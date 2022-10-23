@@ -1,3 +1,5 @@
+#![feature(iter_next_chunk)]
+
 mod rope;
 mod tree;
 
