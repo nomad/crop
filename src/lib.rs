@@ -1,6 +1,5 @@
 #![feature(int_roundings)]
 #![feature(iter_array_chunks)]
-#![feature(iter_next_chunk)]
 
 mod rope;
 mod tree;

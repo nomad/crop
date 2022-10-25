@@ -31,132 +31,97 @@ impl<const FANOUT: usize, Chunk: Summarize> Inode<FANOUT, Chunk> {
         self.initialized
     }
 
+    pub(super) fn children(&self) -> &[Arc<Node<FANOUT, Chunk>>] {
+        // Safety: the first `initialized` elements are guaranteed to be
+        // initialized and `MaybeUninit<T>` has the same memory layout as `T`.
+        unsafe { mem::transmute(&self.children[..self.initialized]) }
+    }
+
     /// Note: All the nodes are expected to have the same height.
     pub(super) fn from_nodes<I>(nodes: I) -> Self
     where
         I: IntoIterator<Item = Node<FANOUT, Chunk>>,
         I::IntoIter: ExactSizeIterator,
     {
-        let nodes: Box<
-            dyn ExactSizeIterator<Item = Arc<Node<FANOUT, Chunk>>>,
-        > = Box::new(nodes.into_iter().map(Arc::new));
-
-        let mut nodes = nodes.into_iter().collect::<Vec<_>>();
+        let mut nodes = nodes
+            .into_iter()
+            .map(Arc::new)
+            .map(MaybeUninit::new)
+            .collect::<Vec<_>>();
 
         while nodes.len() > FANOUT {
-            let mut ciao = Vec::<Arc<Node<FANOUT, Chunk>>>::new();
+            // TODO: this allocates a `new_nodes` at every iteration. Can
+            // we reuse `nodes`?
 
-            let (n_nodes, remainder) =
-                (nodes.len() / FANOUT, nodes.len() % FANOUT);
+            let mut new_nodes =
+                Vec::with_capacity(usize::div_ceil(nodes.len(), FANOUT));
 
-            let mut iter = nodes.into_iter();
+            let mut iter = nodes.into_iter().array_chunks::<FANOUT>();
 
-            for _ in 0..n_nodes {
-                // Safety: `n_nodes` is the integer part of `nodes.len() / N`,
-                // so nodes is guaranteed to have at least `n_nodes * N`
-                // elements.
-                let children =
-                    unsafe { iter.next_chunk::<FANOUT>().unwrap_unchecked() };
-
+            while let Some(children) = iter.next() {
                 let summary = children
                     .iter()
-                    .map(|node| node.summarize())
+                    .map(|node| unsafe { node.assume_init_ref().summarize() })
                     .sum::<Chunk::Summary>();
 
-                let children = children
-                    .into_iter()
-                    .map(MaybeUninit::new)
-                    .collect::<Vec<_>>();
-
-                ciao.push(Arc::new(Node::Internal(Inode {
-                    summary,
-                    initialized: FANOUT,
-                    // Safety: `children` as exactly `N` elements.
-                    children: unsafe {
-                        children.try_into().unwrap_unchecked()
-                    },
-                })))
+                new_nodes.push(MaybeUninit::new(Arc::new(Node::Internal(
+                    Inode { summary, children, initialized: FANOUT },
+                ))));
             }
 
-            if remainder != 0 {
-                let mut summary = Chunk::Summary::default();
+            if let Some(last) = iter.into_remainder() {
+                if last.len() > 0 {
+                    let last = last.into_iter().collect();
 
-                // Safety: `iter` had exactly `remainder < N` elements
-                // left, so this final call to `next_chunk` will return an
-                // `Err` containing the last `remainder` elements.
-                let last = unsafe {
-                    iter.next_chunk::<FANOUT>().unwrap_err_unchecked()
-                };
+                    // Safety: all the nodes in this last chunk are initialized
+                    // and `last` contains at most `FANOUT - 1` elements.
+                    let inode =
+                        unsafe { Self::from_m_less_than_n_children(last) };
 
-                let mut last = last
-                    .into_iter()
-                    .map(|node| {
-                        summary += &*node.summarize();
-                        MaybeUninit::new(node)
-                    })
-                    .collect::<Vec<_>>();
-
-                for _ in 0..FANOUT - remainder {
-                    last.push(MaybeUninit::uninit());
+                    new_nodes.push(MaybeUninit::new(Arc::new(
+                        Node::Internal(inode),
+                    )));
                 }
-
-                ciao.push(Arc::new(Node::Internal(Inode {
-                    summary,
-                    initialized: remainder,
-                    // Safety: `children` as exactly `N` elements.
-                    children: unsafe { last.try_into().unwrap_unchecked() },
-                })))
             }
 
-            nodes = ciao;
+            nodes = new_nodes;
         }
 
-        let summary =
-            nodes.iter().map(|node| node.summarize()).sum::<Chunk::Summary>();
-
-        let initialized = nodes.len();
-
-        let mut children =
-            nodes.into_iter().map(MaybeUninit::new).collect::<Vec<_>>();
-
-        if initialized < FANOUT {
-            for _ in initialized..FANOUT {
-                children.push(MaybeUninit::uninit());
-            }
-        }
-
-        Inode {
-            summary,
-            initialized,
-            // Safety: `children` has exactly `N` elements.
-            children: unsafe { children.try_into().unwrap_unchecked() },
-        }
+        // Safety: all the nodes are initialized and nodes.len() <= FANOUT.
+        unsafe { Self::from_m_less_than_n_children(nodes) }
     }
 
-    //fn from_m_less_than_n_nodes(nodes: Vec<Arc<Node<Chunk>>>) -> Self {
-    //    let m = nodes.len();
+    /// # Panics
+    ///
+    /// - `children.len()` has to be less than or equal to `FANOUT`.
+    ///
+    /// # Safety
+    ///
+    /// - all the children have to be initialized.
+    ///
+    /// Note: All the children are expected to have the same height.
+    unsafe fn from_m_less_than_n_children(
+        mut children: Vec<MaybeUninit<Arc<Node<FANOUT, Chunk>>>>,
+    ) -> Self {
+        assert!(children.len() <= FANOUT);
 
-    //    assert!(m < N);
+        let initialized = children.len();
 
-    //    let mut children =
-    //        nodes.into_iter().map(MaybeUninit::new).collect::<Vec<_>>();
+        let summary = children
+            .iter()
+            .map(|node| node.assume_init_ref().summarize())
+            .sum::<Chunk::Summary>();
 
-    //    for _ in m..N {
-    //        children.push(MaybeUninit::uninit());
-    //    }
+        for _ in initialized..FANOUT {
+            children.push(MaybeUninit::uninit());
+        }
 
-    //    unsafe { Self::from_n_nodes_unchecked(children) }
-    //}
-
-    ///// Safety:
-    /////
-    ///// * `nodes.len()` has to be exactly equal to `N`.
-    //unsafe fn from_n_nodes_unchecked(nodes: Vec<Arc<Node<N, Chunk>>>) -> Self {
-    //    todo!()
-    //}
-
-    pub fn children(&self) -> &[Arc<Node<FANOUT, Chunk>>] {
-        unsafe { mem::transmute(&self.children[..self.initialized]) }
+        Self {
+            summary,
+            initialized,
+            // Safety: `children` has exactly `FANOUT` elements.
+            children: children.try_into().unwrap_unchecked(),
+        }
     }
 }
 

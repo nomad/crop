@@ -123,6 +123,9 @@ mod tests {
         let r = Rope::from_str("Hello there");
         assert_eq!(11, r.byte_len());
 
+        println!("{:#?}", r.text);
+        panic!("")
+
         // let r = Rope::from_str("🐕‍🦺");
         // assert_eq!(11, r.byte_len());
 
