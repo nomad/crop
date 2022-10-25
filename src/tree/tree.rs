@@ -1,6 +1,5 @@
 //! A B-tree implementation.
 
-use std::borrow::Cow;
 use std::fmt;
 use std::iter::Sum;
 use std::ops::AddAssign;
@@ -12,7 +11,7 @@ pub trait Summarize: fmt::Debug {
     type Summary: fmt::Debug
         + Clone
         + for<'a> AddAssign<&'a Self::Summary>
-        + for<'a> Sum<Cow<'a, Self::Summary>>;
+        + for<'a> Sum<&'a Self::Summary>;
 
     fn summarize(&self) -> Self::Summary;
 }
@@ -37,8 +36,8 @@ impl<const FANOUT: usize, Chunk: Summarize> fmt::Debug
 }
 
 impl<const FANOUT: usize, Chunk: Summarize> Tree<FANOUT, Chunk> {
-    pub fn summarize(&self) -> Cow<'_, Chunk::Summary> {
-        self.root.summarize()
+    pub fn summarize(&self) -> &'_ Chunk::Summary {
+        self.root.summary()
     }
 
     /// # Panics
@@ -86,13 +85,13 @@ mod tests {
         }
     }
 
-    impl<'a> Sum<Cow<'a, Count>> for Count {
+    impl<'a> Sum<&'a Count> for Count {
         fn sum<I>(mut iter: I) -> Self
         where
-            I: Iterator<Item = Cow<'a, Count>>,
+            I: Iterator<Item = &'a Count>,
         {
             let mut res = match iter.next() {
-                Some(first) => first.into_owned(),
+                Some(first) => first.clone(),
                 None => return Self::default(),
             };
             for summary in iter {

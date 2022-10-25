@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::fmt;
 
 use super::{Inode, Leaf, Summarize};
@@ -35,15 +34,15 @@ impl<const FANOUT: usize, Chunk: Summarize> Node<FANOUT, Chunk> {
         matches!(self, Node::Internal(_))
     }
 
-    pub(super) fn is_leaf(&self) -> bool {
+    pub(super) fn _is_leaf(&self) -> bool {
         matches!(self, Node::Leaf(_))
     }
 
     /// TODO: docs
-    pub(super) fn summarize(&self) -> Cow<'_, Chunk::Summary> {
+    pub(super) fn summary(&self) -> &'_ Chunk::Summary {
         match self {
-            Node::Internal(inode) => inode.summarize(),
-            Node::Leaf(leaf) => Cow::Borrowed(leaf.summarize()),
+            Node::Internal(inode) => inode.summary(),
+            Node::Leaf(leaf) => leaf.summary(),
         }
     }
 }

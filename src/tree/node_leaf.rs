@@ -21,7 +21,7 @@ impl<Chunk: Summarize> fmt::Debug for Leaf<Chunk> {
 }
 
 impl<Chunk: Summarize> Leaf<Chunk> {
-    pub(super) fn summarize(&self) -> &'_ Chunk::Summary {
+    pub(super) fn summary(&self) -> &'_ Chunk::Summary {
         &self.summary
     }
 

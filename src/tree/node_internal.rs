@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::fmt;
 use std::mem::{self, MaybeUninit};
 use std::sync::Arc;
@@ -39,25 +38,8 @@ impl<const FANOUT: usize, Chunk: Summarize> Inode<FANOUT, Chunk> {
         unsafe { mem::transmute(&self.children[..self.initialized]) }
     }
 
-    pub(super) fn summarize(&self) -> Cow<'_, Chunk::Summary> {
-        let mut children = self.children().into_iter();
-
-        match (children.next(), children.next()) {
-            (Some(first), Some(second)) => {
-                let mut summary = first.summarize().into_owned();
-                summary += &*second.summarize();
-                for node in children {
-                    summary += &*node.summarize();
-                }
-                Cow::Owned(summary)
-            },
-
-            (Some(first), None) => first.summarize(),
-
-            // Safety: internal nodes are guaranteed to have at least one
-            // child.
-            (None, _) => unsafe { std::hint::unreachable_unchecked() },
-        }
+    pub(super) fn summary(&self) -> &'_ Chunk::Summary {
+        &self.summary
     }
 
     /// TODO: docs
@@ -86,7 +68,7 @@ impl<const FANOUT: usize, Chunk: Summarize> Inode<FANOUT, Chunk> {
             while let Some(children) = iter.next() {
                 let summary = children
                     .iter()
-                    .map(|node| unsafe { node.assume_init_ref().summarize() })
+                    .map(|node| unsafe { node.assume_init_ref().summary() })
                     .sum::<Chunk::Summary>();
 
                 new_nodes.push(MaybeUninit::new(Arc::new(Node::Internal(
@@ -136,7 +118,7 @@ impl<const FANOUT: usize, Chunk: Summarize> Inode<FANOUT, Chunk> {
 
         let summary = children
             .iter()
-            .map(|node| node.assume_init_ref().summarize())
+            .map(|node| node.assume_init_ref().summary())
             .sum::<Chunk::Summary>();
 
         for _ in initialized..FANOUT {
