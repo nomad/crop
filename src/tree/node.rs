@@ -42,28 +42,8 @@ impl<const FANOUT: usize, Chunk: Summarize> Node<FANOUT, Chunk> {
     /// TODO: docs
     pub(super) fn summarize(&self) -> Cow<'_, Chunk::Summary> {
         match self {
-            Node::Internal(inode) => {
-                let mut nodes = inode.children().into_iter();
-
-                match (nodes.next(), nodes.next()) {
-                    (Some(first), Some(second)) => {
-                        let mut summary = first.summarize().into_owned();
-                        summary += &*second.summarize();
-                        for node in nodes {
-                            summary += &*node.summarize();
-                        }
-                        Cow::Owned(summary)
-                    },
-
-                    (Some(first), None) => first.summarize(),
-
-                    (None, Some(_)) => unreachable!(),
-
-                    (None, None) => Cow::Owned(Chunk::Summary::default()),
-                }
-            },
-
-            Node::Leaf(leaf) => Cow::Borrowed(&leaf.summary),
+            Node::Internal(inode) => inode.summarize(),
+            Node::Leaf(leaf) => Cow::Borrowed(leaf.summarize()),
         }
     }
 }

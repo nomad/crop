@@ -3,8 +3,8 @@ use std::fmt;
 use super::Summarize;
 
 pub(super) struct Leaf<Chunk: Summarize> {
-    pub(super) chunk: Chunk,
-    pub(super) summary: Chunk::Summary,
+    chunk: Chunk,
+    summary: Chunk::Summary,
 }
 
 impl<Chunk: Summarize> fmt::Debug for Leaf<Chunk> {
@@ -21,7 +21,11 @@ impl<Chunk: Summarize> fmt::Debug for Leaf<Chunk> {
 }
 
 impl<Chunk: Summarize> Leaf<Chunk> {
-    pub fn from_chunk(chunk: Chunk) -> Self {
+    pub(super) fn summarize(&self) -> &'_ Chunk::Summary {
+        &self.summary
+    }
+
+    pub(super) fn from_chunk(chunk: Chunk) -> Self {
         Self { summary: chunk.summarize(), chunk }
     }
 }

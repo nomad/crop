@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::fmt;
 use std::mem::{self, MaybeUninit};
 use std::sync::Arc;
@@ -37,6 +38,29 @@ impl<const FANOUT: usize, Chunk: Summarize> Inode<FANOUT, Chunk> {
         unsafe { mem::transmute(&self.children[..self.initialized]) }
     }
 
+    pub(super) fn summarize(&self) -> Cow<'_, Chunk::Summary> {
+        let mut children = self.children().into_iter();
+
+        match (children.next(), children.next()) {
+            (Some(first), Some(second)) => {
+                let mut summary = first.summarize().into_owned();
+                summary += &*second.summarize();
+                for node in children {
+                    summary += &*node.summarize();
+                }
+                Cow::Owned(summary)
+            },
+
+            (Some(first), None) => first.summarize(),
+
+            (None, Some(_)) => unreachable!(),
+
+            (None, None) => Cow::Owned(Chunk::Summary::default()),
+        }
+    }
+
+    /// TODO: docs
+    ///
     /// Note: All the nodes are expected to have the same height.
     pub(super) fn from_nodes<I>(nodes: I) -> Self
     where
@@ -91,6 +115,8 @@ impl<const FANOUT: usize, Chunk: Summarize> Inode<FANOUT, Chunk> {
         unsafe { Self::from_m_less_than_n_children(nodes) }
     }
 
+    /// TODO: docs
+    ///
     /// # Panics
     ///
     /// - `children.len()` has to be less than or equal to `FANOUT`.
@@ -125,6 +151,7 @@ impl<const FANOUT: usize, Chunk: Summarize> Inode<FANOUT, Chunk> {
     }
 }
 
+/// TODO: docs
 fn pretty_print_inode<const N: usize, Leaf: Summarize>(
     inode: &Inode<N, Leaf>,
     shifts: &mut String,
