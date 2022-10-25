@@ -5,6 +5,7 @@ use std::sync::Arc;
 
 use super::{Node, Summarize};
 
+/// Invariants: guaranteed to contain at least one child node.
 pub(super) struct Inode<const FANOUT: usize, Chunk: Summarize> {
     children: [MaybeUninit<Arc<Node<FANOUT, Chunk>>>; FANOUT],
     initialized: usize,
@@ -53,9 +54,9 @@ impl<const FANOUT: usize, Chunk: Summarize> Inode<FANOUT, Chunk> {
 
             (Some(first), None) => first.summarize(),
 
-            (None, Some(_)) => unreachable!(),
-
-            (None, None) => Cow::Owned(Chunk::Summary::default()),
+            // Safety: internal nodes are guaranteed to have at least one
+            // child.
+            (None, _) => unsafe { std::hint::unreachable_unchecked() },
         }
     }
 

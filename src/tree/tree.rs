@@ -11,7 +11,6 @@ use super::{Inode, Leaf, Node};
 pub trait Summarize: fmt::Debug {
     type Summary: fmt::Debug
         + Clone
-        + Default
         + for<'a> AddAssign<&'a Self::Summary>
         + for<'a> Sum<Cow<'a, Self::Summary>>;
 
