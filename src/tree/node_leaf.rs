@@ -1,31 +1,31 @@
-use std::fmt;
+use std::fmt::{self, Debug};
 
 use super::Summarize;
 
-pub(super) struct Leaf<Chunk: Summarize> {
-    chunk: Chunk,
-    summary: Chunk::Summary,
+pub(super) struct Leaf<Leaf: Summarize> {
+    value: Leaf,
+    summary: Leaf::Summary,
 }
 
-impl<Chunk: Summarize> fmt::Debug for Leaf<Chunk> {
+impl<Leaf: Summarize> Debug for self::Leaf<Leaf> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !f.alternate() {
             f.debug_struct("Leaf")
-                .field("chunk", &self.chunk)
+                .field("value", &self.value)
                 .field("summary", &self.summary)
                 .finish()
         } else {
-            write!(f, "{:?} — {:?}", self.chunk, self.summary)
+            write!(f, "{:?} — {:?}", self.value, self.summary)
         }
     }
 }
 
-impl<Chunk: Summarize> Leaf<Chunk> {
-    pub(super) fn summary(&self) -> &'_ Chunk::Summary {
-        &self.summary
+impl<Leaf: Summarize> self::Leaf<Leaf> {
+    pub(super) fn from_value(value: Leaf) -> Self {
+        Self { summary: value.summarize(), value }
     }
 
-    pub(super) fn from_chunk(chunk: Chunk) -> Self {
-        Self { summary: chunk.summarize(), chunk }
+    pub(super) fn summary(&self) -> &Leaf::Summary {
+        &self.summary
     }
 }

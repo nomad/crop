@@ -1,17 +1,16 @@
 //! A B-tree implementation.
 
-use std::fmt;
-use std::iter::Sum;
+use std::fmt::{self, Debug};
 use std::ops::AddAssign;
 use std::sync::Arc;
 
-use super::{Inode, Leaf, Node};
+use super::{Inode, Node};
 
-pub trait Summarize: fmt::Debug {
-    type Summary: fmt::Debug
+pub trait Summarize: Debug {
+    type Summary: Debug
         + Clone
-        + for<'a> AddAssign<&'a Self::Summary>
-        + for<'a> Sum<&'a Self::Summary>;
+        + Default
+        + for<'a> AddAssign<&'a Self::Summary>;
 
     fn summarize(&self) -> Self::Summary;
 }
@@ -20,9 +19,7 @@ pub struct Tree<const FANOUT: usize, Leaf: Summarize> {
     root: Arc<Node<FANOUT, Leaf>>,
 }
 
-impl<const FANOUT: usize, Chunk: Summarize> fmt::Debug
-    for Tree<FANOUT, Chunk>
-{
+impl<const N: usize, Leaf: Summarize> Debug for Tree<N, Leaf> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !f.alternate() {
             f.debug_struct("Tree").field("root", &self.root).finish()
@@ -35,40 +32,35 @@ impl<const FANOUT: usize, Chunk: Summarize> fmt::Debug
     }
 }
 
-impl<const FANOUT: usize, Chunk: Summarize> Tree<FANOUT, Chunk> {
-    pub fn summarize(&self) -> &'_ Chunk::Summary {
-        self.root.summary()
-    }
-
+impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
     /// # Panics
     ///
     /// This function will panic if the iterator is empty.
     pub fn from_leaves<I>(leaves: I) -> Self
     where
-        I: IntoIterator<Item = Chunk>,
+        I: IntoIterator<Item = Leaf>,
         I::IntoIter: ExactSizeIterator,
     {
         let mut leaves = leaves.into_iter();
 
         if leaves.len() == 0 {
             panic!(
-                "Cannot construct a Tree<{}> from an empty iterator",
-                std::any::type_name::<Chunk>()
+                "Cannot construct a Tree<{}, {}> from an empty iterator",
+                FANOUT,
+                std::any::type_name::<Leaf>(),
             )
         }
 
         if leaves.len() == 1 {
-            // Safety: there is exactly one leaf.
-            let chunk = unsafe { leaves.next().unwrap_unchecked() };
-            return Tree {
-                root: Arc::new(Node::Leaf(Leaf::from_chunk(chunk))),
-            };
+            let leaf = super::Leaf::from_value(leaves.next().unwrap());
+            return Tree { root: Arc::new(Node::Leaf(leaf)) };
         }
 
-        let inode =
-            Inode::from_nodes(leaves.map(Leaf::from_chunk).map(Node::Leaf));
+        Tree { root: Arc::new(Node::Internal(Inode::from_leaves(leaves))) }
+    }
 
-        Tree { root: Arc::new(Node::Internal(inode)) }
+    pub fn summarize(&self) -> &Leaf::Summary {
+        self.root.summary()
     }
 }
 
@@ -85,22 +77,6 @@ mod tests {
         }
     }
 
-    impl<'a> Sum<&'a Count> for Count {
-        fn sum<I>(mut iter: I) -> Self
-        where
-            I: Iterator<Item = &'a Count>,
-        {
-            let mut res = match iter.next() {
-                Some(first) => first.clone(),
-                None => return Self::default(),
-            };
-            for summary in iter {
-                res += &*summary;
-            }
-            res
-        }
-    }
-
     impl Summarize for usize {
         type Summary = Count;
 
@@ -111,12 +87,13 @@ mod tests {
 
     #[test]
     fn easy() {
-        let _tree = Tree::<4, usize>::from_leaves(0..20);
+        // let _tree = Tree::<4, usize>::from_leaves(0..20);
     }
 
     #[test]
     fn pretty_print() {
-        let tree = Tree::<2, usize>::from_leaves(0..10);
+        // let tree = Tree::<2, usize>::from_leaves(0..20);
+        let tree = Tree::<2, usize>::from_leaves(0..4);
         println!("{:#?}", tree);
         panic!("")
     }

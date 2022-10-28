@@ -1,15 +1,13 @@
-use std::fmt;
+use std::fmt::{self, Debug};
 
-use super::{Inode, Leaf, Summarize};
+use super::{Inode, Summarize};
 
-pub(super) enum Node<const FANOUT: usize, Chunk: Summarize> {
-    Internal(Inode<FANOUT, Chunk>),
-    Leaf(Leaf<Chunk>),
+pub(super) enum Node<const N: usize, Leaf: Summarize> {
+    Internal(Inode<N, Leaf>),
+    Leaf(super::Leaf<Leaf>),
 }
 
-impl<const FANOUT: usize, Chunk: Summarize> fmt::Debug
-    for Node<FANOUT, Chunk>
-{
+impl<const N: usize, Leaf: Summarize> Debug for Node<N, Leaf> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !f.alternate() {
             match self {
@@ -29,7 +27,7 @@ impl<const FANOUT: usize, Chunk: Summarize> fmt::Debug
     }
 }
 
-impl<const FANOUT: usize, Chunk: Summarize> Node<FANOUT, Chunk> {
+impl<const N: usize, Leaf: Summarize> Node<N, Leaf> {
     pub(super) fn is_internal(&self) -> bool {
         matches!(self, Node::Internal(_))
     }
@@ -39,7 +37,7 @@ impl<const FANOUT: usize, Chunk: Summarize> Node<FANOUT, Chunk> {
     }
 
     /// TODO: docs
-    pub(super) fn summary(&self) -> &'_ Chunk::Summary {
+    pub(super) fn summary(&self) -> &Leaf::Summary {
         match self {
             Node::Internal(inode) => inode.summary(),
             Node::Leaf(leaf) => leaf.summary(),
