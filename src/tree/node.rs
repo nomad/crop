@@ -28,6 +28,13 @@ impl<const N: usize, Leaf: Summarize> Debug for Node<N, Leaf> {
 }
 
 impl<const N: usize, Leaf: Summarize> Node<N, Leaf> {
+    pub(super) fn depth(&self) -> usize {
+        match self {
+            Node::Internal(inode) => inode.depth(),
+            Node::Leaf(_) => 0,
+        }
+    }
+
     pub(super) fn is_internal(&self) -> bool {
         matches!(self, Node::Internal(_))
     }
