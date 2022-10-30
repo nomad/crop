@@ -3,5 +3,5 @@
 mod rope;
 mod tree;
 
-pub use rope::Rope;
+pub use rope::{Rope, RopeSlice};
 pub use tree::{Summarize, Tree};

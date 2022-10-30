@@ -1,5 +1,3 @@
-//! A B-tree implementation.
-
 use std::fmt::{self, Debug};
 use std::ops::AddAssign;
 use std::sync::Arc;

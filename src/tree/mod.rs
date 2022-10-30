@@ -1,3 +1,5 @@
+//! A B-tree implementation.
+
 mod node;
 mod node_internal;
 mod node_leaf;

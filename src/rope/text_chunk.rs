@@ -2,9 +2,7 @@ use std::fmt;
 use std::ops::AddAssign;
 use std::str;
 
-use crate::{Summarize, Tree};
-
-const ROPE_FANOUT: usize = 8;
+use crate::Summarize;
 
 #[cfg(not(test))]
 const TEXT_CHUNK_MAX_BYTES: usize = 1024;
@@ -12,7 +10,7 @@ const TEXT_CHUNK_MAX_BYTES: usize = 1024;
 #[cfg(test)]
 const TEXT_CHUNK_MAX_BYTES: usize = 4;
 
-struct TextChunk {
+pub(super) struct TextChunk {
     text: Vec<u8>,
 }
 
@@ -24,8 +22,8 @@ impl fmt::Debug for TextChunk {
 }
 
 #[derive(Clone, Default, Debug)]
-struct TextSummary {
-    byte_len: usize,
+pub(super) struct TextSummary {
+    pub(super) byte_len: usize,
 }
 
 impl<'a> AddAssign<&'a Self> for TextSummary {
@@ -42,12 +40,12 @@ impl Summarize for TextChunk {
     }
 }
 
-struct TextChunkIter<'a> {
+pub(super) struct TextChunkIter<'a> {
     str: &'a str,
 }
 
 impl<'a> TextChunkIter<'a> {
-    fn new(str: &'a str) -> Self {
+    pub(super) fn new(str: &'a str) -> Self {
         Self { str }
     }
 }
@@ -78,40 +76,5 @@ impl<'a> Iterator for TextChunkIter<'a> {
 impl<'a> ExactSizeIterator for TextChunkIter<'a> {
     fn len(&self) -> usize {
         2
-    }
-}
-
-#[derive(Debug)]
-pub struct Rope {
-    root: Tree<ROPE_FANOUT, TextChunk>,
-}
-
-impl Rope {
-    pub fn byte_len(&self) -> usize {
-        self.root.summarize().byte_len
-    }
-
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_str(text: &str) -> Self {
-        Rope { root: Tree::from_leaves(TextChunkIter::new(text)) }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn easy() {
-        let r = Rope::from_str("Hello there");
-        assert_eq!(11, r.byte_len());
-
-        println!("{:#?}", r.root);
-        panic!("")
-
-        // let r = Rope::from_str("🐕‍🦺");
-        // assert_eq!(11, r.byte_len());
-
-        // panic!("{r:?}");
     }
 }
