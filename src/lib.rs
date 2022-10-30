@@ -1,7 +1,6 @@
 #![feature(iter_next_chunk)]
 
 mod rope;
-mod tree;
+pub mod tree;
 
 pub use rope::{Rope, RopeSlice};
-pub use tree::{Summarize, Tree};

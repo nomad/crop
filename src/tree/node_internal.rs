@@ -34,7 +34,7 @@ impl<const N: usize, Leaf: Summarize> Default for Inode<N, Leaf> {
 }
 
 impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
-    fn children(&self) -> &[Arc<Node<N, Leaf>>] {
+    pub(super) fn children(&self) -> &[Arc<Node<N, Leaf>>] {
         &self.children
     }
 

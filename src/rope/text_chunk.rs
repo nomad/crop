@@ -2,7 +2,7 @@ use std::fmt;
 use std::ops::AddAssign;
 use std::str;
 
-use crate::Summarize;
+use crate::tree::Summarize;
 
 #[cfg(not(test))]
 const TEXT_CHUNK_MAX_BYTES: usize = 1024;
@@ -23,12 +23,12 @@ impl fmt::Debug for TextChunk {
 
 #[derive(Clone, Default, Debug)]
 pub(super) struct TextSummary {
-    pub(super) byte_len: usize,
+    pub(super) bytes: usize,
 }
 
 impl<'a> AddAssign<&'a Self> for TextSummary {
     fn add_assign(&mut self, rhs: &'a Self) {
-        self.byte_len += rhs.byte_len;
+        self.bytes += rhs.bytes;
     }
 }
 
@@ -36,7 +36,7 @@ impl Summarize for TextChunk {
     type Summary = TextSummary;
 
     fn summarize(&self) -> Self::Summary {
-        TextSummary { byte_len: self.text.len() }
+        TextSummary { bytes: self.text.len() }
     }
 }
 

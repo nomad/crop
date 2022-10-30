@@ -1,13 +1,13 @@
 use std::fmt::{self, Debug};
-use std::ops::AddAssign;
+use std::ops::{AddAssign, Bound, RangeBounds};
 use std::sync::Arc;
 
-use super::{Inode, Node};
+use super::{Inode, Metric, Node, TreeSlice};
 
 pub trait Summarize: Debug {
     type Summary: Debug
-        + Clone
         + Default
+        + Clone
         + for<'a> AddAssign<&'a Self::Summary>;
 
     fn summarize(&self) -> Self::Summary;
@@ -57,7 +57,57 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
         Tree { root: Arc::new(Node::Internal(Inode::from_leaves(leaves))) }
     }
 
-    pub fn summarize(&self) -> &Leaf::Summary {
+    pub fn slice<M, R>(&self, interval: R) -> TreeSlice<'_, FANOUT, Leaf>
+    where
+        R: RangeBounds<M>,
+        M: Metric<Leaf>,
+    {
+        let start = match interval.start_bound() {
+            Bound::Excluded(s) => todo!(),
+            Bound::Included(s) => todo!(),
+            Bound::Unbounded => 0usize,
+        };
+
+        let end = match interval.end_bound() {
+            Bound::Excluded(s) => todo!(),
+            Bound::Included(s) => todo!(),
+            Bound::Unbounded => M::measure(self.summary()),
+        };
+
+        assert!(start <= end);
+        assert!(end <= M::measure(self.summary()));
+
+        // let mut n_start = start;
+        // let mut n_end = end;
+
+        let mut measured = 0;
+        let mut node = &*self.root;
+
+        'outer: loop {
+            match node {
+                Node::Leaf(leaf) => todo!(),
+
+                Node::Internal(inode) => {
+                    for child in inode.children() {
+                        let measure = M::measure(child.summary());
+
+                        if measured <= start && measured + measure >= end {
+                            node = &*child;
+                            continue 'outer;
+                        } else {
+                            measured += measure;
+                        }
+                    }
+
+                    break;
+                },
+            }
+        }
+
+        todo!()
+    }
+
+    pub fn summary(&self) -> &Leaf::Summary {
         self.root.summary()
     }
 }
@@ -66,7 +116,7 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
 mod tests {
     use super::*;
 
-    #[derive(Clone, Default, Debug)]
+    #[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
     pub struct Count(usize);
 
     impl<'a> AddAssign<&'a Self> for Count {
@@ -83,16 +133,37 @@ mod tests {
         }
     }
 
+    impl Metric<usize> for usize {
+        fn measure(summary: &Count) -> usize {
+            summary.0
+        }
+
+        fn to_base_units(x: usize) -> usize {
+            todo!()
+        }
+
+        fn from_base_units(x: usize) -> usize {
+            todo!()
+        }
+    }
+
     #[test]
     fn easy() {
-        // let _tree = Tree::<4, usize>::from_leaves(0..20);
+        let tree = Tree::<4, usize>::from_leaves(0..20);
+        assert_eq!(Count(190), *tree.summary());
     }
 
     #[test]
     fn pretty_print() {
-        // let tree = Tree::<2, usize>::from_leaves(0..20);
-        let tree = Tree::<2, usize>::from_leaves(0..4);
+        let tree = Tree::<2, usize>::from_leaves(0..10);
         println!("{:#?}", tree);
         panic!("")
+    }
+
+    #[test]
+    fn slice() {
+        let tree = Tree::<2, usize>::from_leaves(0..10);
+        let slice = tree.slice(1..=2);
+        assert_eq!(Count(3), *slice.summary());
     }
 }
