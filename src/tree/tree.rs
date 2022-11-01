@@ -1,8 +1,8 @@
 use std::fmt::{self, Debug};
-use std::ops::{AddAssign, Bound, RangeBounds};
+use std::ops::{AddAssign, Range};
 use std::sync::Arc;
 
-use super::{Inode, Metric, Node, TreeSlice};
+use super::{Inode, Leaves, Metric, Node, TreeSlice};
 
 pub trait Summarize: Debug {
     type Summary: Debug
@@ -57,30 +57,15 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
         Tree { root: Arc::new(Node::Internal(Inode::from_leaves(leaves))) }
     }
 
-    pub fn slice<M, R>(&self, interval: R) -> TreeSlice<'_, FANOUT, Leaf>
+    /// TODO: docs
+    pub fn slice<M>(&self, interval: Range<M>) -> TreeSlice<'_, FANOUT, Leaf>
     where
-        R: RangeBounds<M>,
         M: Metric<Leaf>,
     {
-        let start = match interval.start_bound() {
-            Bound::Excluded(s) => todo!(),
-            Bound::Included(s) => todo!(),
-            Bound::Unbounded => 0usize,
-        };
+        assert!(interval.start <= interval.end);
+        assert!(interval.end <= M::measure(self.summary()));
 
-        let end = match interval.end_bound() {
-            Bound::Excluded(s) => todo!(),
-            Bound::Included(s) => todo!(),
-            Bound::Unbounded => M::measure(self.summary()),
-        };
-
-        assert!(start <= end);
-        assert!(end <= M::measure(self.summary()));
-
-        // let mut n_start = start;
-        // let mut n_end = end;
-
-        let mut measured = 0;
+        let mut measured = M::zero();
         let mut node = &*self.root;
 
         'outer: loop {
@@ -89,21 +74,35 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
 
                 Node::Internal(inode) => {
                     for child in inode.children() {
-                        let measure = M::measure(child.summary());
+                        let size = M::measure(child.summary());
 
-                        if measured <= start && measured + measure >= end {
+                        // If the `[measured, measured + size)` interval is
+                        // fully contained in `interval` it means `child` fully
+                        // contains the final slice => loop again with this
+                        // child as `node.
+                        if measured <= interval.start
+                            && measured + size >= interval.end
+                        {
                             node = &*child;
                             continue 'outer;
                         } else {
-                            measured += measure;
+                            measured += size;
                         }
                     }
 
+                    // If none of this inode's children fully contained
+                    // `interval` then this is the deepest node that fully
+                    // contains the final slice, so we're done.
                     break;
                 },
             }
         }
 
+        todo!()
+    }
+
+    /// Returns an iterator over the leaves of this tree.
+    pub fn leaves(&self) -> Leaves<'_, Leaf> {
         todo!()
     }
 
@@ -133,19 +132,19 @@ mod tests {
         }
     }
 
-    impl Metric<usize> for usize {
-        fn measure(summary: &Count) -> usize {
-            summary.0
-        }
+    // impl Metric<usize> for usize {
+    //     fn measure(summary: &Count) -> usize {
+    //         summary.0
+    //     }
 
-        fn to_base_units(x: usize) -> usize {
-            todo!()
-        }
+    //     fn to_base_units(x: usize) -> usize {
+    //         todo!()
+    //     }
 
-        fn from_base_units(x: usize) -> usize {
-            todo!()
-        }
-    }
+    //     fn from_base_units(x: usize) -> usize {
+    //         todo!()
+    //     }
+    // }
 
     #[test]
     fn easy() {
@@ -163,7 +162,7 @@ mod tests {
     #[test]
     fn slice() {
         let tree = Tree::<2, usize>::from_leaves(0..10);
-        let slice = tree.slice(1..=2);
-        assert_eq!(Count(3), *slice.summary());
+        // let slice = tree.slice(1..=2);
+        // assert_eq!(Count(3), *slice.summary());
     }
 }

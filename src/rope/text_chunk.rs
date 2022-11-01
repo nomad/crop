@@ -11,13 +11,12 @@ const TEXT_CHUNK_MAX_BYTES: usize = 1024;
 const TEXT_CHUNK_MAX_BYTES: usize = 4;
 
 pub(super) struct TextChunk {
-    text: Vec<u8>,
+    pub(super) text: String,
 }
 
 impl fmt::Debug for TextChunk {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // Yes, this is not actually safe right now.
-        write!(f, "{:?}", unsafe { str::from_utf8_unchecked(&self.text) })
+        write!(f, "{:?}", self.text)
     }
 }
 
@@ -58,16 +57,21 @@ impl<'a> Iterator for TextChunkIter<'a> {
             0 => None,
 
             n if n >= TEXT_CHUNK_MAX_BYTES => {
-                let bytes =
-                    self.str[..TEXT_CHUNK_MAX_BYTES].as_bytes().to_owned();
-                self.str = &self.str[TEXT_CHUNK_MAX_BYTES..];
-                Some(TextChunk { text: bytes })
+                let mut bytes = TEXT_CHUNK_MAX_BYTES;
+
+                while !self.str.is_char_boundary(bytes) {
+                    bytes += 1;
+                }
+
+                let text = self.str[..bytes].to_owned();
+                self.str = &self.str[bytes..];
+                Some(TextChunk { text })
             },
 
             _ => {
-                let bytes = self.str.as_bytes().to_owned();
+                let text = self.str.to_owned();
                 self.str = "";
-                Some(TextChunk { text: bytes })
+                Some(TextChunk { text })
             },
         }
     }

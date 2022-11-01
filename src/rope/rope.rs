@@ -1,12 +1,24 @@
+use std::fmt::{self, Debug};
 use std::ops::RangeBounds;
 
-use super::{TextChunk, TextChunkIter, ROPE_FANOUT};
+use super::{Chunks, TextChunk, TextChunkIter};
 use crate::tree::Tree;
 use crate::RopeSlice;
 
-#[derive(Debug)]
+pub(super) const ROPE_FANOUT: usize = 8;
+
 pub struct Rope {
     root: Tree<ROPE_FANOUT, TextChunk>,
+}
+
+impl Debug for Rope {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str("Rope(\"")?;
+        for chunk in self.chunks() {
+            f.write_str(chunk)?;
+        }
+        f.write_str("\")")
+    }
 }
 
 impl Rope {
@@ -24,6 +36,10 @@ impl Rope {
         // RopeSlice { tree_slice: self.root.slice(interval) }
 
         todo!()
+    }
+
+    fn chunks(&self) -> Chunks<'_> {
+        Chunks { chunks: self.root.leaves() }
     }
 
     #[allow(clippy::should_implement_trait)]
