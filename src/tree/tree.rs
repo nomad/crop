@@ -70,7 +70,20 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
 
         'outer: loop {
             match node {
-                Node::Leaf(leaf) => todo!(),
+                Node::Leaf(leaf) => {
+                    let leaf = if (measured + M::measure(leaf.summary()))
+                        == interval.end - interval.start
+                    {
+                        leaf.value()
+                    } else {
+                        // TODO: this range is wrong.
+                        let start = &(interval.start - measured);
+                        let end = &(interval.end - measured);
+                        M::slice(leaf.value(), start..end).unwrap()
+                    };
+
+                    return TreeSlice::single_leaf(leaf);
+                },
 
                 Node::Internal(inode) => {
                     for child in inode.children() {

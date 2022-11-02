@@ -111,6 +111,22 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
         self.children.len() == N
     }
 
+    /// # Panics
+    ///
+    /// This function will panic if the coordinate are not valid.
+    pub(super) fn leaf_at_coordinate(
+        &self,
+        coordinates: &LeafCoordinates<N>,
+    ) -> &'_ Leaf {
+        let mut node = &*self.children()[coordinates.vec[0]];
+
+        for &idx in &coordinates.vec[1..] {
+            node = &*node.as_inode().unwrap().children()[idx];
+        }
+
+        node.as_leaf().unwrap().value()
+    }
+
     /// Adds a node to the children, updating self's summary with the summary
     /// coming from the new node.
     ///
@@ -126,6 +142,17 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
     pub(super) fn summary(&self) -> &Leaf::Summary {
         &self.summary
     }
+}
+
+/// Path to follow to go from an internal node down to one of the leaves in its
+/// subtree.
+#[derive(Clone)]
+pub(super) struct LeafCoordinates<const N: usize> {
+    /// # Invariants
+    ///
+    /// - `vec` always contains at least one item.
+    /// - all the items in the vector are < `N`.
+    vec: Vec<usize>,
 }
 
 /// Recursively prints a tree-like representation of this node. Called by the
