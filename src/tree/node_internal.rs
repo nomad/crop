@@ -146,13 +146,27 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
 
 /// Path to follow to go from an internal node down to one of the leaves in its
 /// subtree.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub(super) struct LeafCoordinates<const N: usize> {
     /// # Invariants
     ///
     /// - `vec` always contains at least one item.
     /// - all the items in the vector are < `N`.
     vec: Vec<usize>,
+}
+
+impl<const N: usize> LeafCoordinates<N> {
+    pub(super) fn new() -> Self {
+        Self { vec: Vec::new() }
+    }
+
+    pub(super) fn pop(&mut self) -> Option<usize> {
+        self.vec.pop()
+    }
+
+    pub(super) fn push(&mut self, idx: usize) {
+        self.vec.push(idx)
+    }
 }
 
 /// Recursively prints a tree-like representation of this node. Called by the

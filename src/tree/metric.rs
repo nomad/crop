@@ -1,14 +1,17 @@
-use std::ops::{Add, AddAssign, Range, Sub};
+use std::fmt::Debug;
+use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 
 use super::Summarize;
 
 pub trait Metric<Leaf: Summarize>:
-    Copy
+    Debug
+    + Copy
     + Ord
     + Sized
     + Add<Self, Output = Self>
     + AddAssign<Self>
     + Sub<Self, Output = Self>
+    + SubAssign<Self>
 // + for<'a> Add<&'a Self, Output = Self>
 // + for<'a> AddAssign<&'a Self>
 {
@@ -26,7 +29,7 @@ pub trait Metric<Leaf: Summarize>:
     /// iff it makes sense to take "part of a leaf", in which case it's
     /// expected to return `Some`.
     #[allow(unused_variables)]
-    fn slice<'a>(leaf: &'a Leaf, range: Range<&Self>) -> Option<&'a Leaf> {
+    fn slice<'a>(leaf: &'a Leaf, range: Range<Self>) -> Option<&'a Leaf> {
         None
     }
 }

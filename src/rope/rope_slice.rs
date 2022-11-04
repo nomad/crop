@@ -25,4 +25,9 @@ impl<'a> RopeSlice<'a> {
     fn chunks(&self) -> Chunks<'_> {
         Chunks { chunks: self.tree_slice.leaves() }
     }
+
+    #[allow(clippy::should_implement_trait)]
+    pub(super) fn from(slice: TreeSlice<'a, ROPE_FANOUT, TextChunk>) -> Self {
+        Self { tree_slice: slice }
+    }
 }

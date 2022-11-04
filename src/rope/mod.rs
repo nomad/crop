@@ -5,9 +5,9 @@ mod metrics;
 mod rope;
 mod rope_slice;
 mod text_chunk;
+mod utils;
 
 use iterators::Chunks;
-use metrics::ByteMetric;
 pub use rope::Rope;
 use rope::ROPE_FANOUT;
 pub use rope_slice::RopeSlice;

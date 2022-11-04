@@ -2,6 +2,7 @@ use std::fmt::{self, Debug};
 use std::ops::{AddAssign, Range};
 use std::sync::Arc;
 
+use super::tree_slice::{self, Diocane};
 use super::{Inode, Leaves, Metric, Node, TreeSlice};
 
 pub trait Summarize: Debug {
@@ -58,60 +59,19 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
     }
 
     /// TODO: docs
-    pub fn slice<M>(&self, interval: Range<M>) -> TreeSlice<'_, FANOUT, Leaf>
+    pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, Leaf>
     where
         M: Metric<Leaf>,
     {
-        assert!(interval.start <= interval.end);
-        assert!(interval.end <= M::measure(self.summary()));
+        println!("{:#?}", self.root);
 
-        let mut measured = M::zero();
-        let mut node = &*self.root;
+        match tree_slice::deepest_node_containing_range(&*self.root, range) {
+            Diocane::Leaf(leaf) => TreeSlice::new_single_leaf(leaf),
 
-        'outer: loop {
-            match node {
-                Node::Leaf(leaf) => {
-                    let leaf = if (measured + M::measure(leaf.summary()))
-                        == interval.end - interval.start
-                    {
-                        leaf.value()
-                    } else {
-                        // TODO: this range is wrong.
-                        let start = &(interval.start - measured);
-                        let end = &(interval.end - measured);
-                        M::slice(leaf.value(), start..end).unwrap()
-                    };
-
-                    return TreeSlice::single_leaf(leaf);
-                },
-
-                Node::Internal(inode) => {
-                    for child in inode.children() {
-                        let size = M::measure(child.summary());
-
-                        // If the `[measured, measured + size)` interval is
-                        // fully contained in `interval` it means `child` fully
-                        // contains the final slice => loop again with this
-                        // child as `node.
-                        if measured <= interval.start
-                            && measured + size >= interval.end
-                        {
-                            node = &*child;
-                            continue 'outer;
-                        } else {
-                            measured += size;
-                        }
-                    }
-
-                    // If none of this inode's children fully contained
-                    // `interval` then this is the deepest node that fully
-                    // contains the final slice, so we're done.
-                    break;
-                },
-            }
+            Diocane::Inode(inode, range) => {
+                TreeSlice::new_from_range_in_inode(inode, range)
+            },
         }
-
-        todo!()
     }
 
     /// Returns an iterator over the leaves of this tree.
@@ -145,19 +105,15 @@ mod tests {
         }
     }
 
-    // impl Metric<usize> for usize {
-    //     fn measure(summary: &Count) -> usize {
-    //         summary.0
-    //     }
+    impl Metric<usize> for usize {
+        fn zero() -> Self {
+            0
+        }
 
-    //     fn to_base_units(x: usize) -> usize {
-    //         todo!()
-    //     }
-
-    //     fn from_base_units(x: usize) -> usize {
-    //         todo!()
-    //     }
-    // }
+        fn measure(count: &Count) -> Self {
+            count.0
+        }
+    }
 
     #[test]
     fn easy() {
@@ -175,7 +131,8 @@ mod tests {
     #[test]
     fn slice() {
         let tree = Tree::<2, usize>::from_leaves(0..10);
-        // let slice = tree.slice(1..=2);
-        // assert_eq!(Count(3), *slice.summary());
+        let slice = tree.slice(4..6);
+        println!("{:#?}", tree);
+        assert_eq!(Count(3), *slice.summary());
     }
 }

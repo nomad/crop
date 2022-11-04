@@ -1,6 +1,8 @@
 use std::fmt::{self, Debug};
 use std::ops::RangeBounds;
 
+use super::metrics::ByteMetric;
+use super::utils;
 use super::{Chunks, TextChunk, TextChunkIter};
 use crate::tree::Tree;
 use crate::RopeSlice;
@@ -22,26 +24,27 @@ impl Debug for Rope {
 }
 
 impl Rope {
+    /// TODO: docs
     pub fn byte_len(&self) -> usize {
         self.root.summary().bytes
     }
 
+    /// TODO: docs
     pub fn byte_slice<R>(&self, byte_range: R) -> RopeSlice<'_>
     where
         R: RangeBounds<usize>,
     {
-        // Slice the rope's tree using the ByteMetric.
+        let (start, end) =
+            utils::range_bound_to_tuple(byte_range, 0, self.byte_len());
 
-        // let interval = todo!();
-        // RopeSlice { tree_slice: self.root.slice(interval) }
-
-        todo!()
+        RopeSlice::from(self.root.slice(ByteMetric(start)..ByteMetric(end)))
     }
 
     fn chunks(&self) -> Chunks<'_> {
         Chunks { chunks: self.root.leaves() }
     }
 
+    /// TODO: docs
     #[allow(clippy::should_implement_trait)]
     pub fn from_str(text: &str) -> Self {
         Rope { root: Tree::from_leaves(TextChunkIter::new(text)) }
