@@ -1,4 +1,4 @@
-//! A utf-8 text rope built on top of a [`Tree`](crate::Tree).
+//! A utf-8 text rope built on top of a [`Tree`](crate::tree::Tree).
 
 mod iterators;
 mod metrics;

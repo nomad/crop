@@ -26,10 +26,14 @@ pub trait Metric<Leaf: Summarize>:
     // after slicing, some leaves may need to return an owned value. Consider
     // returning a Cow<'a, Leaf>?
     /// Slice the leaf in the given range. This method should be implemented
-    /// iff it makes sense to take "part of a leaf", in which case it's
-    /// expected to return `Some`.
+    /// iff it makes sense to take "part of a leaf".
     #[allow(unused_variables)]
-    fn slice<'a>(leaf: &'a Leaf, range: Range<Self>) -> Option<&'a Leaf> {
-        None
+    fn slice<'a>(leaf: &'a Leaf, range: Range<Self>) -> &'a Leaf {
+        unimplemented!(
+            "Trying to slice {leaf:?} in the {range:?} range, but {} isn't \
+             sliceable by {}",
+            std::any::type_name::<Leaf>(),
+            std::any::type_name::<Self>()
+        )
     }
 }

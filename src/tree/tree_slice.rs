@@ -109,7 +109,7 @@ where
                 let value = if size == range.end - range.start {
                     leaf.value()
                 } else {
-                    M::slice(leaf.value(), range).unwrap()
+                    M::slice(leaf.value(), range)
                 };
                 return Diocane::Leaf(value);
             },
@@ -184,7 +184,7 @@ where
                 if range.start > measured {
                     let start = range.start;
                     let end = M::measure(leaf.summary());
-                    let leaf = M::slice(leaf.value(), start..end).unwrap();
+                    let leaf = M::slice(leaf.value(), start..end);
                     summary += &leaf.summarize();
                     start_leaf = Some(leaf);
                 } else {
@@ -226,7 +226,7 @@ where
                 if measured + size > range.end {
                     let start = M::zero();
                     let end = range.end - measured;
-                    let leaf = M::slice(leaf.value(), start..end).unwrap();
+                    let leaf = M::slice(leaf.value(), start..end);
                     summary += &leaf.summarize();
                     end_leaf = Some(leaf);
                 } else {
