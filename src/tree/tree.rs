@@ -2,15 +2,22 @@ use std::fmt::{self, Debug};
 use std::ops::{AddAssign, Range};
 use std::sync::Arc;
 
-use super::tree_slice::{self, Diocane};
 use super::{Inode, Leaves, Metric, Node, TreeSlice};
 
-pub trait Summarize: Debug {
+// TODO: remove `Clone` requirement
+/// TODO: docs
+pub trait Summarize: Debug + Clone {
     type Summary: Debug
         + Default
         + Clone
         + for<'a> AddAssign<&'a Self::Summary>;
 
+    // Used to define empty tree slices.
+    //
+    /// TODO: docs
+    fn empty() -> Self;
+
+    /// TODO: docs
     fn summarize(&self) -> Self::Summary;
 }
 
@@ -63,14 +70,10 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
     where
         M: Metric<Leaf>,
     {
-        println!("{:#?}", self.root);
-
-        match tree_slice::deepest_node_containing_range(&*self.root, range) {
-            Diocane::Leaf(leaf) => TreeSlice::new_single_leaf(leaf),
-
-            Diocane::Inode(inode, range) => {
-                TreeSlice::new_from_range_in_inode(inode, range)
-            },
+        if range.start == range.end {
+            TreeSlice::empty()
+        } else {
+            TreeSlice::from_range_in_node(&*self.root, range)
         }
     }
 
@@ -99,6 +102,10 @@ mod tests {
 
     impl Summarize for usize {
         type Summary = Count;
+
+        fn empty() -> Self {
+            0
+        }
 
         fn summarize(&self) -> Self::Summary {
             Count(*self)

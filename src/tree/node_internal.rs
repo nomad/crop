@@ -114,9 +114,9 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
     /// # Panics
     ///
     /// This function will panic if the coordinate are not valid.
-    pub(super) fn leaf_at_coordinate(
+    pub(super) fn node_at_coordinate(
         &self,
-        coordinates: &LeafCoordinates<N>,
+        coordinates: &NodeCoordinates<N>,
     ) -> &'_ Leaf {
         let mut node = &*self.children()[coordinates.vec[0]];
 
@@ -144,20 +144,39 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
     }
 }
 
+/// TODO: docs
+#[derive(Clone, Debug)]
+pub(super) enum NodeDescendant<'a, const N: usize, L: Summarize> {
+    /// TODO: docs
+    Whole(NodeCoordinates<'a, N>),
+
+    /// TODO: docs
+    SlicedLeaf(NodeCoordinates<'a, N>, L),
+}
+
 /// Path to follow to go from an internal node down to one of the leaves in its
 /// subtree.
 #[derive(Clone, Debug)]
-pub(super) struct LeafCoordinates<const N: usize> {
+pub(super) struct NodeCoordinates<'a, const N: usize> {
     /// # Invariants
     ///
     /// - `vec` always contains at least one item.
     /// - all the items in the vector are < `N`.
     vec: Vec<usize>,
+
+    /// TODO: docs
+    inode_lt: std::marker::PhantomData<&'a ()>,
 }
 
-impl<const N: usize> LeafCoordinates<N> {
+impl<'a, const N: usize> NodeCoordinates<'a, N> {
+    pub(super) fn init(first: usize) -> Self {
+        let mut coord = Self::new();
+        coord.push(first);
+        coord
+    }
+
     pub(super) fn new() -> Self {
-        Self { vec: Vec::new() }
+        Self { vec: Vec::new(), inode_lt: std::marker::PhantomData }
     }
 
     pub(super) fn pop(&mut self) -> Option<usize> {

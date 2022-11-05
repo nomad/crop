@@ -1,9 +1,9 @@
 use std::ops::{Bound, RangeBounds};
 
-pub(super) fn range_bound_to_tuple<B>(
+pub(super) fn range_to_tuple<B>(
     range: B,
-    hi: usize,
     lo: usize,
+    hi: usize,
 ) -> (usize, usize)
 where
     B: RangeBounds<usize>,

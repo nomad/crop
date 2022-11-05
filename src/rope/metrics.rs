@@ -43,8 +43,7 @@ impl Metric<TextChunk> for ByteMetric {
         Self(summary.bytes)
     }
 
-    fn slice(chunk: &TextChunk, range: Range<Self>) -> &TextChunk {
-        todo!()
-        // Some(&chunk.text[range.start.0..range.end.0])
+    fn slice(chunk: &TextChunk, range: Range<Self>) -> TextChunk {
+        TextChunk::from(chunk.text[range.start.0..range.end.0].to_owned())
     }
 }

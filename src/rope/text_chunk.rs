@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{self, Debug};
 use std::ops::AddAssign;
 use std::str;
 
@@ -10,11 +10,23 @@ const TEXT_CHUNK_MAX_BYTES: usize = 1024;
 #[cfg(test)]
 const TEXT_CHUNK_MAX_BYTES: usize = 4;
 
+// TODO: remove `Clone` impl
+#[derive(Clone)]
 pub(super) struct TextChunk {
     pub(super) text: String,
 }
 
-impl fmt::Debug for TextChunk {
+impl From<String> for TextChunk {
+    fn from(text: String) -> Self {
+        debug_assert!(
+            text.len() <= TEXT_CHUNK_MAX_BYTES
+                || !text.is_char_boundary(TEXT_CHUNK_MAX_BYTES)
+        );
+        Self { text }
+    }
+}
+
+impl Debug for TextChunk {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.text)
     }
@@ -33,6 +45,10 @@ impl<'a> AddAssign<&'a Self> for TextSummary {
 
 impl Summarize for TextChunk {
     type Summary = TextSummary;
+
+    fn empty() -> Self {
+        Self::from(String::new())
+    }
 
     fn summarize(&self) -> Self::Summary {
         TextSummary { bytes: self.text.len() }
