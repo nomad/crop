@@ -78,6 +78,9 @@ mod tests {
         let s = r.byte_slice(..);
         assert_eq!(11, s.byte_len());
 
+        let s = s.byte_slice(0..5);
+        assert_eq!(5, s.byte_len());
+
         let r = Rope::from_str(
             "Hello there this is a really long line that I'm gonna use to \
              test this fucking slicing methods that we got going on well \

@@ -2,9 +2,10 @@ use std::fmt::{self, Debug};
 
 use super::Summarize;
 
-pub(super) struct Leaf<Leaf: Summarize> {
-    value: Leaf,
-    summary: Leaf::Summary,
+#[derive(Clone)]
+pub(super) struct Leaf<L: Summarize> {
+    value: L,
+    summary: L::Summary,
 }
 
 impl<Leaf: Summarize> Debug for self::Leaf<Leaf> {

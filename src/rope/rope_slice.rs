@@ -1,5 +1,8 @@
 use std::fmt::{self, Debug};
+use std::ops::RangeBounds;
 
+use super::metrics::ByteMetric;
+use super::utils::*;
 use super::{Chunks, TextChunk, ROPE_FANOUT};
 use crate::tree::TreeSlice;
 
@@ -20,6 +23,15 @@ impl<'a> Debug for RopeSlice<'a> {
 impl<'a> RopeSlice<'a> {
     pub fn byte_len(&self) -> usize {
         self.tree_slice.summary().bytes
+    }
+
+    /// TODO: docs
+    pub fn byte_slice<R>(&self, byte_range: R) -> RopeSlice<'_>
+    where
+        R: RangeBounds<usize>,
+    {
+        let (start, end) = range_to_tuple(byte_range, 0, self.byte_len());
+        Self::from(self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)))
     }
 
     fn chunks(&self) -> Chunks<'_> {
