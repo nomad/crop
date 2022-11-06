@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::ops::Range;
 
 use super::{Leaf, Leaves, Metric, Node, Summarize};
@@ -48,7 +49,7 @@ impl<'a, const FANOUT: usize, Leaf: Summarize> TreeSlice<'a, FANOUT, Leaf> {
     }
 
     /// TODO: docs
-    pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'a, FANOUT, Leaf>
+    pub fn slice<M>(&'a self, range: Range<M>) -> TreeSlice<'a, FANOUT, Leaf>
     where
         M: Metric<Leaf>,
     {
@@ -64,8 +65,9 @@ impl<'a, const FANOUT: usize, Leaf: Summarize> TreeSlice<'a, FANOUT, Leaf> {
             return self.clone();
         }
 
-        // TODO: don't clone
-        let (nodes, summary) = sumzong(self.nodes.clone(), range);
+        let (nodes, summary) =
+            sumzong(self.nodes.iter().map(Cow::Borrowed), range);
+
         Self { nodes, summary }
     }
 
@@ -131,7 +133,7 @@ where
                 let nodes = inode
                     .children()
                     .iter()
-                    .map(|n| NodeOrSlicedLeaf::Whole(&**n));
+                    .map(|n| Cow::Owned(NodeOrSlicedLeaf::Whole(&**n)));
 
                 return sumzong(nodes, range);
             },
@@ -146,7 +148,7 @@ fn sumzong<'a, const N: usize, I, L, M>(
 where
     M: Metric<L>,
     L: Summarize,
-    I: IntoIterator<Item = NodeOrSlicedLeaf<'a, N, L>>,
+    I: IntoIterator<Item = Cow<'a, NodeOrSlicedLeaf<'a, N, L>>>,
 {
     let mut iter = nodes.into_iter();
     let mut measured = M::zero();
@@ -158,7 +160,7 @@ where
         let size = M::measure(node.summary());
         if measured + size > range.start {
             nodes_from_start(
-                node,
+                node.into_owned(),
                 range.start - measured,
                 &mut nodes,
                 &mut summary,
@@ -176,7 +178,7 @@ where
         let size = M::measure(node.summary());
         if measured + size >= range.end {
             nodes_to_end(
-                node,
+                node.into_owned(),
                 range.end - measured,
                 &mut nodes,
                 &mut summary,
@@ -186,7 +188,7 @@ where
             break;
         } else {
             summary += node.summary();
-            nodes.push(node);
+            nodes.push(node.into_owned());
             measured += size;
         }
     }
@@ -237,19 +239,8 @@ fn nodes_from_start<'a, const N: usize, L, M>(
             }
         },
 
-        NodeOrSlicedLeaf::Whole(Node::Leaf(leaf)) => {
-            let start = start - *measured;
-            let end = M::measure(leaf.summary()); // TODO: remove this
-            let sliced = M::slice(leaf.value(), start..end);
-            let summ = sliced.summarize();
-            *summary += &summ;
-            let leaf = Leaf::new(sliced, summ);
-            vec.push(NodeOrSlicedLeaf::Sliced(leaf));
-            *found_start = true;
-            return;
-        },
-
-        NodeOrSlicedLeaf::Sliced(leaf) => {
+        NodeOrSlicedLeaf::Whole(Node::Leaf(ref leaf))
+        | NodeOrSlicedLeaf::Sliced(ref leaf) => {
             let start = start - *measured;
             let end = M::measure(leaf.summary()); // TODO: remove this
             let sliced = M::slice(leaf.value(), start..end);
@@ -301,19 +292,8 @@ fn nodes_to_end<'a, const N: usize, L, M>(
             }
         },
 
-        NodeOrSlicedLeaf::Whole(Node::Leaf(leaf)) => {
-            let start = M::zero(); // TODO: remove this
-            let end = end - *measured;
-            let sliced = M::slice(leaf.value(), start..end);
-            let summ = sliced.summarize();
-            *summary += &summ;
-            let leaf = Leaf::new(sliced, summ);
-            vec.push(NodeOrSlicedLeaf::Sliced(leaf));
-            *found_end = true;
-            return;
-        },
-
-        NodeOrSlicedLeaf::Sliced(ref leaf) => {
+        NodeOrSlicedLeaf::Whole(Node::Leaf(ref leaf))
+        | NodeOrSlicedLeaf::Sliced(ref leaf) => {
             let start = M::zero(); // TODO: remove this
             let end = end - *measured;
             let sliced = M::slice(leaf.value(), start..end);
