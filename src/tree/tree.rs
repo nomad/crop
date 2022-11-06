@@ -15,6 +15,7 @@ pub trait Summarize: Debug + Clone {
     fn summarize(&self) -> Self::Summary;
 }
 
+/// TODO: docs
 pub struct Tree<const FANOUT: usize, Leaf: Summarize> {
     root: Arc<Node<FANOUT, Leaf>>,
 }
@@ -32,6 +33,7 @@ impl<const N: usize, Leaf: Summarize> Debug for Tree<N, Leaf> {
     }
 }
 
+/// TODO: docs
 impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
     /// # Panics
     ///
@@ -64,6 +66,10 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
     where
         M: Metric<Leaf>,
     {
+        assert!(M::zero() <= range.start);
+        assert!(range.start <= range.end);
+        assert!(range.end <= M::measure(self.summary()));
+
         if range.start == range.end {
             TreeSlice::empty()
         } else {
@@ -76,6 +82,7 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
         todo!()
     }
 
+    /// TODO: docs
     pub fn summary(&self) -> &Leaf::Summary {
         self.root.summary()
     }

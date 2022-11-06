@@ -3,6 +3,7 @@ use std::ops::Range;
 
 use super::{Leaf, Leaves, Metric, Node, Summarize};
 
+/// TODO: docs
 #[derive(Debug, Clone)]
 enum NodeOrSlicedLeaf<'a, const N: usize, L: Summarize> {
     /// No slicing was needed so we can reuse a reference to the original node.
@@ -21,17 +22,28 @@ impl<'a, const N: usize, L: Summarize> NodeOrSlicedLeaf<'a, N, L> {
     }
 }
 
-#[derive(Clone)]
+/// TODO: docs
+#[derive(Debug, Clone)]
 pub struct TreeSlice<'a, const FANOUT: usize, Leaf: Summarize> {
     nodes: Vec<NodeOrSlicedLeaf<'a, FANOUT, Leaf>>,
     summary: Leaf::Summary,
 }
 
 impl<'a, const FANOUT: usize, Leaf: Summarize> TreeSlice<'a, FANOUT, Leaf> {
+    /// TODO: docs
     pub(super) fn empty() -> Self {
         Self { nodes: Vec::new(), summary: Leaf::Summary::default() }
     }
 
+    /// TODO: docs
+    pub(super) fn from_single_node(node: &'a Node<FANOUT, Leaf>) -> Self {
+        Self {
+            summary: node.summary().clone(),
+            nodes: vec![NodeOrSlicedLeaf::Whole(node)],
+        }
+    }
+
+    /// TODO: docs
     pub(super) fn from_range_in_node<M>(
         node: &'a Node<FANOUT, Leaf>,
         range: Range<M>,
@@ -55,20 +67,17 @@ impl<'a, const FANOUT: usize, Leaf: Summarize> TreeSlice<'a, FANOUT, Leaf> {
     {
         assert!(M::zero() <= range.start);
         assert!(range.start <= range.end);
-        assert!(range.end <= M::measure(&self.summary));
+        assert!(range.end <= M::measure(self.summary()));
 
         if range.start == range.end {
-            return Self::empty();
+            Self::empty()
+        } else if M::measure(self.summary()) == range.end - range.start {
+            self.clone()
+        } else {
+            let (nodes, summary) =
+                sumzong(self.nodes.iter().map(Cow::Borrowed), range);
+            Self { nodes, summary }
         }
-
-        if M::measure(&self.summary) == range.end - range.start {
-            return self.clone();
-        }
-
-        let (nodes, summary) =
-            sumzong(self.nodes.iter().map(Cow::Borrowed), range);
-
-        Self { nodes, summary }
     }
 
     /// TODO: docs
@@ -77,6 +86,7 @@ impl<'a, const FANOUT: usize, Leaf: Summarize> TreeSlice<'a, FANOUT, Leaf> {
     }
 }
 
+/// TODO: docs
 fn sumzing<'a, const N: usize, L, M>(
     mut node: &'a Node<N, L>,
     mut range: Range<M>,
@@ -85,12 +95,6 @@ where
     L: Summarize,
     M: Metric<L>,
 {
-    let zero = M::zero();
-
-    assert!(zero <= range.start);
-    assert!(range.start <= range.end);
-    assert!(range.end <= M::measure(node.summary()));
-
     'outer: loop {
         match node {
             Node::Leaf(leaf) => {
@@ -114,7 +118,7 @@ where
             },
 
             Node::Internal(inode) => {
-                let mut measured = zero;
+                let mut measured = M::zero();
                 for child in inode.children() {
                     let size = M::measure(child.summary());
                     if range.start >= measured && range.end <= measured + size
@@ -141,6 +145,7 @@ where
     }
 }
 
+/// TODO: docs (nodes should be > 1)
 fn sumzong<'a, const N: usize, I, L, M>(
     nodes: I,
     range: Range<M>,
@@ -196,6 +201,7 @@ where
     (nodes, summary)
 }
 
+/// TODO: docs
 fn nodes_from_start<'a, const N: usize, L, M>(
     node: NodeOrSlicedLeaf<'a, N, L>,
     start: M,
@@ -254,6 +260,7 @@ fn nodes_from_start<'a, const N: usize, L, M>(
     };
 }
 
+/// TODO: docs
 fn nodes_to_end<'a, const N: usize, L, M>(
     node: NodeOrSlicedLeaf<'a, N, L>,
     end: M,

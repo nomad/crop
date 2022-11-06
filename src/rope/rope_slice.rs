@@ -6,6 +6,7 @@ use super::utils::*;
 use super::{Chunks, TextChunk, ROPE_FANOUT};
 use crate::tree::TreeSlice;
 
+/// TODO: docs
 pub struct RopeSlice<'a> {
     pub(super) tree_slice: TreeSlice<'a, ROPE_FANOUT, TextChunk>,
 }
@@ -21,12 +22,13 @@ impl<'a> Debug for RopeSlice<'a> {
 }
 
 impl<'a> RopeSlice<'a> {
+    /// TODO: docs
     pub fn byte_len(&self) -> usize {
         self.tree_slice.summary().bytes
     }
 
     /// TODO: docs
-    pub fn byte_slice<R>(&self, byte_range: R) -> RopeSlice<'_>
+    pub fn byte_slice<R>(&'a self, byte_range: R) -> RopeSlice<'a>
     where
         R: RangeBounds<usize>,
     {
@@ -34,10 +36,12 @@ impl<'a> RopeSlice<'a> {
         Self::from(self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)))
     }
 
-    fn chunks(&self) -> Chunks<'_> {
+    /// TODO: docs
+    pub(super) fn chunks(&self) -> Chunks<'_> {
         Chunks { chunks: self.tree_slice.leaves() }
     }
 
+    /// TODO: docs
     #[allow(clippy::should_implement_trait)]
     pub(super) fn from(slice: TreeSlice<'a, ROPE_FANOUT, TextChunk>) -> Self {
         Self { tree_slice: slice }
