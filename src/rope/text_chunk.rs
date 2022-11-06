@@ -46,10 +46,6 @@ impl<'a> AddAssign<&'a Self> for TextSummary {
 impl Summarize for TextChunk {
     type Summary = TextSummary;
 
-    fn empty() -> Self {
-        Self::from(String::new())
-    }
-
     fn summarize(&self) -> Self::Summary {
         TextSummary { bytes: self.text.len() }
     }

@@ -4,18 +4,12 @@ use std::sync::Arc;
 
 use super::{Inode, Leaves, Metric, Node, TreeSlice};
 
-// TODO: remove `Clone` requirement
 /// TODO: docs
 pub trait Summarize: Debug + Clone {
     type Summary: Debug
         + Default
         + Clone
         + for<'a> AddAssign<&'a Self::Summary>;
-
-    // Used to define empty tree slices.
-    //
-    /// TODO: docs
-    fn empty() -> Self;
 
     /// TODO: docs
     fn summarize(&self) -> Self::Summary;
@@ -102,10 +96,6 @@ mod tests {
 
     impl Summarize for usize {
         type Summary = Count;
-
-        fn empty() -> Self {
-            0
-        }
 
         fn summarize(&self) -> Self::Summary {
             Count(*self)

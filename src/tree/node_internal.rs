@@ -111,22 +111,6 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
         self.children.len() == N
     }
 
-    /// # Panics
-    ///
-    /// This function will panic if the coordinate are not valid.
-    pub(super) fn node_at_coordinate(
-        &self,
-        coordinates: &NodeCoordinates<N>,
-    ) -> &'_ Leaf {
-        let mut node = &*self.children()[coordinates.vec[0]];
-
-        for &idx in &coordinates.vec[1..] {
-            node = &*node.as_inode().unwrap().children()[idx];
-        }
-
-        node.as_leaf().unwrap().value()
-    }
-
     /// Adds a node to the children, updating self's summary with the summary
     /// coming from the new node.
     ///
@@ -141,50 +125,6 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
 
     pub(super) fn summary(&self) -> &Leaf::Summary {
         &self.summary
-    }
-}
-
-/// TODO: docs
-#[derive(Clone, Debug)]
-pub(super) enum NodeDescendant<'a, const N: usize, L: Summarize> {
-    /// TODO: docs
-    Whole(NodeCoordinates<'a, N>),
-
-    /// TODO: docs
-    SlicedLeaf(NodeCoordinates<'a, N>, L),
-}
-
-/// Path to follow to go from an internal node down to one of the leaves in its
-/// subtree.
-#[derive(Clone, Debug)]
-pub(super) struct NodeCoordinates<'a, const N: usize> {
-    /// # Invariants
-    ///
-    /// - `vec` always contains at least one item.
-    /// - all the items in the vector are < `N`.
-    vec: Vec<usize>,
-
-    /// TODO: docs
-    inode_lt: std::marker::PhantomData<&'a ()>,
-}
-
-impl<'a, const N: usize> NodeCoordinates<'a, N> {
-    pub(super) fn init(first: usize) -> Self {
-        let mut coord = Self::new();
-        coord.push(first);
-        coord
-    }
-
-    pub(super) fn new() -> Self {
-        Self { vec: Vec::new(), inode_lt: std::marker::PhantomData }
-    }
-
-    pub(super) fn pop(&mut self) -> Option<usize> {
-        self.vec.pop()
-    }
-
-    pub(super) fn push(&mut self, idx: usize) {
-        self.vec.push(idx)
     }
 }
 

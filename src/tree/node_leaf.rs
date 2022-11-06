@@ -26,6 +26,10 @@ impl<Leaf: Summarize> self::Leaf<Leaf> {
         Self { summary: value.summarize(), value }
     }
 
+    pub(super) fn new(value: Leaf, summary: Leaf::Summary) -> Self {
+        Self { value, summary }
+    }
+
     pub(super) fn summary(&self) -> &Leaf::Summary {
         &self.summary
     }
