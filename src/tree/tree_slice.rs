@@ -57,7 +57,18 @@ impl<'a, const FANOUT: usize, Leaf: Summarize> TreeSlice<'a, FANOUT, Leaf> {
 
     /// TODO: docs
     pub fn leaves(&self) -> Leaves<'_, Leaf> {
-        todo!()
+        let mut leaves = Leaves::new();
+        for node_or_leaf in &self.nodes {
+            match node_or_leaf {
+                NodeOrSlicedLeaf::Whole(node) => {
+                    leaves.push_node_subtree(node)
+                },
+                NodeOrSlicedLeaf::Sliced(leaf) => {
+                    leaves.push_leaf(leaf.value())
+                },
+            }
+        }
+        leaves
     }
 
     /// TODO: docs
@@ -97,26 +108,6 @@ where
 {
     'outer: loop {
         match node {
-            Node::Leaf(leaf) => {
-                // If the leaf's size is perfectly equal to the width of the
-                // range we return the leaf's value. If not then the range is
-                // strictly smaller than the leaf and the latter *must* be
-                // sliceable by `M`.
-
-                // TODO: this should be handled in the previous iteration.
-                if M::measure(leaf.summary()) == range.end - range.start {
-                    return (
-                        vec![NodeOrSlicedLeaf::Whole(node)],
-                        leaf.summary().clone(),
-                    );
-                } else {
-                    let sliced = M::slice(leaf.value(), range);
-                    let summary = sliced.summarize();
-                    let leaf = Leaf::new(sliced, summary.clone());
-                    return (vec![NodeOrSlicedLeaf::Sliced(leaf)], summary);
-                }
-            },
-
             Node::Internal(inode) => {
                 let mut measured = M::zero();
                 for child in inode.children() {
@@ -140,6 +131,26 @@ where
                     .map(|n| Cow::Owned(NodeOrSlicedLeaf::Whole(&**n)));
 
                 return sumzong(nodes, range);
+            },
+
+            Node::Leaf(leaf) => {
+                // If the leaf's size is perfectly equal to the width of the
+                // range we return the leaf's value. If not then the range is
+                // strictly smaller than the leaf and the latter *must* be
+                // sliceable by `M`.
+
+                // TODO: this should be handled in the previous iteration.
+                if M::measure(leaf.summary()) == range.end - range.start {
+                    return (
+                        vec![NodeOrSlicedLeaf::Whole(node)],
+                        leaf.summary().clone(),
+                    );
+                } else {
+                    let sliced = M::slice(leaf.value(), range);
+                    let summary = sliced.summarize();
+                    let leaf = Leaf::new(sliced, summary.clone());
+                    return (vec![NodeOrSlicedLeaf::Sliced(leaf)], summary);
+                }
             },
         }
     }

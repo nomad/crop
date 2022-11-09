@@ -79,7 +79,9 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
 
     /// Returns an iterator over the leaves of this tree.
     pub fn leaves(&self) -> Leaves<'_, Leaf> {
-        todo!()
+        let mut leaves = Leaves::new();
+        leaves.push_node_subtree(&*self.root);
+        leaves
     }
 
     /// TODO: docs
