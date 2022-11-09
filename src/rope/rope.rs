@@ -1,4 +1,4 @@
-use std::fmt::{self, Debug};
+use std::fmt::{self, Debug, Display};
 use std::ops::RangeBounds;
 
 use super::metrics::ByteMetric;
@@ -20,10 +20,17 @@ pub struct Rope {
 impl Debug for Rope {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         f.write_str("Rope(\"")?;
+        Display::fmt(self, f)?;
+        f.write_str("\")")
+    }
+}
+
+impl Display for Rope {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         for chunk in self.chunks() {
             f.write_str(chunk)?;
         }
-        f.write_str("\")")
+        Ok(())
     }
 }
 
@@ -45,11 +52,26 @@ impl Rope {
     fn chunks(&self) -> Chunks<'_> {
         Chunks { chunks: self.root.leaves() }
     }
+}
 
-    /// TODO: docs
-    #[allow(clippy::should_implement_trait)]
-    pub fn from_str(text: &str) -> Self {
-        Rope { root: Tree::from_leaves(TextChunkIter::new(text)) }
+impl From<&str> for Rope {
+    #[inline]
+    fn from(s: &str) -> Self {
+        Rope { root: Tree::from_leaves(TextChunkIter::new(s)) }
+    }
+}
+
+impl<'a> From<std::borrow::Cow<'a, str>> for Rope {
+    #[inline]
+    fn from(moo: std::borrow::Cow<'a, str>) -> Self {
+        Rope::from(&*moo)
+    }
+}
+
+impl From<String> for Rope {
+    #[inline]
+    fn from(s: String) -> Self {
+        Rope::from(&*s)
     }
 }
 
@@ -59,21 +81,16 @@ mod tests {
 
     #[test]
     fn easy() {
-        let r = Rope::from_str("Hello there");
+        let r = Rope::from("Hello there");
         assert_eq!(11, r.byte_len());
 
-        println!("{:#?}", r.root);
-        panic!("")
-
-        // let r = Rope::from_str("🐕‍🦺");
-        // assert_eq!(11, r.byte_len());
-
-        // panic!("{r:?}");
+        let r = Rope::from("🐕‍🦺");
+        assert_eq!(11, r.byte_len());
     }
 
     #[test]
     fn slice() {
-        let r = Rope::from_str("Hello there");
+        let r = Rope::from("Hello there");
 
         let s = r.byte_slice(..);
         assert_eq!(11, s.byte_len());
@@ -81,7 +98,7 @@ mod tests {
         let s = s.byte_slice(0..5);
         assert_eq!(5, s.byte_len());
 
-        let r = Rope::from_str(
+        let r = Rope::from(
             "Hello there this is a really long line that I'm gonna use to \
              test this fucking slicing methods that we got going on well \
              hope this shit works 'cause if it doesn't I'm gonna fucking \

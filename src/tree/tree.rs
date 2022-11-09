@@ -129,9 +129,9 @@ mod tests {
 
     #[test]
     fn pretty_print() {
-        let tree = Tree::<2, usize>::from_leaves(0..10);
-        println!("{:#?}", tree);
-        panic!("")
+        let _tree = Tree::<2, usize>::from_leaves(0..10);
+        // println!("{:#?}", tree);
+        // panic!("")
     }
 
     #[test]
