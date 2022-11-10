@@ -9,6 +9,5 @@ mod utils;
 
 use iterators::Chunks;
 pub use rope::Rope;
-use rope::ROPE_FANOUT;
 pub use rope_slice::RopeSlice;
 use text_chunk::{TextChunk, TextChunkIter, TextSummary};

@@ -1,4 +1,3 @@
-use std::fmt::{self, Debug, Display};
 use std::ops::RangeBounds;
 
 use super::metrics::ByteMetric;
@@ -8,30 +7,14 @@ use crate::tree::Tree;
 use crate::RopeSlice;
 
 #[cfg(not(test))]
-pub(super) const ROPE_FANOUT: usize = 8;
+const ROPE_FANOUT: usize = 8;
 
 #[cfg(test)]
-pub(super) const ROPE_FANOUT: usize = 2;
+const ROPE_FANOUT: usize = 2;
 
+/// TODO: docs
 pub struct Rope {
     root: Tree<ROPE_FANOUT, TextChunk>,
-}
-
-impl Debug for Rope {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.write_str("Rope(\"")?;
-        Display::fmt(self, f)?;
-        f.write_str("\")")
-    }
-}
-
-impl Display for Rope {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        for chunk in self.chunks() {
-            f.write_str(chunk)?;
-        }
-        Ok(())
-    }
 }
 
 impl Rope {
@@ -46,11 +29,45 @@ impl Rope {
         R: RangeBounds<usize>,
     {
         let (start, end) = range_to_tuple(byte_range, 0, self.byte_len());
-        RopeSlice::from(self.root.slice(ByteMetric(start)..ByteMetric(end)))
+        RopeSlice::new(self.root.slice(ByteMetric(start)..ByteMetric(end)))
     }
 
     fn chunks(&self) -> Chunks<'_> {
         Chunks { chunks: self.root.leaves() }
+    }
+
+    pub(super) const fn fanout() -> usize {
+        ROPE_FANOUT
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn new() -> Self {
+        Self::from("")
+    }
+}
+
+impl std::fmt::Debug for Rope {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        f.write_str("Rope(\"")?;
+        std::fmt::Display::fmt(self, f)?;
+        f.write_str("\")")
+    }
+}
+
+impl std::fmt::Display for Rope {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        for chunk in self.chunks() {
+            f.write_str(chunk)?;
+        }
+        Ok(())
+    }
+}
+
+impl Default for Rope {
+    #[inline]
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -61,19 +78,96 @@ impl From<&str> for Rope {
     }
 }
 
-impl<'a> From<std::borrow::Cow<'a, str>> for Rope {
-    #[inline]
-    fn from(moo: std::borrow::Cow<'a, str>) -> Self {
-        Rope::from(&*moo)
-    }
-}
-
 impl From<String> for Rope {
     #[inline]
     fn from(s: String) -> Self {
-        Rope::from(&*s)
+        if s.len() <= TextChunk::max_bytes() {
+            // If the string fits in one chunk we can avoid the allocation.
+            Rope { root: Tree::from_leaves([TextChunk::new(s)]) }
+        } else {
+            Rope::from(&*s)
+        }
     }
 }
+
+impl<'a> From<std::borrow::Cow<'a, str>> for Rope {
+    #[inline]
+    fn from(moo: std::borrow::Cow<'a, str>) -> Self {
+        match moo {
+            std::borrow::Cow::Owned(s) => Rope::from(s),
+            std::borrow::Cow::Borrowed(s) => Rope::from(s),
+        }
+    }
+}
+
+impl std::cmp::PartialEq<Rope> for Rope {
+    #[inline]
+    fn eq(&self, rhs: &Rope) -> bool {
+        todo!()
+    }
+}
+
+impl std::cmp::PartialEq<str> for Rope {
+    #[inline]
+    fn eq(&self, rhs: &str) -> bool {
+        if self.byte_len() != rhs.len() {
+            false
+        } else {
+            chunks_eq_str(self.chunks(), rhs)
+        }
+    }
+}
+
+impl std::cmp::PartialEq<Rope> for str {
+    #[inline]
+    fn eq(&self, rhs: &Rope) -> bool {
+        rhs == self
+    }
+}
+
+impl<'a> std::cmp::PartialEq<&'a str> for Rope {
+    #[inline]
+    fn eq(&self, rhs: &&'a str) -> bool {
+        self == *rhs
+    }
+}
+
+impl<'a> std::cmp::PartialEq<Rope> for &'a str {
+    #[inline]
+    fn eq(&self, rhs: &Rope) -> bool {
+        rhs == self
+    }
+}
+
+impl std::cmp::PartialEq<String> for Rope {
+    #[inline]
+    fn eq(&self, rhs: &String) -> bool {
+        self == &**rhs
+    }
+}
+
+impl std::cmp::PartialEq<Rope> for String {
+    #[inline]
+    fn eq(&self, rhs: &Rope) -> bool {
+        rhs == self
+    }
+}
+
+impl<'a> std::cmp::PartialEq<std::borrow::Cow<'a, str>> for Rope {
+    #[inline]
+    fn eq(&self, rhs: &std::borrow::Cow<'a, str>) -> bool {
+        self == &**rhs
+    }
+}
+
+impl<'a> std::cmp::PartialEq<Rope> for std::borrow::Cow<'a, str> {
+    #[inline]
+    fn eq(&self, rhs: &Rope) -> bool {
+        rhs == self
+    }
+}
+
+impl std::cmp::Eq for Rope {}
 
 #[cfg(test)]
 mod tests {
@@ -113,5 +207,13 @@ mod tests {
 
         let s = r.byte_slice(0..=10);
         assert_eq!(11, s.byte_len());
+    }
+
+    #[test]
+    fn partial_eq() {
+        let s = "This is a service dog: 🐕‍🦺";
+        let r = Rope::from(s);
+        assert_eq!(s, r);
+        assert_eq!(s, r.byte_slice(..));
     }
 }

@@ -1,5 +1,20 @@
 use std::ops::{Bound, RangeBounds};
 
+use super::Chunks;
+
+/// Note: assumes that `chunks` yields the same number of bytes as `s` and that
+/// `chunks` is iterating forward.
+pub(super) fn chunks_eq_str<'a>(chunks: Chunks<'a>, s: &str) -> bool {
+    let mut checked = 0;
+    for chunk in chunks {
+        if chunk != &s[checked..(checked + chunk.len())] {
+            return false;
+        }
+        checked += chunk.len();
+    }
+    true
+}
+
 pub(super) fn range_to_tuple<B>(
     range: B,
     lo: usize,

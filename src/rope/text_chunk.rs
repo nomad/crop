@@ -16,6 +16,16 @@ pub(super) struct TextChunk {
     pub(super) text: String,
 }
 
+impl TextChunk {
+    pub(super) const fn max_bytes() -> usize {
+        TEXT_CHUNK_MAX_BYTES
+    }
+
+    pub(super) fn new(text: String) -> Self {
+        Self { text }
+    }
+}
+
 impl From<String> for TextChunk {
     fn from(text: String) -> Self {
         debug_assert!(
