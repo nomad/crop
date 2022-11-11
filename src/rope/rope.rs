@@ -1,6 +1,6 @@
 use std::ops::RangeBounds;
 
-use super::iterators::{Bytes, Chunks};
+use super::iterators::{Bytes, Chars, Chunks};
 use super::metrics::ByteMetric;
 use super::utils::*;
 use super::{TextChunk, TextChunkIter};
@@ -36,6 +36,11 @@ impl Rope {
     /// TODO: docs
     pub fn bytes(&self) -> Bytes<'_> {
         Bytes::from(self)
+    }
+
+    /// TODO: docs
+    pub fn chars(&self) -> Chars<'_> {
+        Chars::from(self)
     }
 
     pub(super) fn chunks(&self) -> Chunks<'_> {

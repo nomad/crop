@@ -50,7 +50,8 @@ impl<'a> Iterator for Bytes<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.yielded_in_current == self.current.len() {
-            // NOTE: make sure there are never empty chunks or this will fail.
+            // NOTE: make sure there are never empty chunks or this will make
+            // the byte indexing below fail.
             self.current = self.chunks.next()?.as_bytes();
             self.yielded_in_current = 0;
         }
@@ -69,6 +70,48 @@ impl<'a> Iterator for Bytes<'a> {
 
 impl<'a> ExactSizeIterator for Bytes<'a> {}
 
+/// TODO: docs
+#[derive(Clone)]
+pub struct Chars<'a> {
+    chunks: Chunks<'a>,
+    current: &'a str,
+    /// Note: this is the number of *bytes* already yielded in `current`, not
+    /// chars.
+    yielded_in_current: usize,
+}
+
+impl<'a> From<&'a Rope> for Chars<'a> {
+    fn from(rope: &'a Rope) -> Self {
+        let mut chunks = rope.chunks();
+        let current = chunks.next().unwrap_or_default();
+        Self { chunks, current, yielded_in_current: 0 }
+    }
+}
+
+impl<'a> Iterator for Chars<'a> {
+    type Item = char;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.yielded_in_current == self.current.len() {
+            // NOTE: make sure there are never empty chunks or this will make
+            // the byte indexing below fail.
+            self.current = self.chunks.next()?;
+            self.yielded_in_current = 0;
+        }
+
+        let char = unsafe {
+            self.current[self.yielded_in_current..]
+                .chars()
+                .next()
+                // Safety: `yielded_in_current < current.len()`, so there are
+                // still chars to yield in this chunk.
+                .unwrap_unchecked()
+        };
+        self.yielded_in_current += char.len_utf8();
+        Some(char)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::Rope;
@@ -77,5 +120,6 @@ mod tests {
     fn bytes_1() {
         let r = Rope::from("Hello world this is my dog -> 🐕‍🦺");
         assert_eq!(41, r.bytes().count());
+        assert_eq!(33, r.chars().count());
     }
 }

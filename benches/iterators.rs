@@ -13,6 +13,14 @@ fn iter(c: &mut Criterion) {
             iter.next();
         })
     });
+
+    group.bench_function("chars", |bench| {
+        let r = Rope::from(LARGE);
+        let mut iter = r.chars().cycle();
+        bench.iter(|| {
+            iter.next();
+        })
+    });
 }
 
 criterion_group!(benches, iter);
