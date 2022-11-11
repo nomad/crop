@@ -1,5 +1,7 @@
 use super::{Node, Summarize};
 
+/// TODO: docs
+#[derive(Clone)]
 pub struct Leaves<'a, Leaf: Summarize> {
     leaves: Vec<&'a Leaf>,
     current: usize,

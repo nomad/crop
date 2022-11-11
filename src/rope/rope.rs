@@ -1,8 +1,9 @@
 use std::ops::RangeBounds;
 
+use super::iterators::{Bytes, Chunks};
 use super::metrics::ByteMetric;
 use super::utils::*;
-use super::{Chunks, TextChunk, TextChunkIter};
+use super::{TextChunk, TextChunkIter};
 use crate::tree::Tree;
 use crate::RopeSlice;
 
@@ -32,12 +33,23 @@ impl Rope {
         RopeSlice::new(self.root.slice(ByteMetric(start)..ByteMetric(end)))
     }
 
-    fn chunks(&self) -> Chunks<'_> {
+    /// TODO: docs
+    pub fn bytes(&self) -> Bytes<'_> {
+        Bytes::from(self)
+    }
+
+    pub(super) fn chunks(&self) -> Chunks<'_> {
         Chunks { chunks: self.root.leaves() }
     }
 
     pub(super) const fn fanout() -> usize {
         ROPE_FANOUT
+    }
+
+    /// TODO: docs
+    pub fn insert(&mut self, after_byte: usize, text: &str) {
+        assert!(after_byte <= self.byte_len());
+        todo!()
     }
 
     /// TODO: docs

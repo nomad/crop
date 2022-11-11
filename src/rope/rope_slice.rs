@@ -1,8 +1,9 @@
 use std::ops::RangeBounds;
 
+use super::iterators::{Bytes, Chunks};
 use super::metrics::ByteMetric;
 use super::utils::*;
-use super::{Chunks, Rope, TextChunk};
+use super::{Rope, TextChunk};
 use crate::tree::TreeSlice;
 
 /// TODO: docs
@@ -23,6 +24,11 @@ impl<'a> RopeSlice<'a> {
     {
         let (start, end) = range_to_tuple(byte_range, 0, self.byte_len());
         Self::new(self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)))
+    }
+
+    /// TODO: docs
+    pub fn bytes(&self) -> Bytes<'_> {
+        todo!()
     }
 
     /// TODO: docs

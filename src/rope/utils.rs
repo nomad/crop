@@ -1,6 +1,6 @@
 use std::ops::{Bound, RangeBounds};
 
-use super::Chunks;
+use super::iterators::Chunks;
 
 /// Note: assumes that `chunks` yields the same number of bytes as `s` and that
 /// `chunks` is iterating forward.

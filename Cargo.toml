@@ -12,3 +12,7 @@ criterion = "0.4"
 [[bench]]
 name = "create"
 harness = false
+
+[[bench]]
+name = "iterators"
+harness = false

@@ -3,6 +3,7 @@ use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 
 use super::Summarize;
 
+/// TODO: docs
 pub trait Metric<Leaf: Summarize>:
     Debug
     + Copy
@@ -12,8 +13,6 @@ pub trait Metric<Leaf: Summarize>:
     + Sub<Self, Output = Self>
     + AddAssign<Self>
     + SubAssign<Self>
-// + for<'a> Add<&'a Self, Output = Self>
-// + for<'a> AddAssign<&'a Self>
 {
     /// The identity element of this metric wrt to addition. It should always
     /// be such that `t + t::zero() = t` for all `t` in `T`.
