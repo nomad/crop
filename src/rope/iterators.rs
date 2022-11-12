@@ -13,7 +13,7 @@ impl<'a> Iterator for Chunks<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.chunks.next().map(|s| &s.text)
+        self.chunks.next().map(std::ops::Deref::deref)
     }
 
     #[inline]
@@ -103,6 +103,7 @@ pub struct Chars<'a> {
 }
 
 impl<'a> From<&'a Rope> for Chars<'a> {
+    #[inline]
     fn from(rope: &'a Rope) -> Self {
         let mut chunks = rope.chunks();
         let current = chunks.next().unwrap_or_default();
@@ -111,6 +112,7 @@ impl<'a> From<&'a Rope> for Chars<'a> {
 }
 
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chars<'a> {
+    #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
         let mut chunks = slice.chunks();
         let current = chunks.next().unwrap_or_default();
@@ -121,6 +123,7 @@ impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chars<'a> {
 impl<'a> Iterator for Chars<'a> {
     type Item = char;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.yielded_in_current == self.current.len() {
             // NOTE: make sure there are never empty chunks or this will make
@@ -148,12 +151,14 @@ pub struct Lines<'a> {
 }
 
 impl<'a> From<&'a Rope> for Lines<'a> {
+    #[inline]
     fn from(rope: &'a Rope) -> Self {
         todo!()
     }
 }
 
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
+    #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
         todo!()
     }

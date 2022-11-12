@@ -10,10 +10,8 @@ const TEXT_CHUNK_MAX_BYTES: usize = 1024;
 #[cfg(test)]
 const TEXT_CHUNK_MAX_BYTES: usize = 4;
 
-// TODO: remove `Clone` impl
-#[derive(Clone)]
 pub(super) struct TextChunk {
-    pub(super) text: String,
+    text: String,
 }
 
 impl TextChunk {
@@ -61,7 +59,7 @@ impl Leaf for TextChunk {
 
 #[derive(Debug)]
 pub(super) struct TextSlice {
-    pub(super) text: str,
+    text: str,
 }
 
 impl From<&str> for &TextSlice {
@@ -69,6 +67,15 @@ impl From<&str> for &TextSlice {
     fn from(text: &str) -> Self {
         // Safety: it's safe.
         unsafe { &*(text as *const str as *const TextSlice) }
+    }
+}
+
+impl std::ops::Deref for TextSlice {
+    type Target = str;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.text
     }
 }
 
