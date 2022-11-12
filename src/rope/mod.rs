@@ -9,4 +9,4 @@ mod utils;
 
 pub use rope::Rope;
 pub use rope_slice::RopeSlice;
-use text_chunk::{TextChunk, TextChunkIter, TextSummary};
+use text_chunk::{TextChunk, TextChunkIter, TextSlice, TextSummary};

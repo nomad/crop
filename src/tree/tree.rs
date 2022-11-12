@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 use std::fmt::{self, Debug};
 use std::ops::{AddAssign, Range};
 use std::sync::Arc;
@@ -5,22 +6,28 @@ use std::sync::Arc;
 use super::{Inode, Leaves, Metric, Node, TreeSlice};
 
 /// TODO: docs
-pub trait Summarize: Debug + Clone {
+pub trait Leaf: Summarize + Borrow<Self::Slice> {
+    type Slice: ?Sized
+        + Summarize<Summary = <Self as Summarize>::Summary>
+        + ToOwned<Owned = Self>;
+}
+
+/// TODO: docs
+pub trait Summarize: Debug {
     type Summary: Debug
         + Default
         + Clone
         + for<'a> AddAssign<&'a Self::Summary>;
 
-    /// TODO: docs
     fn summarize(&self) -> Self::Summary;
 }
 
 /// TODO: docs
-pub struct Tree<const FANOUT: usize, Leaf: Summarize> {
-    root: Arc<Node<FANOUT, Leaf>>,
+pub struct Tree<const FANOUT: usize, L: Leaf> {
+    root: Arc<Node<FANOUT, L>>,
 }
 
-impl<const N: usize, Leaf: Summarize> Debug for Tree<N, Leaf> {
+impl<const N: usize, L: Leaf> Debug for Tree<N, L> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !f.alternate() {
             f.debug_struct("Tree").field("root", &self.root).finish()
@@ -34,14 +41,14 @@ impl<const N: usize, Leaf: Summarize> Debug for Tree<N, Leaf> {
 }
 
 /// TODO: docs
-impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
+impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     /// # Panics
     ///
     /// This function will panic if the iterator is empty.
     #[inline]
     pub fn from_leaves<I>(leaves: I) -> Self
     where
-        I: IntoIterator<Item = Leaf>,
+        I: IntoIterator<Item = L>,
         I::IntoIter: ExactSizeIterator,
     {
         let mut leaves = leaves.into_iter();
@@ -50,12 +57,13 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
             panic!(
                 "Cannot construct a Tree<{}, {}> from an empty iterator",
                 FANOUT,
-                std::any::type_name::<Leaf>(),
+                std::any::type_name::<L>(),
             )
         }
 
         if leaves.len() == 1 {
-            let leaf = super::Leaf::from_value(leaves.next().unwrap());
+            let leaf =
+                super::node_leaf::Leaf::from_value(leaves.next().unwrap());
             return Tree { root: Arc::new(Node::Leaf(leaf)) };
         }
 
@@ -64,9 +72,9 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
 
     /// TODO: docs
     #[inline]
-    pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, Leaf>
+    pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
     where
-        M: Metric<Leaf>,
+        M: Metric<L>,
     {
         assert!(M::zero() <= range.start);
         assert!(range.start <= range.end);
@@ -81,7 +89,7 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
 
     /// Returns an iterator over the leaves of this tree.
     #[inline]
-    pub fn leaves(&self) -> Leaves<'_, Leaf> {
+    pub fn leaves(&self) -> Leaves<'_, L> {
         let mut leaves = Leaves::new();
         leaves.push_node_subtree(&*self.root);
         leaves
@@ -89,7 +97,7 @@ impl<const FANOUT: usize, Leaf: Summarize> Tree<FANOUT, Leaf> {
 
     /// TODO: docs
     #[inline]
-    pub fn summary(&self) -> &Leaf::Summary {
+    pub fn summary(&self) -> &L::Summary {
         self.root.summary()
     }
 }
@@ -113,6 +121,10 @@ mod tests {
         fn summarize(&self) -> Self::Summary {
             Count(*self)
         }
+    }
+
+    impl Leaf for usize {
+        type Slice = Self;
     }
 
     impl Metric<usize> for usize {

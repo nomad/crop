@@ -11,10 +11,12 @@ pub(super) struct Chunks<'a> {
 impl<'a> Iterator for Chunks<'a> {
     type Item = &'a str;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.chunks.next().map(|s| &*s.text)
+        self.chunks.next().map(|s| &s.text)
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.chunks.len();
         (remaining, Some(remaining))
@@ -34,6 +36,7 @@ pub struct Bytes<'a> {
 }
 
 impl<'a> From<&'a Rope> for Bytes<'a> {
+    #[inline]
     fn from(rope: &'a Rope) -> Self {
         let mut chunks = rope.chunks();
         let current = chunks.next().unwrap_or_default().as_bytes();
@@ -48,6 +51,7 @@ impl<'a> From<&'a Rope> for Bytes<'a> {
 }
 
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Bytes<'a> {
+    #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
         let mut chunks = slice.chunks();
         let current = chunks.next().unwrap_or_default().as_bytes();
@@ -64,6 +68,7 @@ impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Bytes<'a> {
 impl<'a> Iterator for Bytes<'a> {
     type Item = u8;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.yielded_in_current == self.current.len() {
             // NOTE: make sure there are never empty chunks or this will make
@@ -78,6 +83,7 @@ impl<'a> Iterator for Bytes<'a> {
         Some(byte)
     }
 
+    #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
         let remaining = self.total_bytes - self.total_yielded;
         (remaining, Some(remaining))

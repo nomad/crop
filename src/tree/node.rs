@@ -1,13 +1,13 @@
 use std::fmt::{self, Debug};
 
-use super::{Inode, Summarize};
+use super::{Inode, Leaf};
 
-pub(super) enum Node<const N: usize, Leaf: Summarize> {
-    Internal(Inode<N, Leaf>),
-    Leaf(super::Leaf<Leaf>),
+pub(super) enum Node<const N: usize, L: Leaf> {
+    Internal(Inode<N, L>),
+    Leaf(super::node_leaf::Leaf<L>),
 }
 
-impl<const N: usize, Leaf: Summarize> Debug for Node<N, Leaf> {
+impl<const N: usize, L: Leaf> Debug for Node<N, L> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !f.alternate() {
             match self {
@@ -27,7 +27,7 @@ impl<const N: usize, Leaf: Summarize> Debug for Node<N, Leaf> {
     }
 }
 
-impl<const N: usize, Leaf: Summarize> Node<N, Leaf> {
+impl<const N: usize, L: Leaf> Node<N, L> {
     // pub(super) fn as_inode(&self) -> Option<&Inode<N, Leaf>> {
     //     match self {
     //         Node::Internal(inode) => Some(inode),
@@ -58,7 +58,7 @@ impl<const N: usize, Leaf: Summarize> Node<N, Leaf> {
     }
 
     /// TODO: docs
-    pub(super) fn summary(&self) -> &Leaf::Summary {
+    pub(super) fn summary(&self) -> &L::Summary {
         match self {
             Node::Internal(inode) => inode.summary(),
             Node::Leaf(leaf) => leaf.summary(),

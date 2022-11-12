@@ -1,16 +1,16 @@
 use std::fmt::{self, Debug};
 use std::sync::Arc;
 
-use super::{Node, Summarize};
+use super::{Leaf, Node};
 
 /// Invariants: guaranteed to contain at least one child node.
-pub(super) struct Inode<const N: usize, Leaf: Summarize> {
-    children: Vec<Arc<Node<N, Leaf>>>,
-    summary: Leaf::Summary,
+pub(super) struct Inode<const N: usize, L: Leaf> {
+    children: Vec<Arc<Node<N, L>>>,
+    summary: L::Summary,
     depth: usize,
 }
 
-impl<const N: usize, Leaf: Summarize> Debug for Inode<N, Leaf> {
+impl<const N: usize, L: Leaf> Debug for Inode<N, L> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !f.alternate() {
             f.debug_struct("Inode")
@@ -23,7 +23,7 @@ impl<const N: usize, Leaf: Summarize> Debug for Inode<N, Leaf> {
     }
 }
 
-impl<const N: usize, Leaf: Summarize> Default for Inode<N, Leaf> {
+impl<const N: usize, L: Leaf> Default for Inode<N, L> {
     fn default() -> Self {
         Self {
             children: Vec::with_capacity(N),
@@ -33,8 +33,8 @@ impl<const N: usize, Leaf: Summarize> Default for Inode<N, Leaf> {
     }
 }
 
-impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
-    pub(super) fn children(&self) -> &[Arc<Node<N, Leaf>>] {
+impl<const N: usize, L: Leaf> Inode<N, L> {
+    pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
         &self.children
     }
 
@@ -47,7 +47,7 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
     /// This function will panic if the iterator yields more than `N` items.
     fn from_children<I>(children: I) -> Self
     where
-        I: IntoIterator<Item = Arc<Node<N, Leaf>>>,
+        I: IntoIterator<Item = Arc<Node<N, L>>>,
         I::IntoIter: ExactSizeIterator,
     {
         let children = children.into_iter();
@@ -70,11 +70,11 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
 
     pub(super) fn from_leaves<I>(leaves: I) -> Self
     where
-        I: IntoIterator<Item = Leaf>,
+        I: IntoIterator<Item = L>,
     {
         let mut nodes = leaves
             .into_iter()
-            .map(super::Leaf::from_value)
+            .map(super::node_leaf::Leaf::from_value)
             .map(Node::Leaf)
             .map(Arc::new)
             .collect::<Vec<_>>();
@@ -123,7 +123,7 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
     //    self.children.push(Arc::new(node));
     //}
 
-    pub(super) fn summary(&self) -> &Leaf::Summary {
+    pub(super) fn summary(&self) -> &L::Summary {
         &self.summary
     }
 }
@@ -131,8 +131,8 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
 /// Recursively prints a tree-like representation of this node. Called by the
 /// `Debug` impl of [`Inode`] when using the pretty-print modifier (i.e.
 /// `{:#?}`).
-fn pretty_print_inode<const N: usize, Leaf: Summarize>(
-    inode: &Inode<N, Leaf>,
+fn pretty_print_inode<const N: usize, L: Leaf>(
+    inode: &Inode<N, L>,
     shifts: &mut String,
     ident: &str,
     last_shift_byte_len: usize,

@@ -1,6 +1,6 @@
 use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 
-use super::{TextChunk, TextSummary};
+use super::{TextChunk, TextSlice, TextSummary};
 use crate::tree::Metric;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -43,8 +43,8 @@ impl Metric<TextChunk> for ByteMetric {
         Self(summary.bytes)
     }
 
-    fn slice(chunk: &TextChunk, range: Range<Self>) -> TextChunk {
-        TextChunk::from(chunk.text[range.start.0..range.end.0].to_owned())
+    fn slice(chunk: &TextSlice, range: Range<Self>) -> &TextSlice {
+        (&chunk.text[range.start.0..range.end.0]).into()
     }
 }
 
@@ -88,7 +88,7 @@ impl Metric<TextChunk> for LineMetric {
         todo!()
     }
 
-    fn slice(chunk: &TextChunk, range: Range<Self>) -> TextChunk {
+    fn slice(chunk: &TextSlice, range: Range<Self>) -> &TextSlice {
         todo!()
     }
 }

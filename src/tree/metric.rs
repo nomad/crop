@@ -1,10 +1,10 @@
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 
-use super::Summarize;
+use super::Leaf;
 
 /// TODO: docs
-pub trait Metric<Leaf: Summarize>:
+pub trait Metric<L: Leaf>:
     Debug
     + Copy
     + Ord
@@ -19,16 +19,16 @@ pub trait Metric<Leaf: Summarize>:
     fn zero() -> Self;
 
     /// TODO: docs
-    fn measure(summary: &Leaf::Summary) -> Self;
+    fn measure(summary: &L::Summary) -> Self;
 
     /// Slice the leaf in the given range. This method should be implemented
     /// only if it makes sense to take "part of a leaf".
     #[allow(unused_variables)]
-    fn slice<'a>(leaf: &'a Leaf, range: Range<Self>) -> Leaf /*&'a Leaf*/ {
+    fn slice<'a>(leaf: &'a L::Slice, range: Range<Self>) -> &'a L::Slice {
         unimplemented!(
             "Trying to slice {leaf:?} in the {range:?} range, but {} isn't \
              sliceable by {}",
-            std::any::type_name::<Leaf>(),
+            std::any::type_name::<L>(),
             std::any::type_name::<Self>()
         )
     }

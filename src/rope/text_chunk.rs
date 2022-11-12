@@ -2,7 +2,7 @@ use std::fmt::{self, Debug};
 use std::ops::AddAssign;
 use std::str;
 
-use crate::tree::Summarize;
+use crate::tree::{Leaf, Summarize};
 
 #[cfg(not(test))]
 const TEXT_CHUNK_MAX_BYTES: usize = 1024;
@@ -20,13 +20,10 @@ impl TextChunk {
     pub(super) const fn max_bytes() -> usize {
         TEXT_CHUNK_MAX_BYTES
     }
-
-    pub(super) fn new(text: String) -> Self {
-        Self { text }
-    }
 }
 
 impl From<String> for TextChunk {
+    #[inline]
     fn from(text: String) -> Self {
         debug_assert!(
             text.len() <= TEXT_CHUNK_MAX_BYTES
@@ -42,6 +39,57 @@ impl Debug for TextChunk {
     }
 }
 
+impl std::borrow::Borrow<TextSlice> for TextChunk {
+    #[inline]
+    fn borrow(&self) -> &TextSlice {
+        (&*self.text).into()
+    }
+}
+
+impl Summarize for TextChunk {
+    type Summary = TextSummary;
+
+    #[inline]
+    fn summarize(&self) -> Self::Summary {
+        TextSummary { bytes: self.text.len() }
+    }
+}
+
+impl Leaf for TextChunk {
+    type Slice = TextSlice;
+}
+
+#[derive(Debug)]
+pub(super) struct TextSlice {
+    pub(super) text: str,
+}
+
+impl From<&str> for &TextSlice {
+    #[inline]
+    fn from(text: &str) -> Self {
+        // Safety: it's safe.
+        unsafe { &*(text as *const str as *const TextSlice) }
+    }
+}
+
+impl Summarize for TextSlice {
+    type Summary = TextSummary;
+
+    #[inline]
+    fn summarize(&self) -> Self::Summary {
+        TextSummary { bytes: self.text.len() }
+    }
+}
+
+impl ToOwned for TextSlice {
+    type Owned = TextChunk;
+
+    #[inline]
+    fn to_owned(&self) -> Self::Owned {
+        TextChunk::from(self.text.to_owned())
+    }
+}
+
 #[derive(Clone, Default, Debug)]
 pub(super) struct TextSummary {
     pub(super) bytes: usize,
@@ -50,14 +98,6 @@ pub(super) struct TextSummary {
 impl<'a> AddAssign<&'a Self> for TextSummary {
     fn add_assign(&mut self, rhs: &'a Self) {
         self.bytes += rhs.bytes;
-    }
-}
-
-impl Summarize for TextChunk {
-    type Summary = TextSummary;
-
-    fn summarize(&self) -> Self::Summary {
-        TextSummary { bytes: self.text.len() }
     }
 }
 

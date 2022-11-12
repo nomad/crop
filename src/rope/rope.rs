@@ -111,7 +111,7 @@ impl From<String> for Rope {
     fn from(s: String) -> Self {
         if s.len() <= TextChunk::max_bytes() {
             // If the string fits in one chunk we can avoid the allocation.
-            Rope { root: Tree::from_leaves([TextChunk::new(s)]) }
+            Rope { root: Tree::from_leaves([TextChunk::from(s)]) }
         } else {
             Rope::from(&*s)
         }
