@@ -1,4 +1,4 @@
-use super::{Node, Summarize};
+use super::{Metric, Node, Summarize, TreeSlice};
 
 /// An iterator over the leaves of trees or tree slices.
 ///
@@ -70,3 +70,28 @@ impl<'a, Leaf: Summarize> DoubleEndedIterator for Leaves<'a, Leaf> {
 impl<'a, Leaf: Summarize> ExactSizeIterator for Leaves<'a, Leaf> {}
 
 impl<'a, Leaf: Summarize> std::iter::FusedIterator for Leaves<'a, Leaf> {}
+
+/// An iterator over consecutive units of a particular metric.
+///
+/// This iterator will chop down a tree or a tree slice by hacking at it using
+/// a metric.
+pub struct Chops<
+    'a,
+    const FANOUT: usize,
+    Leaf: Summarize,
+    Advance: Metric<Leaf>,
+> {
+    _tmp1: &'a (),
+    _tmp2: Leaf,
+    _tmp3: Advance,
+}
+
+impl<'a, const FANOUT: usize, Leaf: Summarize + 'a, Advance: Metric<Leaf>>
+    Iterator for Chops<'a, FANOUT, Leaf, Advance>
+{
+    type Item = TreeSlice<'a, FANOUT, Leaf>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
+    }
+}
