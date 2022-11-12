@@ -1,5 +1,6 @@
+use super::metrics::LineMetric;
 use super::{Rope, RopeSlice, TextChunk};
-use crate::tree::Leaves;
+use crate::tree::{Chops, Leaves};
 
 /// TODO: docs
 #[derive(Clone)]
@@ -137,7 +138,7 @@ impl<'a> Iterator for Chars<'a> {
 
 #[derive(Clone)]
 pub struct Lines<'a> {
-    tmp: &'a (),
+    chops: Chops<'a, { Rope::fanout() }, TextChunk, LineMetric>,
 }
 
 impl<'a> From<&'a Rope> for Lines<'a> {
@@ -155,8 +156,9 @@ impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
 impl<'a> Iterator for Lines<'a> {
     type Item = RopeSlice<'a>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+        self.chops.next().map(RopeSlice::new)
     }
 }
 

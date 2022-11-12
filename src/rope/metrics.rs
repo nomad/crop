@@ -47,3 +47,48 @@ impl Metric<TextChunk> for ByteMetric {
         TextChunk::from(chunk.text[range.start.0..range.end.0].to_owned())
     }
 }
+
+#[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub(super) struct LineMetric(pub(super) usize);
+
+impl Add for LineMetric {
+    type Output = Self;
+
+    fn add(self, other: Self) -> Self {
+        Self(self.0 + other.0)
+    }
+}
+
+impl Sub for LineMetric {
+    type Output = Self;
+
+    fn sub(self, other: Self) -> Self {
+        Self(self.0 - other.0)
+    }
+}
+
+impl AddAssign for LineMetric {
+    fn add_assign(&mut self, other: Self) {
+        self.0 += other.0
+    }
+}
+
+impl SubAssign for LineMetric {
+    fn sub_assign(&mut self, other: Self) {
+        self.0 -= other.0
+    }
+}
+
+impl Metric<TextChunk> for LineMetric {
+    fn zero() -> Self {
+        Self(0)
+    }
+
+    fn measure(summary: &TextSummary) -> Self {
+        todo!()
+    }
+
+    fn slice(chunk: &TextChunk, range: Range<Self>) -> TextChunk {
+        todo!()
+    }
+}

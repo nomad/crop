@@ -75,6 +75,7 @@ impl<'a, Leaf: Summarize> std::iter::FusedIterator for Leaves<'a, Leaf> {}
 ///
 /// This iterator will chop down a tree or a tree slice by hacking at it using
 /// a metric.
+#[derive(Clone)]
 pub struct Chops<
     'a,
     const FANOUT: usize,
