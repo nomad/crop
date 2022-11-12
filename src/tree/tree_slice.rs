@@ -1,11 +1,11 @@
 use std::borrow::Cow;
 use std::ops::Range;
 
-use super::{Leaf, Leaves, Metric, Node, Summarize};
+use super::{Chops, Leaf, Leaves, Metric, Node, Summarize};
 
 /// TODO: docs
 #[derive(Debug, Copy)]
-enum NodeOrSlicedLeaf<'a, const N: usize, L: Leaf> {
+pub(super) enum NodeOrSlicedLeaf<'a, const N: usize, L: Leaf> {
     /// No slicing was needed so we can reuse a reference to the original node.
     Whole(&'a Node<N, L>),
 
@@ -28,11 +28,23 @@ impl<'a, const N: usize, L: Leaf> Clone for NodeOrSlicedLeaf<'a, N, L> {
 }
 
 impl<'a, const N: usize, L: Leaf> NodeOrSlicedLeaf<'a, N, L> {
-    fn summary(&self) -> &L::Summary {
+    #[inline]
+    pub(super) fn summary(&self) -> &L::Summary {
         match self {
             Self::Whole(node) => node.summary(),
             Self::Sliced(_slice, summary) => &summary,
         }
+    }
+
+    /// TODO: docs
+    pub(super) fn split_left<M>(
+        self,
+        up_to: M,
+    ) -> (Vec<Self>, L::Summary, Option<Vec<Self>>)
+    where
+        M: Metric<L>,
+    {
+        todo!()
     }
 }
 
@@ -52,6 +64,14 @@ impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
+    /// TODO: docs
+    pub fn chops<M>(&'a self) -> Chops<'a, FANOUT, L, M>
+    where
+        M: Metric<L>,
+    {
+        todo!()
+    }
+
     /// TODO: docs
     pub(super) fn empty() -> Self {
         Self { nodes: Vec::new(), summary: L::Summary::default() }
@@ -78,7 +98,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     /// TODO: docs
-    pub fn leaves(&self) -> Leaves<'_, L> {
+    pub fn leaves(&'a self) -> Leaves<'a, L> {
         let mut leaves = Leaves::new();
         for node_or_leaf in &self.nodes {
             match node_or_leaf {
@@ -91,6 +111,16 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
             }
         }
         leaves
+    }
+
+    /// Creates a [`TreeSlice`] from the final vector of nodes and their total
+    /// summary. Used in the implementation of [`Chops::next`].
+    #[inline]
+    pub(super) fn new(
+        nodes: Vec<NodeOrSlicedLeaf<'a, FANOUT, L>>,
+        summary: L::Summary,
+    ) -> Self {
+        Self { nodes, summary }
     }
 
     /// TODO: docs
@@ -289,9 +319,7 @@ fn nodes_from_start<'a, const N: usize, L, M>(
         NodeOrSlicedLeaf::Sliced(slice, ref summary) => (slice, summary),
     };
 
-    let start = start - *measured;
-    let end = M::measure(sumz); // TODO: remove this
-    let slice = M::slice(slice, start..end);
+    let (_, slice) = M::split_right(slice, start - *measured);
     let summ = slice.summarize();
     *summary += &summ;
     vec.push(NodeOrSlicedLeaf::Sliced(slice, summ));
@@ -343,9 +371,7 @@ fn nodes_to_end<'a, const N: usize, L, M>(
         NodeOrSlicedLeaf::Sliced(slice, _summary) => slice,
     };
 
-    let start = M::zero(); // TODO: remove this
-    let end = end - *measured;
-    let slice = M::slice(slice, start..end);
+    let (slice, _) = M::split_left(slice, end - *measured);
     let summ = slice.summarize();
     *summary += &summ;
     vec.push(NodeOrSlicedLeaf::Sliced(slice, summ));

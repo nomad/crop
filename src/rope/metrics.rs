@@ -45,8 +45,37 @@ impl Metric<TextChunk> for ByteMetric {
     }
 
     #[inline]
+    fn one() -> Self {
+        Self(1)
+    }
+
+    #[inline]
     fn measure(summary: &TextSummary) -> Self {
         Self(summary.bytes)
+    }
+
+    #[inline]
+    fn split_left(
+        chunk: &TextSlice,
+        ByteMetric(up_to): Self,
+    ) -> (&TextSlice, Option<&TextSlice>) {
+        if up_to == chunk.len() {
+            (chunk, None)
+        } else {
+            (chunk[..up_to].into(), Some(chunk[up_to..].into()))
+        }
+    }
+
+    #[inline]
+    fn split_right(
+        chunk: &TextSlice,
+        ByteMetric(from): Self,
+    ) -> (Option<&TextSlice>, &TextSlice) {
+        if from == 0 {
+            (None, chunk)
+        } else {
+            (Some(chunk[..from].into()), chunk[from..].into())
+        }
     }
 
     #[inline]
@@ -94,6 +123,11 @@ impl Metric<TextChunk> for LineMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
+    }
+
+    #[inline]
+    fn one() -> Self {
+        Self(1)
     }
 
     #[inline]

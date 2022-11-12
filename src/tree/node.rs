@@ -58,6 +58,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     /// TODO: docs
+    #[inline]
     pub(super) fn summary(&self) -> &L::Summary {
         match self {
             Node::Internal(inode) => inode.summary(),

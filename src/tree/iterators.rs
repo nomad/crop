@@ -1,3 +1,4 @@
+use super::tree_slice::NodeOrSlicedLeaf;
 use super::{Leaf, Metric, Node, TreeSlice};
 
 /// An iterator over the leaves of trees or tree slices.
@@ -82,15 +83,15 @@ impl<'a, L: Leaf> std::iter::FusedIterator for Leaves<'a, L> {}
 /// This iterator will chop down a tree or a tree slice by hacking at it using
 /// a metric.
 pub struct Chops<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
-    _tmp1: &'a L::Slice,
-    _tmp2: M,
+    stack: Vec<NodeOrSlicedLeaf<'a, FANOUT, L>>,
+    metric: std::marker::PhantomData<M>,
 }
 
-impl<'a, const FANOUT: usize, L: Leaf + 'a, M: Metric<L>> Clone
+impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Clone
     for Chops<'a, FANOUT, L, M>
 {
     fn clone(&self) -> Self {
-        Self { _tmp1: self._tmp1, _tmp2: self._tmp2 }
+        Self { stack: self.stack.clone(), metric: std::marker::PhantomData }
     }
 }
 
@@ -100,6 +101,35 @@ impl<'a, const FANOUT: usize, L: Leaf + 'a, M: Metric<L>> Iterator
     type Item = TreeSlice<'a, FANOUT, L>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        todo!()
+        if self.stack.is_empty() {
+            return None;
+        }
+
+        let mut nodes = Vec::new();
+        let mut summary = L::Summary::default();
+
+        loop {
+            let last = self.stack.pop().unwrap();
+
+            if M::measure(last.summary()) == M::zero() {
+                summary += last.summary();
+                nodes.push(last);
+            } else {
+                // TODO: consider using an internal function insteaf of
+                // `NodeOrSlicedLeaf::split_left` where you pass in a mutable
+                // reference to the stack, the nodes and the summary instead of
+                // returning copies.
+
+                let (left, summ, rest) = last.split_left(M::one());
+                nodes.extend(left);
+                summary += &summ;
+                if let Some(rest) = rest {
+                    self.stack.extend(rest)
+                }
+                break;
+            }
+        }
+
+        Some(TreeSlice::new(nodes, summary))
     }
 }

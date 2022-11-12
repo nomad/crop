@@ -123,6 +123,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     //    self.children.push(Arc::new(node));
     //}
 
+    #[inline]
     pub(super) fn summary(&self) -> &L::Summary {
         &self.summary
     }

@@ -3,7 +3,7 @@ use std::fmt::{self, Debug};
 use std::ops::{AddAssign, Range};
 use std::sync::Arc;
 
-use super::{Inode, Leaves, Metric, Node, TreeSlice};
+use super::{Chops, Inode, Leaves, Metric, Node, TreeSlice};
 
 /// TODO: docs
 pub trait Leaf: Summarize + Borrow<Self::Slice> {
@@ -42,6 +42,14 @@ impl<const N: usize, L: Leaf> Debug for Tree<N, L> {
 
 /// TODO: docs
 impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
+    /// TODO: docs
+    pub fn chops<M>(&self) -> Chops<'_, FANOUT, L, M>
+    where
+        M: Metric<L>,
+    {
+        todo!()
+    }
+
     /// # Panics
     ///
     /// This function will panic if the iterator is empty.
@@ -130,6 +138,10 @@ mod tests {
     impl Metric<usize> for usize {
         fn zero() -> Self {
             0
+        }
+
+        fn one() -> Self {
+            1
         }
 
         fn measure(count: &Count) -> Self {
