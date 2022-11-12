@@ -52,7 +52,7 @@ impl Rope {
     }
 
     /// TODO: docs
-    pub fn insert(&mut self, after_byte: usize, text: &str) {
+    pub fn insert(&mut self, after_byte: usize, _text: &str) {
         assert!(after_byte <= self.byte_len());
         todo!()
     }
@@ -119,7 +119,7 @@ impl<'a> From<std::borrow::Cow<'a, str>> for Rope {
 
 impl std::cmp::PartialEq<Rope> for Rope {
     #[inline]
-    fn eq(&self, rhs: &Rope) -> bool {
+    fn eq(&self, _rhs: &Rope) -> bool {
         todo!()
     }
 }

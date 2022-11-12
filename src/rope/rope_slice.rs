@@ -1,6 +1,6 @@
 use std::ops::RangeBounds;
 
-use super::iterators::{Bytes, Chunks};
+use super::iterators::{Bytes, Chars, Chunks};
 use super::metrics::ByteMetric;
 use super::utils::*;
 use super::{Rope, TextChunk};
@@ -28,7 +28,12 @@ impl<'a> RopeSlice<'a> {
 
     /// TODO: docs
     pub fn bytes(&self) -> Bytes<'_> {
-        todo!()
+        Bytes::from(self)
+    }
+
+    /// TODO: docs
+    pub fn chars(&self) -> Chars<'_> {
+        Chars::from(self)
     }
 
     /// TODO: docs
@@ -63,7 +68,7 @@ impl<'a> std::fmt::Display for RopeSlice<'a> {
 
 impl<'a, 'b> std::cmp::PartialEq<RopeSlice<'b>> for RopeSlice<'a> {
     #[inline]
-    fn eq(&self, rhs: &RopeSlice<'b>) -> bool {
+    fn eq(&self, _rhs: &RopeSlice<'b>) -> bool {
         todo!()
     }
 }

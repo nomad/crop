@@ -28,19 +28,19 @@ impl<const N: usize, Leaf: Summarize> Debug for Node<N, Leaf> {
 }
 
 impl<const N: usize, Leaf: Summarize> Node<N, Leaf> {
-    pub(super) fn as_inode(&self) -> Option<&Inode<N, Leaf>> {
-        match self {
-            Node::Internal(inode) => Some(inode),
-            Node::Leaf(_) => None,
-        }
-    }
+    // pub(super) fn as_inode(&self) -> Option<&Inode<N, Leaf>> {
+    //     match self {
+    //         Node::Internal(inode) => Some(inode),
+    //         Node::Leaf(_) => None,
+    //     }
+    // }
 
-    pub(super) fn as_leaf(&self) -> Option<&super::Leaf<Leaf>> {
-        match self {
-            Node::Internal(_) => None,
-            Node::Leaf(leaf) => Some(leaf),
-        }
-    }
+    // pub(super) fn as_leaf(&self) -> Option<&super::Leaf<Leaf>> {
+    //     match self {
+    //         Node::Internal(_) => None,
+    //         Node::Leaf(leaf) => Some(leaf),
+    //     }
+    // }
 
     pub(super) fn depth(&self) -> usize {
         match self {

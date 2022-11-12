@@ -107,21 +107,21 @@ impl<const N: usize, Leaf: Summarize> Inode<N, Leaf> {
         Self::from_children(nodes)
     }
 
-    fn is_full(&self) -> bool {
-        self.children.len() == N
-    }
+    //fn is_full(&self) -> bool {
+    //    self.children.len() == N
+    //}
 
-    /// Adds a node to the children, updating self's summary with the summary
-    /// coming from the new node.
-    ///
-    /// # Panics
-    ///
-    /// This function will panic if the node is already full.
-    fn push_node(&mut self, node: Node<N, Leaf>) {
-        assert!(!self.is_full());
-        self.summary += node.summary();
-        self.children.push(Arc::new(node));
-    }
+    ///// Adds a node to the children, updating self's summary with the summary
+    ///// coming from the new node.
+    /////
+    ///// # Panics
+    /////
+    ///// This function will panic if the node is already full.
+    //fn push_node(&mut self, node: Node<N, Leaf>) {
+    //    assert!(!self.is_full());
+    //    self.summary += node.summary();
+    //    self.children.push(Arc::new(node));
+    //}
 
     pub(super) fn summary(&self) -> &Leaf::Summary {
         &self.summary

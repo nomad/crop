@@ -1,4 +1,4 @@
-use super::{Rope, TextChunk};
+use super::{Rope, RopeSlice, TextChunk};
 use crate::tree::Leaves;
 
 #[derive(Clone)]
@@ -45,6 +45,20 @@ impl<'a> From<&'a Rope> for Bytes<'a> {
     }
 }
 
+impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Bytes<'a> {
+    fn from(slice: &'a RopeSlice<'b>) -> Self {
+        let mut chunks = slice.chunks();
+        let current = chunks.next().unwrap_or_default().as_bytes();
+        Self {
+            chunks,
+            current,
+            yielded_in_current: 0,
+            total_yielded: 0,
+            total_bytes: slice.byte_len(),
+        }
+    }
+}
+
 impl<'a> Iterator for Bytes<'a> {
     type Item = u8;
 
@@ -83,6 +97,14 @@ pub struct Chars<'a> {
 impl<'a> From<&'a Rope> for Chars<'a> {
     fn from(rope: &'a Rope) -> Self {
         let mut chunks = rope.chunks();
+        let current = chunks.next().unwrap_or_default();
+        Self { chunks, current, yielded_in_current: 0 }
+    }
+}
+
+impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chars<'a> {
+    fn from(slice: &'a RopeSlice<'b>) -> Self {
+        let mut chunks = slice.chunks();
         let current = chunks.next().unwrap_or_default();
         Self { chunks, current, yielded_in_current: 0 }
     }
