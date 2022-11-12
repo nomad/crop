@@ -72,6 +72,7 @@ impl<'a, const FANOUT: usize, Leaf: Summarize> TreeSlice<'a, FANOUT, Leaf> {
     }
 
     /// TODO: docs
+    #[inline]
     pub fn slice<M>(&'a self, range: Range<M>) -> TreeSlice<'a, FANOUT, Leaf>
     where
         M: Metric<Leaf>,
@@ -92,6 +93,7 @@ impl<'a, const FANOUT: usize, Leaf: Summarize> TreeSlice<'a, FANOUT, Leaf> {
     }
 
     /// TODO: docs
+    #[inline]
     pub fn summary(&self) -> &Leaf::Summary {
         &self.summary
     }

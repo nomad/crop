@@ -1,6 +1,7 @@
 use super::{Rope, RopeSlice, TextChunk};
 use crate::tree::Leaves;
 
+/// TODO: docs
 #[derive(Clone)]
 pub(super) struct Chunks<'a> {
     pub(super) chunks: Leaves<'a, TextChunk>,
@@ -131,6 +132,31 @@ impl<'a> Iterator for Chars<'a> {
         };
         self.yielded_in_current += char.len_utf8();
         Some(char)
+    }
+}
+
+#[derive(Clone)]
+pub struct Lines<'a> {
+    tmp: &'a (),
+}
+
+impl<'a> From<&'a Rope> for Lines<'a> {
+    fn from(rope: &'a Rope) -> Self {
+        todo!()
+    }
+}
+
+impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
+    fn from(slice: &'a RopeSlice<'b>) -> Self {
+        todo!()
+    }
+}
+
+impl<'a> Iterator for Lines<'a> {
+    type Item = RopeSlice<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        todo!()
     }
 }
 

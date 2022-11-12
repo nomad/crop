@@ -1,6 +1,6 @@
 use std::ops::RangeBounds;
 
-use super::iterators::{Bytes, Chars, Chunks};
+use super::iterators::{Bytes, Chars, Chunks, Lines};
 use super::metrics::ByteMetric;
 use super::utils::*;
 use super::{Rope, TextChunk};
@@ -8,16 +8,18 @@ use crate::tree::TreeSlice;
 
 /// TODO: docs
 pub struct RopeSlice<'a> {
-    pub(super) tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
+    tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
 }
 
 impl<'a> RopeSlice<'a> {
     /// TODO: docs
+    #[inline]
     pub fn byte_len(&self) -> usize {
         self.tree_slice.summary().bytes
     }
 
     /// TODO: docs
+    #[inline]
     pub fn byte_slice<R>(&'a self, byte_range: R) -> RopeSlice<'a>
     where
         R: RangeBounds<usize>,
@@ -27,11 +29,13 @@ impl<'a> RopeSlice<'a> {
     }
 
     /// TODO: docs
+    #[inline]
     pub fn bytes(&self) -> Bytes<'_> {
         Bytes::from(self)
     }
 
     /// TODO: docs
+    #[inline]
     pub fn chars(&self) -> Chars<'_> {
         Chars::from(self)
     }
@@ -42,10 +46,15 @@ impl<'a> RopeSlice<'a> {
     }
 
     /// TODO: docs
+    #[inline]
+    pub fn lines(&self) -> Lines<'_> {
+        Lines::from(self)
+    }
+
     pub(super) fn new(
-        slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
+        tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
     ) -> Self {
-        Self { tree_slice: slice }
+        Self { tree_slice }
     }
 }
 

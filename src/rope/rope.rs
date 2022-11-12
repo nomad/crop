@@ -1,6 +1,6 @@
 use std::ops::RangeBounds;
 
-use super::iterators::{Bytes, Chars, Chunks};
+use super::iterators::{Bytes, Chars, Chunks, Lines};
 use super::metrics::ByteMetric;
 use super::utils::*;
 use super::{TextChunk, TextChunkIter};
@@ -20,11 +20,13 @@ pub struct Rope {
 
 impl Rope {
     /// TODO: docs
+    #[inline]
     pub fn byte_len(&self) -> usize {
         self.root.summary().bytes
     }
 
     /// TODO: docs
+    #[inline]
     pub fn byte_slice<R>(&self, byte_range: R) -> RopeSlice<'_>
     where
         R: RangeBounds<usize>,
@@ -34,11 +36,13 @@ impl Rope {
     }
 
     /// TODO: docs
+    #[inline]
     pub fn bytes(&self) -> Bytes<'_> {
         Bytes::from(self)
     }
 
     /// TODO: docs
+    #[inline]
     pub fn chars(&self) -> Chars<'_> {
         Chars::from(self)
     }
@@ -52,9 +56,16 @@ impl Rope {
     }
 
     /// TODO: docs
+    #[inline]
     pub fn insert(&mut self, after_byte: usize, _text: &str) {
         assert!(after_byte <= self.byte_len());
         todo!()
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn lines(&self) -> Lines<'_> {
+        Lines::from(self)
     }
 
     /// TODO: docs
