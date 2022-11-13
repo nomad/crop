@@ -177,6 +177,11 @@ impl<'a> Iterator for Lines<'a> {
 mod tests {
     use crate::Rope;
 
+    const TINY: &str = include_str!("../../benches/tiny.txt");
+    const SMALL: &str = include_str!("../../benches/small.txt");
+    const MEDIUM: &str = include_str!("../../benches/medium.txt");
+    const LARGE: &str = include_str!("../../benches/large.txt");
+
     #[test]
     fn bytes_1() {
         let r = Rope::from("Hello world this is my dog -> 🐕‍🦺");
@@ -237,5 +242,20 @@ mod tests {
         for (r_slice, s_slice) in r.lines().zip(s.lines()) {
             assert_eq!(r_slice, s_slice);
         }
+    }
+
+    #[test]
+    fn lines_4() {
+        let r = Rope::from(TINY);
+        assert_eq!(r.byte_slice(..).lines().count(), TINY.lines().count());
+
+        let r = Rope::from(SMALL);
+        assert_eq!(r.byte_slice(..).lines().count(), SMALL.lines().count());
+
+        let r = Rope::from(MEDIUM);
+        assert_eq!(r.byte_slice(..).lines().count(), MEDIUM.lines().count());
+
+        let r = Rope::from(LARGE);
+        assert_eq!(r.byte_slice(..).lines().count(), LARGE.lines().count());
     }
 }

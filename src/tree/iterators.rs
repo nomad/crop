@@ -126,16 +126,17 @@ impl<'a, const FANOUT: usize, L: Leaf + 'a, M: Metric<L>> Iterator
                 summary += last.summary();
                 nodes.push(last);
             } else {
-                let mut stacker = Vec::new();
+                let mut rest = None;
                 sumzang::<FANOUT, L, M>(
                     last,
-                    &mut stacker,
+                    &mut self.stack,
                     &mut nodes,
                     &mut summary,
                     &mut false,
+                    &mut rest,
                 );
-                if !stacker.is_empty() {
-                    self.stack.extend(stacker.into_iter().rev());
+                if let Some(rest) = rest {
+                    self.stack.push(rest);
                 }
                 break;
             }
@@ -151,16 +152,23 @@ fn sumzang<'a, const N: usize, L, M>(
     out: &mut Vec<NodeOrSlicedLeaf<'a, N, L>>,
     summary: &mut L::Summary,
     found_sliced: &mut bool,
+    rest: &mut Option<NodeOrSlicedLeaf<'a, N, L>>,
 ) where
     L: Leaf,
     M: Metric<L>,
 {
     let slice = match node {
         NodeOrSlicedLeaf::Whole(Node::Internal(inode)) => {
-            for child in inode.children() {
+            let mut iter = inode.children().iter();
+            while let Some(child) = iter.next() {
                 if *found_sliced {
+                    while let Some(diocane) = iter.next_back() {
+                        stack.push(NodeOrSlicedLeaf::Whole(&**diocane));
+                    }
                     stack.push(NodeOrSlicedLeaf::Whole(&**child));
-                } else if M::measure(child.summary()) == M::zero() {
+                    return;
+                }
+                if M::measure(child.summary()) == M::zero() {
                     *summary += child.summary();
                     out.push(NodeOrSlicedLeaf::Whole(&**child));
                 } else {
@@ -171,6 +179,7 @@ fn sumzang<'a, const N: usize, L, M>(
                         out,
                         summary,
                         found_sliced,
+                        rest,
                     );
                 }
             }
@@ -182,13 +191,13 @@ fn sumzang<'a, const N: usize, L, M>(
         NodeOrSlicedLeaf::Sliced(slice, _summary) => slice,
     };
 
-    let (slice, rest) = M::split_left(slice, M::one());
+    let (slice, resto) = M::split_left(slice, M::one());
     let summ = slice.summarize();
     *summary += &summ;
     out.push(NodeOrSlicedLeaf::Sliced(slice, summ));
 
-    if let Some(rest) = rest {
-        stack.push(NodeOrSlicedLeaf::Sliced(rest, rest.summarize()));
+    if let Some(resto) = resto {
+        *rest = Some(NodeOrSlicedLeaf::Sliced(resto, resto.summarize()));
     }
 
     *found_sliced = true;
