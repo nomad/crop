@@ -220,6 +220,11 @@ impl std::cmp::Eq for Rope {}
 mod tests {
     use super::*;
 
+    const TINY: &str = include_str!("../../benches/tiny.txt");
+    const SMALL: &str = include_str!("../../benches/small.txt");
+    const MEDIUM: &str = include_str!("../../benches/medium.txt");
+    const LARGE: &str = include_str!("../../benches/large.txt");
+
     #[test]
     fn easy() {
         let r = Rope::from("Hello there");
@@ -258,9 +263,16 @@ mod tests {
 
     #[test]
     fn partial_eq() {
-        let s = "This is a service dog: 🐕‍🦺";
-        let r = Rope::from(s);
-        assert_eq!(s, r);
-        assert_eq!(s, r.byte_slice(..));
+        for s in ["This is a service dog: 🐕‍🦺", TINY, SMALL, MEDIUM, LARGE]
+        {
+            let r = Rope::from(s);
+
+            assert_eq!(r, r);
+            assert_eq!(r.byte_slice(..), r.byte_slice(..));
+
+            assert_eq!(r, s);
+            assert_eq!(r.byte_slice(..), s);
+            assert_eq!(r, r.byte_slice(..));
+        }
     }
 }

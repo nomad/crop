@@ -26,10 +26,47 @@ pub(super) fn chunks_eq_str<'a>(chunks: Chunks<'a>, s: &str) -> bool {
 /// `RopeSlice`s. It's assumed that if we get this far both chunks yield the
 /// same number of bytes.
 pub(super) fn chunks_eq_chunks<'a, 'b>(
-    lhs: Chunks<'a>,
-    rhs: Chunks<'b>,
+    mut lhs: Chunks<'a>,
+    mut rhs: Chunks<'b>,
 ) -> bool {
-    todo!()
+    let mut left_chunk = lhs.next().unwrap_or("").as_bytes();
+    let mut right_chunk = rhs.next().unwrap_or("").as_bytes();
+
+    loop {
+        if left_chunk.len() < right_chunk.len() {
+            if left_chunk != &right_chunk[..left_chunk.len()] {
+                return false;
+            } else {
+                left_chunk = &[];
+                right_chunk = &right_chunk[..left_chunk.len()];
+            }
+        } else if &left_chunk[..right_chunk.len()] != right_chunk {
+            return false;
+        } else {
+            left_chunk = &left_chunk[right_chunk.len()..];
+            right_chunk = &[];
+        }
+
+        if left_chunk.is_empty() {
+            match lhs.next() {
+                Some(chunk) => left_chunk = chunk.as_bytes(),
+
+                // This works because both chunks are assumed to yield the same
+                // number of bytes, so if one iterator is done then so is the
+                // other.
+                _ => return true,
+            }
+        }
+
+        if right_chunk.is_empty() {
+            match rhs.next() {
+                Some(chunk) => right_chunk = chunk.as_bytes(),
+
+                // Same as above.
+                _ => return true,
+            }
+        }
+    }
 }
 
 pub(super) fn range_to_tuple<B>(
