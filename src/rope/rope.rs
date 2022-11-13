@@ -73,6 +73,10 @@ impl Rope {
     pub fn new() -> Self {
         Self::from("")
     }
+
+    pub(super) fn root(&self) -> &Tree<ROPE_FANOUT, TextChunk> {
+        &self.root
+    }
 }
 
 impl std::fmt::Debug for Rope {

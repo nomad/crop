@@ -35,17 +35,6 @@ impl<'a, const N: usize, L: Leaf> NodeOrSlicedLeaf<'a, N, L> {
             Self::Sliced(_slice, summary) => &summary,
         }
     }
-
-    /// TODO: docs
-    pub(super) fn split_left<M>(
-        self,
-        up_to: M,
-    ) -> (Vec<Self>, L::Summary, Option<Vec<Self>>)
-    where
-        M: Metric<L>,
-    {
-        todo!()
-    }
 }
 
 /// TODO: docs
@@ -65,11 +54,12 @@ impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     /// TODO: docs
+    #[inline]
     pub fn chops<M>(&'a self) -> Chops<'a, FANOUT, L, M>
     where
         M: Metric<L>,
     {
-        todo!()
+        Chops::from_stack(self.nodes.iter().rev().map(Clone::clone))
     }
 
     /// TODO: docs
@@ -79,10 +69,23 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
     /// TODO: docs
     pub(super) fn from_single_node(node: &'a Node<FANOUT, L>) -> Self {
-        Self {
-            summary: node.summary().clone(),
-            nodes: vec![NodeOrSlicedLeaf::Whole(node)],
-        }
+        let nodes = match node {
+            Node::Leaf(leaf) => {
+                // TODO: this shouldn't work like this.
+                vec![NodeOrSlicedLeaf::Sliced(
+                    leaf.value().borrow(),
+                    leaf.summary().clone(),
+                )]
+            },
+
+            Node::Internal(inode) => inode
+                .children()
+                .into_iter()
+                .map(|n| NodeOrSlicedLeaf::Whole(&**n))
+                .collect(),
+        };
+
+        Self { summary: node.summary().clone(), nodes }
     }
 
     /// TODO: docs
@@ -279,7 +282,7 @@ fn nodes_from_start<'a, const N: usize, L, M>(
     L: Leaf,
     M: Metric<L>,
 {
-    let (slice, sumz) = match node {
+    let slice = match node {
         NodeOrSlicedLeaf::Whole(Node::Internal(inode)) => {
             for child in
                 inode.children().iter().map(|n| NodeOrSlicedLeaf::Whole(&**n))
@@ -312,11 +315,9 @@ fn nodes_from_start<'a, const N: usize, L, M>(
             return;
         },
 
-        NodeOrSlicedLeaf::Whole(Node::Leaf(leaf)) => {
-            (leaf.value().borrow(), leaf.summary())
-        },
+        NodeOrSlicedLeaf::Whole(Node::Leaf(leaf)) => leaf.value().borrow(),
 
-        NodeOrSlicedLeaf::Sliced(slice, ref summary) => (slice, summary),
+        NodeOrSlicedLeaf::Sliced(slice, _summary) => slice,
     };
 
     let (_, slice) = M::split_right(slice, start - *measured);

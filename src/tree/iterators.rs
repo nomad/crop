@@ -1,5 +1,5 @@
 use super::tree_slice::NodeOrSlicedLeaf;
-use super::{Leaf, Metric, Node, TreeSlice};
+use super::{Leaf, Metric, Node, Summarize, TreeSlice};
 
 /// An iterator over the leaves of trees or tree slices.
 ///
@@ -95,6 +95,19 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Clone
     }
 }
 
+impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Chops<'a, FANOUT, L, M> {
+    #[inline]
+    pub(super) fn from_stack<I>(slices: I) -> Self
+    where
+        I: IntoIterator<Item = NodeOrSlicedLeaf<'a, FANOUT, L>>,
+    {
+        Self {
+            stack: slices.into_iter().collect(),
+            metric: std::marker::PhantomData,
+        }
+    }
+}
+
 impl<'a, const FANOUT: usize, L: Leaf + 'a, M: Metric<L>> Iterator
     for Chops<'a, FANOUT, L, M>
 {
@@ -108,28 +121,57 @@ impl<'a, const FANOUT: usize, L: Leaf + 'a, M: Metric<L>> Iterator
         let mut nodes = Vec::new();
         let mut summary = L::Summary::default();
 
-        loop {
-            let last = self.stack.pop().unwrap();
-
+        // TODO: is this faster with a `loop` and an `unwrap_unchecked`?
+        while let Some(last) = self.stack.pop() {
             if M::measure(last.summary()) == M::zero() {
                 summary += last.summary();
                 nodes.push(last);
             } else {
-                // TODO: consider using an internal function insteaf of
-                // `NodeOrSlicedLeaf::split_left` where you pass in a mutable
-                // reference to the stack, the nodes and the summary instead of
-                // returning copies.
-
-                let (left, summ, rest) = last.split_left(M::one());
-                nodes.extend(left);
-                summary += &summ;
-                if let Some(rest) = rest {
-                    self.stack.extend(rest)
-                }
+                sumzang(
+                    last,
+                    &mut self.stack,
+                    &mut nodes,
+                    &mut summary,
+                    M::one(),
+                    &mut M::zero(),
+                );
                 break;
             }
         }
 
         Some(TreeSlice::new(nodes, summary))
+    }
+}
+
+fn sumzang<'a, const N: usize, L, M>(
+    node: NodeOrSlicedLeaf<'a, N, L>,
+    stack: &mut Vec<NodeOrSlicedLeaf<'a, N, L>>,
+    out: &mut Vec<NodeOrSlicedLeaf<'a, N, L>>,
+    summary: &mut L::Summary,
+    up_to: M,
+    measured: &mut M,
+) where
+    L: Leaf,
+    M: Metric<L>,
+{
+    let slice = match node {
+        NodeOrSlicedLeaf::Whole(Node::Internal(inode)) => {
+            // TODO
+            todo!();
+            return;
+        },
+
+        NodeOrSlicedLeaf::Whole(Node::Leaf(leaf)) => leaf.value().borrow(),
+
+        NodeOrSlicedLeaf::Sliced(slice, _summary) => slice,
+    };
+
+    let (slice, rest) = M::split_left(slice, up_to - *measured);
+    let summ = slice.summarize();
+    *summary += &summ;
+    out.push(NodeOrSlicedLeaf::Sliced(slice, summ));
+
+    if let Some(rest) = rest {
+        stack.push(NodeOrSlicedLeaf::Sliced(rest, rest.summarize()));
     }
 }

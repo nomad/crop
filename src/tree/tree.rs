@@ -43,11 +43,14 @@ impl<const N: usize, L: Leaf> Debug for Tree<N, L> {
 /// TODO: docs
 impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     /// TODO: docs
+    #[inline]
     pub fn chops<M>(&self) -> Chops<'_, FANOUT, L, M>
     where
         M: Metric<L>,
     {
-        todo!()
+        Chops::from_stack([super::tree_slice::NodeOrSlicedLeaf::Whole(
+            &*self.root,
+        )])
     }
 
     /// # Panics
@@ -90,6 +93,8 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
         if range.start == range.end {
             TreeSlice::empty()
+        // } else if M::measure(self.summary()) == range.end - range.start {
+        //     TreeSlice::from_single_node(&*self.root)
         } else {
             TreeSlice::from_range_in_node(&*self.root, range)
         }

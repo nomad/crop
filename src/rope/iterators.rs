@@ -153,14 +153,14 @@ pub struct Lines<'a> {
 impl<'a> From<&'a Rope> for Lines<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        todo!()
+        Self { chops: rope.root().chops() }
     }
 }
 
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
-        todo!()
+        Self { chops: slice.tree_slice().chops() }
     }
 }
 

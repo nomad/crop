@@ -56,6 +56,12 @@ impl<'a> RopeSlice<'a> {
     ) -> Self {
         Self { tree_slice }
     }
+
+    pub(super) fn tree_slice(
+        &'a self,
+    ) -> &'a TreeSlice<'a, { Rope::fanout() }, TextChunk> {
+        &self.tree_slice
+    }
 }
 
 impl<'a> std::fmt::Debug for RopeSlice<'a> {

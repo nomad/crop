@@ -129,9 +129,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 }
 
-/// Recursively prints a tree-like representation of this node. Called by the
-/// `Debug` impl of [`Inode`] when using the pretty-print modifier (i.e.
-/// `{:#?}`).
+/// Recursively prints a tree-like representation of this node.
+///
+/// Called by the `Debug` impl of [`Inode`] when using the pretty-print
+/// modifier (i.e. `{:#?}`).
 fn pretty_print_inode<const N: usize, L: Leaf>(
     inode: &Inode<N, L>,
     shifts: &mut String,
