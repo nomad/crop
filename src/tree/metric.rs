@@ -26,10 +26,16 @@ pub trait Metric<L: Leaf>:
 
     /// TODO: docs
     #[allow(unused_variables)]
-    fn split_left(
-        slice: &L::Slice,
+    fn split_left<'a>(
+        slice: &'a L::Slice,
         up_to: Self,
-    ) -> (&L::Slice, Option<&L::Slice>) {
+        summary: &L::Summary,
+    ) -> (
+        &'a L::Slice,
+        Option<L::Summary>,
+        Option<&'a L::Slice>,
+        Option<L::Summary>,
+    ) {
         unimplemented!(
             "Trying to split left {slice:?} at {up_to:?}, but {} cannot be \
              split by {}",

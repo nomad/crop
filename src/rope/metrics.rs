@@ -55,14 +55,20 @@ impl Metric<TextChunk> for ByteMetric {
     }
 
     #[inline]
-    fn split_left(
-        chunk: &TextSlice,
+    fn split_left<'a>(
+        chunk: &'a TextSlice,
         ByteMetric(up_to): Self,
-    ) -> (&TextSlice, Option<&TextSlice>) {
+        summary: &TextSummary,
+    ) -> (
+        &'a TextSlice,
+        Option<TextSummary>,
+        Option<&'a TextSlice>,
+        Option<TextSummary>,
+    ) {
         if up_to == chunk.len() {
-            (chunk, None)
+            (chunk, None, None, None)
         } else {
-            (chunk[..up_to].into(), Some(chunk[up_to..].into()))
+            (chunk[..up_to].into(), None, Some(chunk[up_to..].into()), None)
         }
     }
 
@@ -136,19 +142,33 @@ impl Metric<TextChunk> for LineMetric {
     }
 
     #[inline]
-    fn split_left(
-        chunk: &TextSlice,
+    fn split_left<'a>(
+        chunk: &'a TextSlice,
         LineMetric(up_to): Self,
-    ) -> (&TextSlice, Option<&TextSlice>) {
+        summary: &TextSummary,
+    ) -> (
+        &'a TextSlice,
+        Option<TextSummary>,
+        Option<&'a TextSlice>,
+        Option<TextSummary>,
+    ) {
         // TODO: this is broken in many ways.
 
         let bytes_up_to_and_including_line_break =
             str_indices::lines_lf::to_byte_idx(chunk, up_to);
 
-        let rest = if bytes_up_to_and_including_line_break == chunk.len() {
-            None
+        let (rest, right_summary) = if bytes_up_to_and_including_line_break
+            == chunk.len()
+        {
+            (None, None)
         } else {
-            Some(chunk[bytes_up_to_and_including_line_break..].into())
+            (
+                Some(chunk[bytes_up_to_and_including_line_break..].into()),
+                Some(TextSummary {
+                    bytes: chunk.len() - bytes_up_to_and_including_line_break,
+                    line_breaks: summary.line_breaks - up_to,
+                }),
+            )
         };
 
         let skip = if bytes_up_to_and_including_line_break > 1 {
@@ -165,7 +185,12 @@ impl Metric<TextChunk> for LineMetric {
             1
         };
 
-        (chunk[..bytes_up_to_and_including_line_break - skip].into(), rest)
+        let left_bytes = bytes_up_to_and_including_line_break - skip;
+
+        let left_summary =
+            TextSummary { bytes: left_bytes, line_breaks: up_to - 1 };
+
+        (chunk[..].into(), Some(left_summary), rest, right_summary)
     }
 
     #[inline]

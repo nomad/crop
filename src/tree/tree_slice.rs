@@ -339,7 +339,7 @@ fn nodes_to_end<'a, const N: usize, L, M>(
     L: Leaf,
     M: Metric<L>,
 {
-    let slice = match node {
+    let (slice, orig_summary) = match node {
         NodeOrSlicedLeaf::Whole(Node::Internal(inode)) => {
             for child in
                 inode.children().iter().map(|n| NodeOrSlicedLeaf::Whole(&**n))
@@ -367,13 +367,17 @@ fn nodes_to_end<'a, const N: usize, L, M>(
             return;
         },
 
-        NodeOrSlicedLeaf::Whole(Node::Leaf(leaf)) => leaf.value().borrow(),
+        NodeOrSlicedLeaf::Whole(Node::Leaf(leaf)) => {
+            (leaf.value().borrow(), leaf.summary())
+        },
 
-        NodeOrSlicedLeaf::Sliced(slice, _summary) => slice,
+        NodeOrSlicedLeaf::Sliced(slice, ref summary) => (slice, summary),
     };
 
-    let (slice, _) = M::split_left(slice, end - *measured);
-    let summ = slice.summarize();
+    let (slice, summ, _, _) =
+        M::split_left(slice, end - *measured, orig_summary);
+
+    let summ = summ.unwrap_or(slice.summarize());
     *summary += &summ;
     vec.push(NodeOrSlicedLeaf::Sliced(slice, summ));
     *found_end = true;

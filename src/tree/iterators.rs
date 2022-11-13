@@ -157,7 +157,7 @@ fn sumzang<'a, const N: usize, L, M>(
     L: Leaf,
     M: Metric<L>,
 {
-    let slice = match node {
+    let (slice, orig_summary) = match node {
         NodeOrSlicedLeaf::Whole(Node::Internal(inode)) => {
             let mut iter =
                 inode.children().iter().map(|n| NodeOrSlicedLeaf::Whole(&**n));
@@ -187,18 +187,23 @@ fn sumzang<'a, const N: usize, L, M>(
             return;
         },
 
-        NodeOrSlicedLeaf::Whole(Node::Leaf(leaf)) => leaf.value().borrow(),
+        NodeOrSlicedLeaf::Whole(Node::Leaf(leaf)) => {
+            (leaf.value().borrow(), leaf.summary())
+        },
 
-        NodeOrSlicedLeaf::Sliced(slice, _summary) => slice,
+        NodeOrSlicedLeaf::Sliced(slice, ref summary) => (slice, summary),
     };
 
-    let (slice, resto) = M::split_left(slice, M::one());
-    let summ = slice.summarize();
+    let (slice, summ, resto, rest_summ) =
+        M::split_left(slice, M::one(), orig_summary);
+
+    let summ = summ.unwrap_or(slice.summarize());
     *summary += &summ;
     out.push(NodeOrSlicedLeaf::Sliced(slice, summ));
 
     if let Some(resto) = resto {
-        *rest = Some(NodeOrSlicedLeaf::Sliced(resto, resto.summarize()));
+        let summ = rest_summ.unwrap_or_else(|| resto.summarize());
+        *rest = Some(NodeOrSlicedLeaf::Sliced(resto, summ));
     }
 
     *found_sliced = true;
