@@ -159,22 +159,23 @@ fn sumzang<'a, const N: usize, L, M>(
 {
     let slice = match node {
         NodeOrSlicedLeaf::Whole(Node::Internal(inode)) => {
-            let mut iter = inode.children().iter();
+            let mut iter =
+                inode.children().iter().map(|n| NodeOrSlicedLeaf::Whole(&**n));
+
             while let Some(child) = iter.next() {
                 if *found_sliced {
                     while let Some(diocane) = iter.next_back() {
-                        stack.push(NodeOrSlicedLeaf::Whole(&**diocane));
+                        stack.push(diocane);
                     }
-                    stack.push(NodeOrSlicedLeaf::Whole(&**child));
+                    stack.push(child);
                     return;
                 }
                 if M::measure(child.summary()) == M::zero() {
                     *summary += child.summary();
-                    out.push(NodeOrSlicedLeaf::Whole(&**child));
+                    out.push(child);
                 } else {
-                    let node = NodeOrSlicedLeaf::Whole(&**child);
                     sumzang::<N, L, M>(
-                        node,
+                        child,
                         stack,
                         out,
                         summary,
