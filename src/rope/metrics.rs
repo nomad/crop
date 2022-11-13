@@ -132,6 +132,33 @@ impl Metric<TextChunk> for LineMetric {
 
     #[inline]
     fn measure(summary: &TextSummary) -> Self {
+        Self(summary.line_breaks)
+    }
+
+    #[inline]
+    fn split_left(
+        chunk: &TextSlice,
+        LineMetric(up_to): Self,
+    ) -> (&TextSlice, Option<&TextSlice>) {
+        // TODO: this is broken in many ways.
+
+        let bytes_up_to_and_including_line_break =
+            str_indices::lines_lf::to_byte_idx(chunk, up_to);
+
+        let rest = if bytes_up_to_and_including_line_break == chunk.len() {
+            None
+        } else {
+            Some(chunk[bytes_up_to_and_including_line_break..].into())
+        };
+
+        (chunk[..bytes_up_to_and_including_line_break - 1].into(), rest)
+    }
+
+    #[inline]
+    fn split_right(
+        chunk: &TextSlice,
+        LineMetric(from): Self,
+    ) -> (Option<&TextSlice>, &TextSlice) {
         todo!()
     }
 

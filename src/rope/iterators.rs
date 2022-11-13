@@ -183,4 +183,28 @@ mod tests {
         assert_eq!(41, r.bytes().count());
         assert_eq!(33, r.chars().count());
     }
+
+    #[test]
+    fn lines_1() {
+        // Note: all these ropes should fit in a single chunk, no internal
+        // nodes.
+
+        // Note: we have to slice the ropes because the Tree::chops
+        // implementation is broken rn.
+
+        let r = Rope::from("a\nb");
+        assert_eq!(2, r.byte_slice(..).lines().count());
+
+        let r = Rope::from("a\nb\n");
+        assert_eq!(2, r.byte_slice(..).lines().count());
+
+        let r = Rope::from("\n\n\n\n");
+        assert_eq!(4, r.byte_slice(..).lines().count());
+
+        let r = Rope::from("\n\n\n");
+        assert_eq!(3, r.byte_slice(..).lines().count());
+
+        let r = Rope::from("\n\n\na");
+        assert_eq!(4, r.byte_slice(..).lines().count());
+    }
 }
