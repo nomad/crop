@@ -151,7 +151,21 @@ impl Metric<TextChunk> for LineMetric {
             Some(chunk[bytes_up_to_and_including_line_break..].into())
         };
 
-        (chunk[..bytes_up_to_and_including_line_break - 1].into(), rest)
+        let skip = if bytes_up_to_and_including_line_break > 1 {
+            // If the newline is preceded by a carriage return we have to skip
+            // it.
+            if chunk.as_bytes()[bytes_up_to_and_including_line_break - 2]
+                == b'\r'
+            {
+                2
+            } else {
+                1
+            }
+        } else {
+            1
+        };
+
+        (chunk[..bytes_up_to_and_including_line_break - skip].into(), rest)
     }
 
     #[inline]

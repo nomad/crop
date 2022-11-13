@@ -51,6 +51,7 @@ impl<'a> RopeSlice<'a> {
         Lines::from(self)
     }
 
+    #[inline]
     pub(super) fn new(
         tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
     ) -> Self {

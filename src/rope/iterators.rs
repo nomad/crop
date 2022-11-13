@@ -207,4 +207,35 @@ mod tests {
         let r = Rope::from("\n\n\na");
         assert_eq!(4, r.byte_slice(..).lines().count());
     }
+
+    #[test]
+    fn lines_2() {
+        let s = "This is a piece\nof text that's not \ngonna fit\nin\none \
+                 chunk\nand it also\r\nhas mixed\r\n line breaks\n and a \
+                 trailing\nline break.\n";
+
+        let r = Rope::from(s);
+        let r = r.byte_slice(..);
+
+        assert_eq!(r.lines().count(), s.lines().count());
+
+        for (r_slice, s_slice) in r.lines().zip(s.lines()) {
+            assert_eq!(r_slice, s_slice);
+        }
+    }
+
+    #[test]
+    fn lines_3() {
+        let s = "Donec ut suscipit risus. Vivamus dictum auctor \
+                 vehicula\nurna tristique commodo. Sed sapien risus\nvelit.\n";
+
+        let r = Rope::from(s);
+        let r = r.byte_slice(..);
+
+        assert_eq!(r.lines().count(), s.lines().count());
+
+        for (r_slice, s_slice) in r.lines().zip(s.lines()) {
+            assert_eq!(r_slice, s_slice);
+        }
+    }
 }

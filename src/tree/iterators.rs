@@ -121,20 +121,22 @@ impl<'a, const FANOUT: usize, L: Leaf + 'a, M: Metric<L>> Iterator
         let mut nodes = Vec::new();
         let mut summary = L::Summary::default();
 
-        // TODO: is this faster with a `loop` and an `unwrap_unchecked`?
         while let Some(last) = self.stack.pop() {
             if M::measure(last.summary()) == M::zero() {
                 summary += last.summary();
                 nodes.push(last);
             } else {
-                sumzang(
+                let mut stacker = Vec::new();
+                sumzang::<FANOUT, L, M>(
                     last,
-                    &mut self.stack,
+                    &mut stacker,
                     &mut nodes,
                     &mut summary,
-                    M::one(),
-                    &mut M::zero(),
+                    &mut false,
                 );
+                if !stacker.is_empty() {
+                    self.stack.extend(stacker.into_iter().rev());
+                }
                 break;
             }
         }
@@ -148,16 +150,30 @@ fn sumzang<'a, const N: usize, L, M>(
     stack: &mut Vec<NodeOrSlicedLeaf<'a, N, L>>,
     out: &mut Vec<NodeOrSlicedLeaf<'a, N, L>>,
     summary: &mut L::Summary,
-    up_to: M,
-    measured: &mut M,
+    found_sliced: &mut bool,
 ) where
     L: Leaf,
     M: Metric<L>,
 {
     let slice = match node {
         NodeOrSlicedLeaf::Whole(Node::Internal(inode)) => {
-            // TODO
-            todo!();
+            for child in inode.children() {
+                if *found_sliced {
+                    stack.push(NodeOrSlicedLeaf::Whole(&**child));
+                } else if M::measure(child.summary()) == M::zero() {
+                    *summary += child.summary();
+                    out.push(NodeOrSlicedLeaf::Whole(&**child));
+                } else {
+                    let node = NodeOrSlicedLeaf::Whole(&**child);
+                    sumzang::<N, L, M>(
+                        node,
+                        stack,
+                        out,
+                        summary,
+                        found_sliced,
+                    );
+                }
+            }
             return;
         },
 
@@ -166,7 +182,7 @@ fn sumzang<'a, const N: usize, L, M>(
         NodeOrSlicedLeaf::Sliced(slice, _summary) => slice,
     };
 
-    let (slice, rest) = M::split_left(slice, up_to - *measured);
+    let (slice, rest) = M::split_left(slice, M::one());
     let summ = slice.summarize();
     *summary += &summ;
     out.push(NodeOrSlicedLeaf::Sliced(slice, summ));
@@ -174,4 +190,6 @@ fn sumzang<'a, const N: usize, L, M>(
     if let Some(rest) = rest {
         stack.push(NodeOrSlicedLeaf::Sliced(rest, rest.summarize()));
     }
+
+    *found_sliced = true;
 }

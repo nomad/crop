@@ -112,6 +112,7 @@ pub(super) struct TextSummary {
 impl<'a> AddAssign<&'a Self> for TextSummary {
     fn add_assign(&mut self, rhs: &'a Self) {
         self.bytes += rhs.bytes;
+        self.line_breaks += rhs.line_breaks;
     }
 }
 
