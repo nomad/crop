@@ -49,7 +49,10 @@ impl Summarize for TextChunk {
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        TextSummary { bytes: self.text.len() }
+        TextSummary {
+            bytes: self.text.len(),
+            line_breaks: str_indices::lines_lf::count_breaks(&self.text),
+        }
     }
 }
 
@@ -84,7 +87,10 @@ impl Summarize for TextSlice {
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        TextSummary { bytes: self.text.len() }
+        TextSummary {
+            bytes: self.text.len(),
+            line_breaks: str_indices::lines_lf::count_breaks(&self.text),
+        }
     }
 }
 
@@ -100,6 +106,7 @@ impl ToOwned for TextSlice {
 #[derive(Clone, Default, Debug)]
 pub(super) struct TextSummary {
     pub(super) bytes: usize,
+    pub(super) line_breaks: usize,
 }
 
 impl<'a> AddAssign<&'a Self> for TextSummary {
