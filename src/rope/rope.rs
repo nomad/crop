@@ -134,8 +134,23 @@ impl<'a> From<std::borrow::Cow<'a, str>> for Rope {
 
 impl std::cmp::PartialEq<Rope> for Rope {
     #[inline]
-    fn eq(&self, _rhs: &Rope) -> bool {
-        todo!()
+    fn eq(&self, rhs: &Rope) -> bool {
+        if self.byte_len() != rhs.byte_len() {
+            false
+        } else {
+            chunks_eq_chunks(self.chunks(), rhs.chunks())
+        }
+    }
+}
+
+impl<'a> std::cmp::PartialEq<RopeSlice<'a>> for Rope {
+    #[inline]
+    fn eq(&self, rhs: &RopeSlice<'a>) -> bool {
+        if self.byte_len() != rhs.byte_len() {
+            false
+        } else {
+            chunks_eq_chunks(self.chunks(), rhs.chunks())
+        }
     }
 }
 

@@ -2,8 +2,12 @@ use std::ops::{Bound, RangeBounds};
 
 use super::iterators::Chunks;
 
-/// Note: assumes that `chunks` yields the same number of bytes as `s` and that
-/// `chunks` is iterating forward.
+/// Checks equality between the chunks yielded by iterating over a [`Chunks`]
+/// and a string slice.
+///
+/// This is used in the `PartialEq` implementation between `Rope`/`RopeSlice`s
+/// and strings. It's assumed that if we get this far `chunks` and `s` have the
+/// same number of bytes.
 pub(super) fn chunks_eq_str<'a>(chunks: Chunks<'a>, s: &str) -> bool {
     let mut checked = 0;
     for chunk in chunks {
@@ -13,6 +17,19 @@ pub(super) fn chunks_eq_str<'a>(chunks: Chunks<'a>, s: &str) -> bool {
         checked += chunk.len();
     }
     true
+}
+
+/// Checks equality between the chunks yielded by iterating over two
+/// [`Chunks`].
+///
+/// This is used in the `PartialEq` implementation between `Rope`s and
+/// `RopeSlice`s. It's assumed that if we get this far both chunks yield the
+/// same number of bytes.
+pub(super) fn chunks_eq_chunks<'a, 'b>(
+    lhs: Chunks<'a>,
+    rhs: Chunks<'b>,
+) -> bool {
+    todo!()
 }
 
 pub(super) fn range_to_tuple<B>(
