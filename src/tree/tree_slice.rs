@@ -59,7 +59,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     where
         M: Metric<L>,
     {
-        Chops::from_stack(self.nodes.iter().rev().map(Clone::clone))
+        Chops::from_stack(self.nodes.iter().map(Clone::clone))
     }
 
     /// TODO: docs
@@ -380,5 +380,6 @@ fn nodes_to_end<'a, const N: usize, L, M>(
     let summ = summ.unwrap_or(slice.summarize());
     *summary += &summ;
     vec.push(NodeOrSlicedLeaf::Sliced(slice, summ));
+
     *found_end = true;
 }

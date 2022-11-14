@@ -1,3 +1,5 @@
+use std::collections::VecDeque;
+
 use super::tree_slice::NodeOrSlicedLeaf;
 use super::{Leaf, Metric, Node, Summarize, TreeSlice};
 
@@ -83,7 +85,7 @@ impl<'a, L: Leaf> std::iter::FusedIterator for Leaves<'a, L> {}
 /// This iterator will chop down a tree or a tree slice by hacking at it using
 /// a metric.
 pub struct Chops<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
-    stack: Vec<NodeOrSlicedLeaf<'a, FANOUT, L>>,
+    stack: VecDeque<NodeOrSlicedLeaf<'a, FANOUT, L>>,
     metric: std::marker::PhantomData<M>,
 }
 
@@ -121,23 +123,19 @@ impl<'a, const FANOUT: usize, L: Leaf + 'a, M: Metric<L>> Iterator
         let mut nodes = Vec::new();
         let mut summary = L::Summary::default();
 
-        while let Some(last) = self.stack.pop() {
-            if M::measure(last.summary()) == M::zero() {
-                summary += last.summary();
-                nodes.push(last);
+        while let Some(first) = self.stack.pop_front() {
+            if M::measure(first.summary()) == M::zero() {
+                summary += first.summary();
+                nodes.push(first);
             } else {
-                let mut rest = None;
                 sumzang::<FANOUT, L, M>(
-                    last,
+                    first,
                     &mut self.stack,
                     &mut nodes,
                     &mut summary,
                     &mut false,
-                    &mut rest,
+                    &mut 0,
                 );
-                if let Some(rest) = rest {
-                    self.stack.push(rest);
-                }
                 break;
             }
         }
@@ -148,27 +146,24 @@ impl<'a, const FANOUT: usize, L: Leaf + 'a, M: Metric<L>> Iterator
 
 fn sumzang<'a, const N: usize, L, M>(
     node: NodeOrSlicedLeaf<'a, N, L>,
-    stack: &mut Vec<NodeOrSlicedLeaf<'a, N, L>>,
+    stack: &mut VecDeque<NodeOrSlicedLeaf<'a, N, L>>,
     out: &mut Vec<NodeOrSlicedLeaf<'a, N, L>>,
     summary: &mut L::Summary,
-    found_sliced: &mut bool,
-    rest: &mut Option<NodeOrSlicedLeaf<'a, N, L>>,
+    appended_last: &mut bool,
+    insert_idx: &mut usize,
 ) where
     L: Leaf,
     M: Metric<L>,
 {
-    let (slice, orig_summary) = match node {
+    let (slice, slice_summary) = match node {
         NodeOrSlicedLeaf::Whole(Node::Internal(inode)) => {
-            let mut iter =
-                inode.children().iter().map(|n| NodeOrSlicedLeaf::Whole(&**n));
-
-            while let Some(child) = iter.next() {
-                if *found_sliced {
-                    while let Some(diocane) = iter.next_back() {
-                        stack.push(diocane);
-                    }
-                    stack.push(child);
-                    return;
+            for child in
+                inode.children().iter().map(|n| NodeOrSlicedLeaf::Whole(&**n))
+            {
+                if *appended_last {
+                    stack.insert(*insert_idx, child);
+                    *insert_idx += 1;
+                    continue;
                 }
                 if M::measure(child.summary()) == M::zero() {
                     *summary += child.summary();
@@ -179,11 +174,12 @@ fn sumzang<'a, const N: usize, L, M>(
                         stack,
                         out,
                         summary,
-                        found_sliced,
-                        rest,
+                        appended_last,
+                        insert_idx,
                     );
                 }
             }
+
             return;
         },
 
@@ -194,17 +190,18 @@ fn sumzang<'a, const N: usize, L, M>(
         NodeOrSlicedLeaf::Sliced(slice, ref summary) => (slice, summary),
     };
 
-    let (slice, summ, resto, rest_summ) =
-        M::split_left(slice, M::one(), orig_summary);
+    let (left, left_summary, right, right_summary) =
+        M::split_left(slice, M::one(), slice_summary);
 
-    let summ = summ.unwrap_or(slice.summarize());
-    *summary += &summ;
-    out.push(NodeOrSlicedLeaf::Sliced(slice, summ));
+    let left_summary = left_summary.unwrap_or(left.summarize());
+    *summary += &left_summary;
+    out.push(NodeOrSlicedLeaf::Sliced(left, left_summary));
 
-    if let Some(resto) = resto {
-        let summ = rest_summ.unwrap_or_else(|| resto.summarize());
-        *rest = Some(NodeOrSlicedLeaf::Sliced(resto, summ));
+    if let Some(right) = right {
+        let right_summary = right_summary.unwrap_or(right.summarize());
+        stack.push_front(NodeOrSlicedLeaf::Sliced(right, right_summary));
+        *insert_idx = 1;
     }
 
-    *found_sliced = true;
+    *appended_last = true;
 }

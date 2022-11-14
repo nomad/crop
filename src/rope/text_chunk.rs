@@ -110,6 +110,7 @@ pub(super) struct TextSummary {
 }
 
 impl<'a> AddAssign<&'a Self> for TextSummary {
+    #[inline]
     fn add_assign(&mut self, rhs: &'a Self) {
         self.bytes += rhs.bytes;
         self.line_breaks += rhs.line_breaks;
@@ -129,6 +130,7 @@ impl<'a> TextChunkIter<'a> {
 impl<'a> Iterator for TextChunkIter<'a> {
     type Item = TextChunk;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         match self.str.len() {
             0 => None,

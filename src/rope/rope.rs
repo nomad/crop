@@ -81,6 +81,7 @@ impl Rope {
 
 impl std::fmt::Debug for Rope {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // TODO: escape \r, \n, etc.
         f.write_str("Rope(\"")?;
         std::fmt::Display::fmt(self, f)?;
         f.write_str("\")")

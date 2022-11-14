@@ -66,7 +66,9 @@ impl<'a> RopeSlice<'a> {
 }
 
 impl<'a> std::fmt::Debug for RopeSlice<'a> {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        // TODO: escape \r, \n, etc.
         f.write_str("RopeSlice(\"")?;
         std::fmt::Display::fmt(self, f)?;
         f.write_str("\")")
@@ -74,6 +76,7 @@ impl<'a> std::fmt::Debug for RopeSlice<'a> {
 }
 
 impl<'a> std::fmt::Display for RopeSlice<'a> {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for chunk in self.chunks() {
             f.write_str(chunk)?;

@@ -152,45 +152,43 @@ impl Metric<TextChunk> for LineMetric {
         Option<&'a TextSlice>,
         Option<TextSummary>,
     ) {
-        // TODO: this is broken in many ways.
+        let lf_plus_one = str_indices::lines_lf::to_byte_idx(chunk, up_to);
 
-        let bytes_up_to_and_including_line_break =
-            str_indices::lines_lf::to_byte_idx(chunk, up_to);
+        let (left, left_summary) = {
+            // If the newline is preceded by a carriage return we have to skip
+            // it.
+            let skip = if (lf_plus_one > 1)
+                && (chunk.as_bytes()[lf_plus_one - 2] == b'\r')
+            {
+                2
+            } else {
+                1
+            };
 
-        let (rest, right_summary) = if bytes_up_to_and_including_line_break
-            == chunk.len()
-        {
+            let left_bytes = lf_plus_one - skip;
+
+            (
+                chunk[..left_bytes].into(),
+                Some(TextSummary {
+                    bytes: left_bytes,
+                    line_breaks: up_to - 1,
+                }),
+            )
+        };
+
+        let (right, right_summary) = if lf_plus_one == chunk.len() {
             (None, None)
         } else {
             (
-                Some(chunk[bytes_up_to_and_including_line_break..].into()),
+                Some(chunk[lf_plus_one..].into()),
                 Some(TextSummary {
-                    bytes: chunk.len() - bytes_up_to_and_including_line_break,
+                    bytes: chunk.len() - lf_plus_one,
                     line_breaks: summary.line_breaks - up_to,
                 }),
             )
         };
 
-        let skip = if bytes_up_to_and_including_line_break > 1 {
-            // If the newline is preceded by a carriage return we have to skip
-            // it.
-            if chunk.as_bytes()[bytes_up_to_and_including_line_break - 2]
-                == b'\r'
-            {
-                2
-            } else {
-                1
-            }
-        } else {
-            1
-        };
-
-        let left_bytes = bytes_up_to_and_including_line_break - skip;
-
-        let left_summary =
-            TextSummary { bytes: left_bytes, line_breaks: up_to - 1 };
-
-        (chunk[..].into(), Some(left_summary), rest, right_summary)
+        (left, left_summary, right, right_summary)
     }
 
     #[inline]
