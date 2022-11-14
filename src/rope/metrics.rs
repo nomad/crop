@@ -1,7 +1,7 @@
 use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 
 use super::{TextChunk, TextSlice, TextSummary};
-use crate::tree::Metric;
+use crate::tree::{Metric, Summarize};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct ByteMetric(pub(super) usize);
@@ -59,16 +59,14 @@ impl Metric<TextChunk> for ByteMetric {
         chunk: &'a TextSlice,
         ByteMetric(up_to): Self,
         summary: &TextSummary,
-    ) -> (
-        &'a TextSlice,
-        Option<TextSummary>,
-        Option<&'a TextSlice>,
-        Option<TextSummary>,
-    ) {
+    ) -> (&'a TextSlice, TextSummary, Option<(&'a TextSlice, TextSummary)>)
+    {
         if up_to == chunk.len() {
-            (chunk, None, None, None)
+            (chunk, summary.clone(), None)
         } else {
-            (chunk[..up_to].into(), None, Some(chunk[up_to..].into()), None)
+            let left = chunk[..up_to].into();
+            let right = chunk[up_to..].into();
+            (left, left.summarize(), Some((right, right.summarize())))
         }
     }
 
@@ -146,12 +144,8 @@ impl Metric<TextChunk> for LineMetric {
         chunk: &'a TextSlice,
         LineMetric(up_to): Self,
         summary: &TextSummary,
-    ) -> (
-        &'a TextSlice,
-        Option<TextSummary>,
-        Option<&'a TextSlice>,
-        Option<TextSummary>,
-    ) {
+    ) -> (&'a TextSlice, TextSummary, Option<(&'a TextSlice, TextSummary)>)
+    {
         let lf_plus_one = str_indices::lines_lf::to_byte_idx(chunk, up_to);
 
         let (left, left_summary) = {
@@ -169,26 +163,23 @@ impl Metric<TextChunk> for LineMetric {
 
             (
                 chunk[..left_bytes].into(),
-                Some(TextSummary {
-                    bytes: left_bytes,
-                    line_breaks: up_to - 1,
-                }),
+                TextSummary { bytes: left_bytes, line_breaks: up_to - 1 },
             )
         };
 
-        let (right, right_summary) = if lf_plus_one == chunk.len() {
-            (None, None)
+        let right = if lf_plus_one == chunk.len() {
+            None
         } else {
-            (
-                Some(chunk[lf_plus_one..].into()),
-                Some(TextSummary {
+            Some((
+                chunk[lf_plus_one..].into(),
+                TextSummary {
                     bytes: chunk.len() - lf_plus_one,
                     line_breaks: summary.line_breaks - up_to,
-                }),
-            )
+                },
+            ))
         };
 
-        (left, left_summary, right, right_summary)
+        (left, left_summary, right)
     }
 
     #[inline]

@@ -374,12 +374,11 @@ fn nodes_to_end<'a, const N: usize, L, M>(
         NodeOrSlicedLeaf::Sliced(slice, ref summary) => (slice, summary),
     };
 
-    let (slice, summ, _, _) =
+    let (left, left_summary, _) =
         M::split_left(slice, end - *measured, orig_summary);
 
-    let summ = summ.unwrap_or(slice.summarize());
-    *summary += &summ;
-    vec.push(NodeOrSlicedLeaf::Sliced(slice, summ));
+    *summary += &left_summary;
+    vec.push(NodeOrSlicedLeaf::Sliced(left, left_summary));
 
     *found_end = true;
 }

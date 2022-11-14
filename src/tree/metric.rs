@@ -30,12 +30,7 @@ pub trait Metric<L: Leaf>:
         slice: &'a L::Slice,
         up_to: Self,
         summary: &L::Summary,
-    ) -> (
-        &'a L::Slice,
-        Option<L::Summary>,
-        Option<&'a L::Slice>,
-        Option<L::Summary>,
-    ) {
+    ) -> (&'a L::Slice, L::Summary, Option<(&'a L::Slice, L::Summary)>) {
         unimplemented!(
             "Trying to split left {slice:?} at {up_to:?}, but {} cannot be \
              split by {}",

@@ -190,15 +190,13 @@ fn sumzang<'a, const N: usize, L, M>(
         NodeOrSlicedLeaf::Sliced(slice, ref summary) => (slice, summary),
     };
 
-    let (left, left_summary, right, right_summary) =
+    let (left, left_summary, right) =
         M::split_left(slice, M::one(), slice_summary);
 
-    let left_summary = left_summary.unwrap_or(left.summarize());
     *summary += &left_summary;
     out.push(NodeOrSlicedLeaf::Sliced(left, left_summary));
 
-    if let Some(right) = right {
-        let right_summary = right_summary.unwrap_or(right.summarize());
+    if let Some((right, right_summary)) = right {
         stack.push_front(NodeOrSlicedLeaf::Sliced(right, right_summary));
         *insert_idx = 1;
     }
