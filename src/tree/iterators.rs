@@ -157,20 +157,21 @@ fn sumzang<'a, const N: usize, L, M>(
 {
     let (slice, slice_summary) = match node {
         NodeOrSlicedLeaf::Whole(Node::Internal(inode)) => {
-            for child in
-                inode.children().iter().map(|n| NodeOrSlicedLeaf::Whole(&**n))
-            {
+            for child in inode.children() {
                 if *appended_last {
-                    stack.insert(*insert_idx, child);
+                    stack.insert(
+                        *insert_idx,
+                        NodeOrSlicedLeaf::Whole(&**child),
+                    );
                     *insert_idx += 1;
                     continue;
                 }
                 if M::measure(child.summary()) == M::zero() {
                     *summary += child.summary();
-                    out.push(child);
+                    out.push(NodeOrSlicedLeaf::Whole(&**child));
                 } else {
                     sumzang::<N, L, M>(
-                        child,
+                        NodeOrSlicedLeaf::Whole(&**child),
                         stack,
                         out,
                         summary,
