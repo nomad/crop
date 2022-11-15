@@ -69,23 +69,23 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
     /// TODO: docs
     pub(super) fn from_single_node(node: &'a Node<FANOUT, L>) -> Self {
-        let nodes = match node {
-            Node::Leaf(leaf) => {
-                // TODO: this shouldn't work like this.
-                vec![NodeOrSlicedLeaf::Sliced(
-                    leaf.value().borrow(),
-                    leaf.summary().clone(),
-                )]
+        let summary = node.summary().clone();
+
+        match node {
+            Node::Leaf(_) => {
+                Self { nodes: vec![NodeOrSlicedLeaf::Whole(node)], summary }
             },
 
-            Node::Internal(inode) => inode
-                .children()
-                .into_iter()
-                .map(|n| NodeOrSlicedLeaf::Whole(&**n))
-                .collect(),
-        };
+            Node::Internal(inode) => {
+                let nodes = inode
+                    .children()
+                    .iter()
+                    .map(|n| NodeOrSlicedLeaf::Whole(&**n))
+                    .collect();
 
-        Self { summary: node.summary().clone(), nodes }
+                Self { nodes, summary }
+            },
+        }
     }
 
     /// TODO: docs
@@ -141,6 +141,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         } else if M::measure(self.summary()) == range.end - range.start {
             self.clone()
         } else {
+            // TODO: this doesn't work if there's a single leaf node.
             let (nodes, summary) =
                 sumzong(self.nodes.iter().map(Cow::Borrowed), range);
             Self { nodes, summary }
@@ -214,7 +215,8 @@ where
     }
 }
 
-/// TODO: docs (nodes should be > 1)
+/// TODO: docs (nodes should be > 1). Also, this assumes the start and end lie
+/// in different leaves.
 fn sumzong<'a, const N: usize, I, L, M>(
     nodes: I,
     range: Range<M>,

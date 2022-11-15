@@ -1,7 +1,7 @@
 use std::collections::VecDeque;
 
 use super::tree_slice::NodeOrSlicedLeaf;
-use super::{Leaf, Metric, Node, Summarize, TreeSlice};
+use super::{Leaf, Metric, Node, TreeSlice};
 
 /// An iterator over the leaves of trees or tree slices.
 ///
