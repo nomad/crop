@@ -102,10 +102,10 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
     /// Returns an iterator over the leaves of this tree.
     #[inline]
-    pub fn leaves(&self) -> Leaves<'_, L> {
-        let mut leaves = Leaves::new();
-        leaves.push_node_subtree(&*self.root);
-        leaves
+    pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
+        Leaves::from_stack([super::tree_slice::NodeOrSlicedLeaf::Whole(
+            &*self.root,
+        )])
     }
 
     /// TODO: docs

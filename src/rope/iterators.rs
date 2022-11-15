@@ -5,7 +5,7 @@ use crate::tree::{Chops, Leaves};
 /// TODO: docs
 #[derive(Clone)]
 pub(super) struct Chunks<'a> {
-    pub(super) chunks: Leaves<'a, TextChunk>,
+    pub(super) chunks: Leaves<'a, { Rope::fanout() }, TextChunk>,
 }
 
 impl<'a> Iterator for Chunks<'a> {
@@ -15,15 +15,7 @@ impl<'a> Iterator for Chunks<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.chunks.next().map(std::ops::Deref::deref)
     }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.chunks.len();
-        (remaining, Some(remaining))
-    }
 }
-
-impl<'a> ExactSizeIterator for Chunks<'a> {}
 
 /// TODO: docs
 #[derive(Clone)]

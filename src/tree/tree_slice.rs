@@ -3,6 +3,8 @@ use std::ops::Range;
 
 use super::{Chops, Leaf, Leaves, Metric, Node, Summarize};
 
+// TODO: consider making this either Sliced<slice> or Inode<inode>, there's no
+// use in keeping whole leafs.
 /// TODO: docs
 #[derive(Debug, Copy)]
 pub(super) enum NodeOrSlicedLeaf<'a, const N: usize, L: Leaf> {
@@ -101,19 +103,8 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     /// TODO: docs
-    pub fn leaves(&'a self) -> Leaves<'a, L> {
-        let mut leaves = Leaves::new();
-        for node_or_leaf in &self.nodes {
-            match node_or_leaf {
-                NodeOrSlicedLeaf::Whole(node) => {
-                    leaves.push_node_subtree(node)
-                },
-                NodeOrSlicedLeaf::Sliced(slice, _summary) => {
-                    leaves.push_leaf(slice)
-                },
-            }
-        }
-        leaves
+    pub fn leaves(&'a self) -> Leaves<'a, FANOUT, L> {
+        Leaves::from_stack(self.nodes.iter().map(Clone::clone))
     }
 
     /// Creates a [`TreeSlice`] from the final vector of nodes and their total
