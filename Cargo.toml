@@ -17,3 +17,7 @@ harness = false
 [[bench]]
 name = "iterators"
 harness = false
+
+[[bench]]
+name = "slicing"
+harness = false
