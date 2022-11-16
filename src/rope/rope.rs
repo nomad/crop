@@ -1,4 +1,5 @@
 use std::ops::RangeBounds;
+use std::thread;
 
 use super::iterators::{Bytes, Chars, Chunks, Lines};
 use super::metrics::ByteMetric;
@@ -88,6 +89,37 @@ impl std::fmt::Debug for Rope {
     }
 }
 
+/// Used in the implementation of `From<&str>` for `Rope`s if the string is big
+/// enough.
+fn str_to_rope_parallel(mut s: &str, n_cores: std::num::NonZeroUsize) -> Rope {
+    let bytes = s.len() / n_cores;
+
+    let n_cores: usize = n_cores.into();
+
+    let n_trees = n_cores + ((s.len() % n_cores != 0) as usize);
+
+    let first = split_at_byte(&mut s, bytes);
+
+    let mut tree = Tree::from_leaves(TextChunkIter::new(first));
+
+    thread::scope(|scope| {
+        let mut handles = Vec::new();
+
+        for _ in 0..n_trees {
+            let this = split_at_byte(&mut s, bytes);
+            handles.push(
+                scope.spawn(|| Tree::from_leaves(TextChunkIter::new(this))),
+            );
+        }
+
+        for handle in handles {
+            tree += handle.join().unwrap();
+        }
+    });
+
+    Rope { root: tree }
+}
+
 impl std::fmt::Display for Rope {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for chunk in self.chunks() {
@@ -107,7 +139,16 @@ impl Default for Rope {
 impl From<&str> for Rope {
     #[inline]
     fn from(s: &str) -> Self {
-        Rope { root: Tree::from_leaves(TextChunkIter::new(s)) }
+        // This threshold value was determined empirically on a single machine.
+        // TODO: test this on multiple machines and with varying parallelism.
+        if s.len() <= 2 * 1024 * TextChunk::max_bytes() {
+            Rope { root: Tree::from_leaves(TextChunkIter::new(s)) }
+        } else {
+            match std::thread::available_parallelism() {
+                Ok(n_cores) => str_to_rope_parallel(s, n_cores),
+                _ => Rope { root: Tree::from_leaves(TextChunkIter::new(s)) },
+            }
+        }
     }
 }
 

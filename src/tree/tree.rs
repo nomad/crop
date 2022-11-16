@@ -110,6 +110,11 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     }
 }
 
+impl<const FANOUT: usize, L: Leaf> AddAssign<Self> for Tree<FANOUT, L> {
+    #[inline]
+    fn add_assign(&mut self, _rhs: Self) {}
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
