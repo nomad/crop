@@ -1,4 +1,5 @@
 use std::ops::Range;
+use std::sync::Arc;
 
 use super::{Chops, Leaf, Leaves, Metric, Node, Summarize};
 
@@ -52,7 +53,7 @@ enum SliceType<'a, const FANOUT: usize, L: Leaf> {
 
     Multi {
         start: (&'a L::Slice, L::Summary),
-        internals: Vec<&'a Node<FANOUT, L>>,
+        internals: Vec<Arc<Node<FANOUT, L>>>,
         // internals: Vec<&'a Inode<FANOUT, L>>,
         end: (&'a L::Slice, L::Summary),
     },
@@ -124,12 +125,13 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
                 // println!("splicing node {inode:#?}");
                 let mut slice = None;
                 let mut summary = L::Summary::default();
+                let mut v = Vec::new();
                 sumzyng(
-                    inode.children().iter().map(|n| &**n),
+                    inode.children(),
                     range,
                     &mut M::zero(),
                     &mut slice,
-                    &mut Vec::new(),
+                    &mut (v.as_mut_ptr(), v.len(), v.capacity()),
                     &mut None,
                     &mut summary,
                     &mut false,
@@ -224,7 +226,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
 fn sumzung<'a, const N: usize, L: Leaf, M: Metric<L>>(
     start: (&'a L::Slice, &L::Summary),
-    internals: &[&'a Node<N, L>],
+    internals: &'a [Arc<Node<N, L>>],
     end: (&'a L::Slice, &L::Summary),
     range: Range<M>,
 ) -> (SliceType<'a, N, L>, L::Summary) {
@@ -259,11 +261,15 @@ fn sumzung<'a, const N: usize, L: Leaf, M: Metric<L>>(
     let mut new_internals = Vec::new();
 
     sumzyng(
-        internals.into_iter().map(|n| *n),
+        internals,
         Range { start: range.start, end: range.end },
         &mut measured,
         &mut slice,
-        &mut new_internals,
+        &mut (
+            new_internals.as_mut_ptr(),
+            new_internals.len(),
+            new_internals.capacity(),
+        ),
         &mut start,
         &mut summary,
         &mut found_start,
@@ -288,21 +294,19 @@ fn sumzung<'a, const N: usize, L: Leaf, M: Metric<L>>(
     }
 }
 
-fn sumzyng<'a, const N: usize, L, M, I>(
-    nodes: I,
+fn sumzyng<'a, const N: usize, L, M>(
+    nodes: &'a [Arc<Node<N, L>>],
     range: Range<M>,
     measured: &mut M,
     ty: &mut Option<SliceType<'a, N, L>>,
-    internals: &mut Vec<&'a Node<N, L>>,
-    // internals: &mut Vec<&'a Inode<N, L>>,
+    internals: &mut (*mut Arc<Node<N, L>>, usize, usize),
     start: &mut Option<(&'a L::Slice, L::Summary)>,
     summary: &mut L::Summary,
     found_start: &mut bool,
     found_end: &mut bool,
 ) where
-    L: Leaf + 'a,
+    L: Leaf,
     M: Metric<L>,
-    I: IntoIterator<Item = &'a Node<N, L>>,
 {
     // eprintln!("====================");
     // eprintln!("calling sumzyng w/ start: {start:#?}");
@@ -316,21 +320,15 @@ fn sumzyng<'a, const N: usize, L, M, I>(
             return;
         }
 
-        match node {
+        match &**node {
             Node::Internal(inode) => {
                 let size = M::measure(inode.summary());
 
                 // We're still looking for the start leaf.
                 if !*found_start {
                     if *measured + size > range.start {
-                        let diommerda = inode
-                            .children()
-                            .iter()
-                            .map(|n| &**n)
-                            .collect::<Vec<_>>();
                         sumzyng(
-                            // inode.children().iter().map(|n| &**n),
-                            diommerda,
+                            inode.children(),
                             Range { start: range.start, end: range.end },
                             measured,
                             ty,
@@ -347,14 +345,8 @@ fn sumzyng<'a, const N: usize, L, M, I>(
                 // We've found the start but we haven't found the end leaf.
                 else {
                     if *measured + size >= range.end {
-                        let diommerda = inode
-                            .children()
-                            .iter()
-                            .map(|n| &**n)
-                            .collect::<Vec<_>>();
                         sumzyng(
-                            // inode.children().iter().map(|n| &**n),
-                            diommerda,
+                            inode.children(),
                             Range { start: range.start, end: range.end },
                             measured,
                             ty,
@@ -365,8 +357,14 @@ fn sumzyng<'a, const N: usize, L, M, I>(
                             found_end,
                         );
                     } else {
+                        let (ptr, vec, cap) = internals;
+                        let mut int =
+                            unsafe { Vec::from_raw_parts(*ptr, *vec, *cap) };
                         *summary += inode.summary();
-                        internals.push(node);
+                        int.push(Arc::clone(node));
+                        *internals =
+                            (int.as_mut_ptr(), int.len(), int.capacity());
+                        std::mem::forget(int);
                         *measured += size;
                     }
                 }
@@ -389,17 +387,26 @@ fn sumzyng<'a, const N: usize, L, M, I>(
                             leaf_summary,
                         );
                         *summary += &end_summary;
+                        let (ptr, vec, cap) = internals;
+                        let int =
+                            unsafe { Vec::from_raw_parts(*ptr, *vec, *cap) };
                         *ty = Some(SliceType::Multi {
                             start: start.take().unwrap(),
-                            internals: internals.clone(), // TODO: dont clone
+                            internals: int, // TODO: dont clone
                             end: (end, end_summary),
                         });
                         *found_end = true;
                         return;
                     } else {
                         *summary += leaf_summary;
-                        internals.push(node);
+                        let (ptr, vec, cap) = internals;
+                        let mut int =
+                            unsafe { Vec::from_raw_parts(*ptr, *vec, *cap) };
+                        int.push(Arc::clone(node));
+                        *internals =
+                            (int.as_mut_ptr(), int.len(), int.capacity());
                         *measured += size;
+                        std::mem::forget(int);
                         continue;
                     }
                 }
