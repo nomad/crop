@@ -103,7 +103,7 @@ impl ToOwned for TextSlice {
     }
 }
 
-#[derive(Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug)]
 pub(super) struct TextSummary {
     pub(super) bytes: usize,
     pub(super) line_breaks: usize,

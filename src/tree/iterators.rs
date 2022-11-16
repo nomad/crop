@@ -26,6 +26,21 @@ impl<'a, const FANOUT: usize, L: Leaf> Leaves<'a, FANOUT, L> {
     {
         Self { stack: slices.into_iter().collect() }
     }
+
+    pub(super) fn new() -> Self {
+        Self { stack: VecDeque::new() }
+    }
+
+    pub(super) fn append(&mut self, node: NodeOrSlicedLeaf<'a, FANOUT, L>) {
+        self.stack.push_back(node);
+    }
+
+    pub(super) fn extend<I>(&mut self, nodes: I)
+    where
+        I: IntoIterator<Item = NodeOrSlicedLeaf<'a, FANOUT, L>>,
+    {
+        self.stack.extend(nodes);
+    }
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
@@ -104,6 +119,21 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Chops<'a, FANOUT, L, M> {
             metric: std::marker::PhantomData,
         }
     }
+
+    pub(super) fn new() -> Self {
+        Self { stack: VecDeque::new(), metric: std::marker::PhantomData }
+    }
+
+    pub(super) fn append(&mut self, node: NodeOrSlicedLeaf<'a, FANOUT, L>) {
+        self.stack.push_back(node);
+    }
+
+    pub(super) fn extend<I>(&mut self, nodes: I)
+    where
+        I: IntoIterator<Item = NodeOrSlicedLeaf<'a, FANOUT, L>>,
+    {
+        self.stack.extend(nodes);
+    }
 }
 
 impl<'a, const FANOUT: usize, L: Leaf + 'a, M: Metric<L>> Iterator
@@ -136,7 +166,27 @@ impl<'a, const FANOUT: usize, L: Leaf + 'a, M: Metric<L>> Iterator
             }
         }
 
-        Some(TreeSlice::new(nodes, summary))
+        todo!()
+        // if nodes.len() == 1 {
+        //     let single = nodes.into_iter().next().unwrap();
+        //     match single {
+        //         NodeOrSlicedLeaf::Sliced(slice, summary) => todo!(),
+        //         _ => unreachable!(),
+        //     }
+        // } else if nodes.len() == 2 {
+        //     let mut nodes = nodes.into_iter();
+        //     let start = nodes.next().unwrap();
+        //     let end = nodes.next().unwrap();
+        //     let (start, st_summ) = match start {
+        //         NodeOrSlicedLeaf::Sliced(slice, summary) => (slice, summary),
+        //         _ => unreachable!(),
+        //     };
+        //     let (end, end_summ) = match end {
+        //         NodeOrSlicedLeaf::Sliced(slice, summary) => (slice, summary),
+        //         _ => unreachable!(),
+        //     };
+        // }
+        // Some(TreeSlice::new(nodes, summary))
     }
 }
 

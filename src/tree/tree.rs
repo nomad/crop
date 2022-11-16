@@ -3,6 +3,7 @@ use std::fmt::{self, Debug};
 use std::ops::{AddAssign, Range};
 use std::sync::Arc;
 
+use super::tree_slice::NodeOrSlicedLeaf;
 use super::{Chops, Inode, Leaves, Metric, Node, TreeSlice};
 
 /// TODO: docs
@@ -48,9 +49,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     where
         M: Metric<L>,
     {
-        Chops::from_stack([super::tree_slice::NodeOrSlicedLeaf::Whole(
-            &*self.root,
-        )])
+        Chops::from_stack([NodeOrSlicedLeaf::Whole(&*self.root)])
     }
 
     /// # Panics
@@ -93,8 +92,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
         if range.start == range.end {
             TreeSlice::empty()
-        // } else if M::measure(self.summary()) == range.end - range.start {
-        //     TreeSlice::from_single_node(&*self.root)
         } else {
             TreeSlice::from_range_in_node(&*self.root, range)
         }
@@ -103,9 +100,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     /// Returns an iterator over the leaves of this tree.
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
-        Leaves::from_stack([super::tree_slice::NodeOrSlicedLeaf::Whole(
-            &*self.root,
-        )])
+        Leaves::from_stack([NodeOrSlicedLeaf::Whole(&*self.root)])
     }
 
     /// TODO: docs
