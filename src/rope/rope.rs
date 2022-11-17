@@ -2,7 +2,7 @@ use std::ops::RangeBounds;
 use std::thread;
 
 use super::iterators::{Bytes, Chars, Chunks, Lines};
-use super::metrics::ByteMetric;
+use super::metrics::{ByteMetric, LineMetric};
 use super::utils::*;
 use super::{TextChunk, TextChunkIter};
 use crate::tree::Tree;
@@ -17,6 +17,7 @@ const ROPE_FANOUT: usize = 2;
 /// TODO: docs
 pub struct Rope {
     root: Tree<ROPE_FANOUT, TextChunk>,
+    last_byte_is_newline: bool,
 }
 
 impl Rope {
@@ -65,6 +66,23 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
+    pub fn line_len(&self) -> usize {
+        self.root.summary().line_breaks + 1
+            - (self.last_byte_is_newline as usize)
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn line_slice<R>(&self, line_range: R) -> RopeSlice<'_>
+    where
+        R: RangeBounds<usize>,
+    {
+        let (start, end) = range_to_tuple(line_range, 0, self.line_len());
+        RopeSlice::new(self.root.slice(LineMetric(start)..LineMetric(end)))
+    }
+
+    /// TODO: docs
+    #[inline]
     pub fn lines(&self) -> Lines<'_> {
         Lines::from(self)
     }
@@ -91,7 +109,10 @@ impl std::fmt::Debug for Rope {
 
 /// Used in the implementation of `From<&str>` for `Rope`s if the string is big
 /// enough.
-fn str_to_rope_parallel(mut s: &str, n_cores: std::num::NonZeroUsize) -> Rope {
+fn str_to_rope_parallel(
+    mut s: &str,
+    n_cores: std::num::NonZeroUsize,
+) -> Tree<ROPE_FANOUT, TextChunk> {
     let bytes = s.len() / n_cores;
 
     let n_cores: usize = n_cores.into();
@@ -117,7 +138,7 @@ fn str_to_rope_parallel(mut s: &str, n_cores: std::num::NonZeroUsize) -> Rope {
         }
     });
 
-    Rope { root: tree }
+    tree
 }
 
 impl std::fmt::Display for Rope {
@@ -139,16 +160,21 @@ impl Default for Rope {
 impl From<&str> for Rope {
     #[inline]
     fn from(s: &str) -> Self {
+        let last_byte_is_newline =
+            s.as_bytes().last().map(|b| *b == b'\n').unwrap_or_default();
+
         // This threshold value was determined empirically on a single machine.
         // TODO: test this on multiple machines and with varying parallelism.
-        if s.len() <= 2 * 1024 * TextChunk::max_bytes() {
-            Rope { root: Tree::from_leaves(TextChunkIter::new(s)) }
+        let root = if s.len() <= 2 * 1024 * TextChunk::max_bytes() {
+            Tree::from_leaves(TextChunkIter::new(s))
         } else {
             match std::thread::available_parallelism() {
                 Ok(n_cores) => str_to_rope_parallel(s, n_cores),
-                _ => Rope { root: Tree::from_leaves(TextChunkIter::new(s)) },
+                _ => Tree::from_leaves(TextChunkIter::new(s)),
             }
-        }
+        };
+
+        Rope { root, last_byte_is_newline }
     }
 }
 
@@ -157,7 +183,12 @@ impl From<String> for Rope {
     fn from(s: String) -> Self {
         if s.len() <= TextChunk::max_bytes() {
             // If the string fits in one chunk we can avoid the allocation.
-            Rope { root: Tree::from_leaves([TextChunk::from(s)]) }
+            let last_byte_is_newline =
+                s.as_bytes().last().map(|b| *b == b'\n').unwrap_or_default();
+            Rope {
+                root: Tree::from_leaves([TextChunk::from(s)]),
+                last_byte_is_newline,
+            }
         } else {
             Rope::from(&*s)
         }
@@ -277,7 +308,7 @@ mod tests {
     }
 
     #[test]
-    fn slice() {
+    fn byte_slice() {
         let r = Rope::from("Hello there");
 
         let s = r.byte_slice(..);
@@ -302,6 +333,29 @@ mod tests {
 
         let s = r.byte_slice(0..=10);
         assert_eq!(11, s.byte_len());
+    }
+
+    #[test]
+    fn line_slice() {
+        let r = Rope::from("Hello world");
+        assert_eq!(1, r.line_len());
+        // assert_eq!("Hello world", r.line_slice(..));
+
+        let r = Rope::from("Hello world\n");
+        assert_eq!(1, r.line_len());
+        // assert_eq!("Hello world", r.line_slice(..));
+
+        let r = Rope::from("Hello world\nthis is \na test");
+        // assert_eq!("Hello world", r.line_slice(..1));
+        // assert_eq!("Hello world\nthis is", r.line_slice(..2));
+        // assert_eq!("Hello world\nthis is\na test", r.line_slice(..3));
+        // assert_eq!("Hello world\nthis is\na test", r.line_slice(..));
+
+        let r = Rope::from("Hello world\nthis is \na test\n");
+        assert_eq!("Hello world", r.line_slice(..1));
+        assert_eq!("Hello world\nthis is", r.line_slice(..2));
+        assert_eq!("Hello world\nthis is\na test", r.line_slice(..3));
+        assert_eq!("Hello world\nthis is\na test", r.line_slice(..));
     }
 
     // #[test]
