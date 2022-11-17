@@ -260,6 +260,7 @@ where
         &mut StackVec::new(),
         &mut span,
         &mut summary,
+        &mut false,
     );
     TreeSlice { span: span.unwrap(), summary }
 }
@@ -314,6 +315,7 @@ where
         &mut new_internals,
         &mut span,
         &mut summary,
+        &mut false,
     );
 
     if let Some(span) = span {
@@ -345,6 +347,7 @@ fn some_name_for_this_rec<'a, const N: usize, L, M>(
     internals: &mut StackVec<Arc<Node<N, L>>>,
     final_span: &mut Option<SliceSpan<'a, N, L>>,
     final_summary: &mut L::Summary,
+    span_is_some: &mut bool,
 ) where
     L: Leaf,
     M: Metric<L>,
@@ -352,7 +355,7 @@ fn some_name_for_this_rec<'a, const N: usize, L, M>(
     for node in nodes {
         // If the end of the slice has been found and the final span has been
         // set there's nothing left to do.
-        if final_span.is_some() {
+        if *span_is_some {
             return;
         }
 
@@ -375,6 +378,7 @@ fn some_name_for_this_rec<'a, const N: usize, L, M>(
                             internals,
                             final_span,
                             final_summary,
+                            span_is_some,
                         );
                     } else {
                         // This inode comes before the starting leaf.
@@ -395,6 +399,7 @@ fn some_name_for_this_rec<'a, const N: usize, L, M>(
                             internals,
                             final_span,
                             final_summary,
+                            span_is_some,
                         );
                     } else {
                         // This inode is fully contained in the final span. Add
@@ -424,6 +429,8 @@ fn some_name_for_this_rec<'a, const N: usize, L, M>(
                             let slice_summary = slice.summarize();
                             *final_span = Some(SliceSpan::Single(slice));
                             *final_summary = slice_summary;
+                            *span_is_some = true;
+                            return;
                         } else {
                             let (_, start) = M::split_right(
                                 leaf.value().borrow(),
@@ -451,6 +458,7 @@ fn some_name_for_this_rec<'a, const N: usize, L, M>(
                             internals: unsafe { internals.into_vec() },
                             end: (end_slice, end_summary),
                         });
+                        *span_is_some = true;
                         return;
                     } else {
                         unsafe { internals.push(Arc::clone(node)) };
