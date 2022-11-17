@@ -39,48 +39,77 @@ impl<'a, const N: usize, L: Leaf> NodeOrSlicedLeaf<'a, N, L> {
     }
 }
 
+/// TODO: docs
 #[derive(Debug, Clone)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
-    slice: SliceType<'a, FANOUT, L>,
+    span: SliceSpan<'a, FANOUT, L>,
     summary: L::Summary,
 }
 
 #[derive(Debug)]
-enum SliceType<'a, const FANOUT: usize, L: Leaf> {
-    Empty,
-
+enum SliceSpan<'a, const N: usize, L: Leaf> {
+    /// The slice is fully contained within a single leaf of the tree.
     Single(&'a L::Slice),
 
+    /// The slice spans multiple leaves. In this case we store:
+    ///
+    /// - `start`: the leaf slice where this span starts together with its
+    /// summary;
+    ///
+    /// - `internals`: a vector of tree nodes that are fully contained in the
+    /// span. These nodes can have different depths and their order reflects
+    /// the logical order of the slice, i.e. the first internal is the node
+    /// right after `start` and the last is the one before `end`. This vector
+    /// can be empty if the slice spans two consecutive leaves with no other
+    /// node between them;
+    ///
+    /// - `end`: the leaf slice where this span ends together with its summary.
     Multi {
         start: (&'a L::Slice, L::Summary),
-        internals: Vec<Arc<Node<FANOUT, L>>>,
-        // internals: Vec<&'a Inode<FANOUT, L>>,
+        internals: Vec<Arc<Node<N, L>>>,
         end: (&'a L::Slice, L::Summary),
     },
+
+    /// The slice is empty.
+    Empty,
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> Clone for SliceType<'a, FANOUT, L> {
+impl<'a, const N: usize, L: Leaf> Clone for SliceSpan<'a, N, L> {
+    #[inline]
     fn clone(&self) -> Self {
-        todo!()
+        match self {
+            SliceSpan::Single(slice) => SliceSpan::Single(*slice),
+
+            SliceSpan::Multi { start, internals, end } => SliceSpan::Multi {
+                start: (start.0, start.1.clone()),
+                internals: internals.clone(),
+                end: (end.0, end.1.clone()),
+            },
+
+            SliceSpan::Empty => SliceSpan::Empty,
+        }
     }
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     /// TODO: docs
     #[inline]
-    pub fn chops<M: Metric<L>>(&'a self) -> Chops<'a, FANOUT, L, M> {
+    pub fn chops<M>(&'a self) -> Chops<'a, FANOUT, L, M>
+    where
+        M: Metric<L>,
+    {
         let mut chops = Chops::new();
-        match &self.slice {
-            SliceType::Empty => {},
+        match &self.span {
+            SliceSpan::Empty => {},
 
-            SliceType::Single(slice) => {
+            SliceSpan::Single(slice) => {
                 chops.append(NodeOrSlicedLeaf::Sliced(
                     *slice,
                     self.summary.clone(),
                 ));
             },
 
-            SliceType::Multi { start, internals, end } => {
+            SliceSpan::Multi { start, internals, end } => {
                 let (start, start_summary) = start;
                 chops.append(NodeOrSlicedLeaf::Sliced(
                     *start,
@@ -102,7 +131,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     pub(super) fn empty() -> Self {
-        Self { slice: SliceType::Empty, summary: L::Summary::default() }
+        Self { span: SliceSpan::Empty, summary: L::Summary::default() }
     }
 
     pub(super) fn from_range_in_node<M>(
@@ -116,7 +145,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
             Node::Leaf(leaf) => {
                 let slice = M::slice(leaf.value().borrow(), range);
                 Self {
-                    slice: SliceType::Single(slice),
+                    span: SliceSpan::Single(slice),
                     summary: slice.summarize(),
                 }
             },
@@ -137,7 +166,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
                     &mut false,
                     &mut false,
                 );
-                Self { slice: slice.unwrap(), summary }
+                Self { span: slice.unwrap(), summary }
             },
         }
     }
@@ -146,17 +175,17 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     #[inline]
     pub fn leaves(&'a self) -> Leaves<'a, FANOUT, L> {
         let mut leaves = Leaves::new();
-        match &self.slice {
-            SliceType::Empty => {},
+        match &self.span {
+            SliceSpan::Empty => {},
 
-            SliceType::Single(slice) => {
+            SliceSpan::Single(slice) => {
                 leaves.append(NodeOrSlicedLeaf::Sliced(
                     *slice,
                     self.summary.clone(),
                 ));
             },
 
-            SliceType::Multi { start, internals, end } => {
+            SliceSpan::Multi { start, internals, end } => {
                 let (start, start_summary) = start;
                 leaves.append(NodeOrSlicedLeaf::Sliced(
                     *start,
@@ -185,34 +214,39 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     {
         assert!(M::zero() <= range.start);
         assert!(range.start <= range.end);
+
+        // TODO: this doesn't work for the line metric, e.g. we should be able
+        // to slice a string w/ no newlines in the 0..1 range but its measure
+        // is 0.
         assert!(range.end <= M::measure(self.summary()));
 
         if range.start == range.end {
             Self::empty()
         } else {
-            match &self.slice {
-                SliceType::Empty => panic!("TODO: explain why"),
+            match &self.span {
+                SliceSpan::Empty => panic!("TODO: explain why"),
 
-                SliceType::Single(slice) => {
+                SliceSpan::Single(slice) => {
                     let sliced = M::slice(slice, range);
 
                     Self {
                         summary: sliced.summarize(),
-                        slice: SliceType::Single(sliced),
+                        span: SliceSpan::Single(sliced),
                     }
                 },
 
-                SliceType::Multi {
-                    start: (a, ref b),
-                    ref internals,
-                    end: (c, ref d),
-                } => {
-                    // println!("=======================");
-                    // println!("slicing {self:#?}");
-                    let (slice, summary) =
-                        sumzung((*a, b), internals, (*c, d), range);
+                SliceSpan::Multi { start, internals, end } => {
+                    let (start_slice, start_summary) = start;
+                    let (end_slice, end_summary) = end;
 
-                    Self { slice, summary }
+                    let (span, summary) = sumzung(
+                        (*start_slice, start_summary),
+                        internals,
+                        (*end_slice, end_summary),
+                        range,
+                    );
+
+                    Self { span, summary }
                 },
             }
         }
@@ -229,7 +263,7 @@ fn sumzung<'a, const N: usize, L: Leaf, M: Metric<L>>(
     internals: &'a [Arc<Node<N, L>>],
     end: (&'a L::Slice, &L::Summary),
     range: Range<M>,
-) -> (SliceType<'a, N, L>, L::Summary) {
+) -> (SliceSpan<'a, N, L>, L::Summary) {
     let (mut start, mut measured, mut summary) = {
         let (slice, summary) = start;
         let size = M::measure(summary);
@@ -237,7 +271,7 @@ fn sumzung<'a, const N: usize, L: Leaf, M: Metric<L>>(
             if size >= range.end {
                 // The whole range is contained in the starting slice.
                 let sliced = M::slice(slice, range);
-                return (SliceType::Single(sliced), sliced.summarize());
+                return (SliceSpan::Single(sliced), sliced.summarize());
             } else {
                 // The starting slice contains the start of the range but
                 // not the end.
@@ -284,7 +318,7 @@ fn sumzung<'a, const N: usize, L: Leaf, M: Metric<L>>(
             M::split_left(end, range.end - measured, end_summary);
         summary += &end_summary;
         (
-            SliceType::Multi {
+            SliceSpan::Multi {
                 start: start.take().unwrap(),
                 internals: new_internals,
                 end: (end, end_summary),
@@ -298,7 +332,7 @@ fn sumzyng<'a, const N: usize, L, M>(
     nodes: &'a [Arc<Node<N, L>>],
     range: Range<M>,
     measured: &mut M,
-    ty: &mut Option<SliceType<'a, N, L>>,
+    ty: &mut Option<SliceSpan<'a, N, L>>,
     internals: &mut (*mut Arc<Node<N, L>>, usize, usize),
     start: &mut Option<(&'a L::Slice, L::Summary)>,
     summary: &mut L::Summary,
@@ -390,7 +424,7 @@ fn sumzyng<'a, const N: usize, L, M>(
                         let (ptr, vec, cap) = internals;
                         let int =
                             unsafe { Vec::from_raw_parts(*ptr, *vec, *cap) };
-                        *ty = Some(SliceType::Multi {
+                        *ty = Some(SliceSpan::Multi {
                             start: start.take().unwrap(),
                             internals: int, // TODO: dont clone
                             end: (end, end_summary),
@@ -420,7 +454,7 @@ fn sumzyng<'a, const N: usize, L, M>(
                         // is also the end and we have a single type.
                         let slice = M::slice(leaf, start_m..end);
                         let slice_summary = slice.summarize();
-                        *ty = Some(SliceType::Single(slice));
+                        *ty = Some(SliceSpan::Single(slice));
                         *summary = slice_summary.clone();
                         *found_end = true;
                     } else {
