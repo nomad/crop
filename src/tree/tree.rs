@@ -100,7 +100,14 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     /// Returns an iterator over the leaves of this tree.
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
-        Leaves::from_stack([NodeOrSlicedLeaf::Whole(&*self.root)])
+        match &*self.root {
+            Node::Leaf(_) => {
+                Leaves::from_stack([NodeOrSlicedLeaf::Whole(&*self.root)])
+            },
+            Node::Internal(inode) => {
+                Leaves::from_inode_children(inode.children())
+            },
+        }
     }
 
     /// TODO: docs

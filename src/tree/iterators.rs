@@ -1,4 +1,5 @@
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 use super::tree_slice::NodeOrSlicedLeaf;
 use super::{Leaf, Metric, Node, TreeSlice};
@@ -25,6 +26,31 @@ impl<'a, const FANOUT: usize, L: Leaf> Leaves<'a, FANOUT, L> {
         I: IntoIterator<Item = NodeOrSlicedLeaf<'a, FANOUT, L>>,
     {
         Self { stack: slices.into_iter().collect() }
+    }
+
+    pub(super) fn from_inode_children(
+        mut nodes: &'a [Arc<Node<FANOUT, L>>],
+    ) -> Self {
+        let mut stack = VecDeque::new();
+
+        'outer: loop {
+            let mut iter = nodes.into_iter();
+            let first = &**iter.next().unwrap();
+            for (idx, rest) in iter.enumerate() {
+                stack.insert(idx, NodeOrSlicedLeaf::Whole(rest));
+            }
+            match first {
+                Node::Leaf(_) => {
+                    stack.push_front(NodeOrSlicedLeaf::Whole(first));
+                    break 'outer;
+                },
+                Node::Internal(inode) => {
+                    nodes = inode.children();
+                },
+            }
+        }
+
+        Self { stack }
     }
 
     pub(super) fn new() -> Self {
