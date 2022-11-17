@@ -1,7 +1,7 @@
 #![feature(iter_next_chunk)]
 
 mod rope;
-pub mod tree;
+mod tree;
 
 pub mod iter {
     //! Iterators over [`Rope`](crate::Rope)s.
