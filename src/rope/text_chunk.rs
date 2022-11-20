@@ -60,7 +60,7 @@ impl Leaf for TextChunk {
     type Slice = TextSlice;
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub(super) struct TextSlice {
     text: str,
 }
@@ -103,7 +103,7 @@ impl ToOwned for TextSlice {
     }
 }
 
-#[derive(Copy, Clone, Default, Debug)]
+#[derive(Copy, Clone, Default, Debug, PartialEq)]
 pub(super) struct TextSummary {
     pub(super) bytes: usize,
     pub(super) line_breaks: usize,

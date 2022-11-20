@@ -1,5 +1,6 @@
 use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 
+use super::utils::*;
 use super::{TextChunk, TextSlice, TextSummary};
 use crate::tree::{Metric, Summarize};
 
@@ -71,14 +72,18 @@ impl Metric<TextChunk> for ByteMetric {
     }
 
     #[inline]
-    fn split_right(
-        chunk: &TextSlice,
+    fn split_right<'a>(
+        chunk: &'a TextSlice,
         ByteMetric(from): Self,
-    ) -> (Option<&TextSlice>, &TextSlice) {
+        summary: &TextSummary,
+    ) -> (Option<(&'a TextSlice, TextSummary)>, &'a TextSlice, TextSummary)
+    {
         if from == 0 {
-            (None, chunk)
+            (None, chunk, summary.clone())
         } else {
-            (Some(chunk[..from].into()), chunk[from..].into())
+            let left = chunk[..from].into();
+            let right = chunk[from..].into();
+            (Some((left, left.summarize())), right, right.summarize())
         }
     }
 
@@ -146,52 +151,85 @@ impl Metric<TextChunk> for LineMetric {
         summary: &TextSummary,
     ) -> (&'a TextSlice, TextSummary, Option<(&'a TextSlice, TextSummary)>)
     {
-        let lf_plus_one = str_indices::lines_lf::to_byte_idx(chunk, up_to);
+        let (left, right) = split_slice_at_line_break(chunk, up_to, summary);
 
-        let (left, left_summary) = {
-            // If the newline is preceded by a carriage return we have to skip
-            // it.
-            let skip = if (lf_plus_one > 1)
-                && (chunk.as_bytes()[lf_plus_one - 2] == b'\r')
-            {
-                2
-            } else {
-                1
-            };
-
-            let left_bytes = lf_plus_one - skip;
-
-            (
-                chunk[..left_bytes].into(),
-                TextSummary { bytes: left_bytes, line_breaks: up_to - 1 },
-            )
-        };
-
-        let right = if lf_plus_one == chunk.len() {
-            None
-        } else {
-            Some((
-                chunk[lf_plus_one..].into(),
-                TextSummary {
-                    bytes: chunk.len() - lf_plus_one,
-                    line_breaks: summary.line_breaks - up_to,
-                },
-            ))
-        };
+        let (left, left_summary) =
+            left.unwrap_or(("".into(), TextSummary::default()));
 
         (left, left_summary, right)
     }
 
     #[inline]
-    fn split_right(
-        chunk: &TextSlice,
+    fn split_right<'a>(
+        chunk: &'a TextSlice,
         LineMetric(from): Self,
-    ) -> (Option<&TextSlice>, &TextSlice) {
-        todo!()
+        summary: &TextSummary,
+    ) -> (Option<(&'a TextSlice, TextSummary)>, &'a TextSlice, TextSummary)
+    {
+        let (left, right) = split_slice_at_line_break(chunk, from, summary);
+
+        let (right, right_summary) =
+            right.unwrap_or(("".into(), TextSummary::default()));
+
+        (left, right, right_summary)
     }
 
     #[inline]
-    fn slice(chunk: &TextSlice, range: Range<Self>) -> &TextSlice {
-        todo!()
+    fn slice(
+        chunk: &TextSlice,
+        Range { start, end }: Range<Self>,
+    ) -> &TextSlice {
+        slice_between_line_breaks(chunk, start.0, end.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::ops::Deref;
+
+    use super::*;
+
+    #[test]
+    fn split_lines_left_1() {
+        let chunk = "this is\na chunk\n".into();
+
+        let (left, left_summary, maybe_right) =
+            LineMetric::split_left(chunk, LineMetric(1), &chunk.summarize());
+
+        assert_eq!("this is", left.deref());
+        assert_eq!(0, left_summary.line_breaks);
+
+        let (right, right_summary) = maybe_right.unwrap();
+        assert_eq!("a chunk\n", right.deref());
+        assert_eq!(1, right_summary.line_breaks);
+
+        let (left, left_summary, maybe_right) =
+            LineMetric::split_left(chunk, LineMetric(2), &chunk.summarize());
+
+        assert_eq!("this is\na chunk", left.deref());
+        assert_eq!(1, left_summary.line_breaks);
+        assert_eq!(None, maybe_right);
+    }
+
+    #[test]
+    fn split_lines_right_1() {
+        let chunk = "\nthis is\na chunk".into();
+
+        let (maybe_left, right, right_summary) =
+            LineMetric::split_right(chunk, LineMetric(1), &chunk.summarize());
+
+        assert_eq!("this is\na chunk", right.deref());
+        assert_eq!(1, right_summary.line_breaks);
+        assert_eq!(None, maybe_left);
+
+        let (maybe_left, right, right_summary) =
+            LineMetric::split_right(chunk, LineMetric(2), &chunk.summarize());
+
+        let (left, left_summary) = maybe_left.unwrap();
+        assert_eq!("\nthis is", left.deref());
+        assert_eq!(1, left_summary.line_breaks);
+
+        assert_eq!("a chunk", right.deref());
+        assert_eq!(0, right_summary.line_breaks);
     }
 }

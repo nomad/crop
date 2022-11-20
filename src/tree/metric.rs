@@ -8,7 +8,6 @@ pub trait Metric<L: Leaf>:
     Debug
     + Copy
     + Ord
-    + Sized
     + Add<Self, Output = Self>
     + Sub<Self, Output = Self>
     + AddAssign<Self>
@@ -41,10 +40,11 @@ pub trait Metric<L: Leaf>:
 
     /// TODO: docs
     #[allow(unused_variables)]
-    fn split_right(
-        slice: &L::Slice,
+    fn split_right<'a>(
+        slice: &'a L::Slice,
         from: Self,
-    ) -> (Option<&L::Slice>, &L::Slice) {
+        summary: &L::Summary,
+    ) -> (Option<(&'a L::Slice, L::Summary)>, &'a L::Slice, L::Summary) {
         unimplemented!(
             "Trying to split right {slice:?} at {from:?}, but {} cannot be \
              split by {}",

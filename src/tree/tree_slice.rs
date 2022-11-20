@@ -194,9 +194,8 @@ where
                 let summary = slice.summarize();
                 return TreeSlice { span: SliceSpan::Single(slice), summary };
             } else {
-                let (_, start_slice) =
-                    M::split_right(start_slice, range.start);
-                let start_summary = start_slice.summarize();
+                let (_, start_slice, start_summary) =
+                    M::split_right(start_slice, range.start, start_summary);
                 Some((start_slice, start_summary))
             }
         } else {
@@ -339,11 +338,11 @@ fn some_name_for_this_rec<'a, const N: usize, L, M>(
                             *span_is_some = true;
                             return;
                         } else {
-                            let (_, start) = M::split_right(
+                            let (_, start, start_summary) = M::split_right(
                                 leaf.value().borrow(),
                                 range.start - *measured,
+                                leaf.summary(),
                             );
-                            let start_summary = start.summarize();
                             *measured += M::measure(leaf.summary());
                             *final_summary = start_summary.clone();
                             *start_slice = Some((start, start_summary));
