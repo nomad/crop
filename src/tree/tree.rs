@@ -25,7 +25,7 @@ pub trait Summarize: Debug {
 
 /// TODO: docs
 pub struct Tree<const FANOUT: usize, L: Leaf> {
-    root: Arc<Node<FANOUT, L>>,
+    pub(super) root: Arc<Node<FANOUT, L>>,
 }
 
 impl<const N: usize, L: Leaf> Debug for Tree<N, L> {
@@ -100,14 +100,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     /// Returns an iterator over the leaves of this tree.
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
-        match &*self.root {
-            Node::Leaf(_) => {
-                Leaves::from_stack([NodeOrSlicedLeaf::Whole(&*self.root)])
-            },
-            Node::Internal(inode) => {
-                Leaves::from_inode_children(inode.children())
-            },
-        }
+        Leaves::from(self)
     }
 
     /// TODO: docs

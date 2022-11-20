@@ -65,4 +65,13 @@ impl<const N: usize, L: Leaf> Node<N, L> {
             Node::Leaf(leaf) => leaf.summary(),
         }
     }
+
+    pub(super) unsafe fn as_leaf_unchecked(
+        &self,
+    ) -> &super::node_leaf::Leaf<L> {
+        match self {
+            Node::Leaf(leaf) => leaf,
+            Node::Internal(_) => std::hint::unreachable_unchecked(),
+        }
+    }
 }

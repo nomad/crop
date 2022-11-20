@@ -42,12 +42,12 @@ impl<'a, const N: usize, L: Leaf> NodeOrSlicedLeaf<'a, N, L> {
 /// TODO: docs
 #[derive(Debug, Clone)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
-    span: SliceSpan<'a, FANOUT, L>,
+    pub(super) span: SliceSpan<'a, FANOUT, L>,
     summary: L::Summary,
 }
 
 #[derive(Debug)]
-enum SliceSpan<'a, const N: usize, L: Leaf> {
+pub(super) enum SliceSpan<'a, const N: usize, L: Leaf> {
     /// The slice is fully contained within a single leaf of the tree.
     Single(&'a L::Slice),
 
@@ -159,36 +159,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     /// TODO: docs
     #[inline]
     pub fn leaves(&'a self) -> Leaves<'a, FANOUT, L> {
-        let mut leaves = Leaves::new();
-        match &self.span {
-            SliceSpan::Empty => {},
-
-            SliceSpan::Single(slice) => {
-                leaves.append(NodeOrSlicedLeaf::Sliced(
-                    *slice,
-                    self.summary.clone(),
-                ));
-            },
-
-            SliceSpan::Multi { start, internals, end } => {
-                let (start, start_summary) = start;
-                leaves.append(NodeOrSlicedLeaf::Sliced(
-                    *start,
-                    start_summary.clone(),
-                ));
-
-                leaves.extend(
-                    internals.iter().map(|n| NodeOrSlicedLeaf::Whole(n)),
-                );
-
-                let (end, end_summary) = end;
-                leaves.append(NodeOrSlicedLeaf::Sliced(
-                    *end,
-                    end_summary.clone(),
-                ));
-            },
-        }
-        leaves
+        Leaves::from(self)
     }
 
     /// TODO: docs

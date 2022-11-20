@@ -31,7 +31,7 @@ impl<'a> From<&'a Rope> for Bytes<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
         let mut chunks = rope.chunks();
-        let current = chunks.next().unwrap_or_default().as_bytes();
+        let current = chunks.next().unwrap_or("").as_bytes();
         Self {
             chunks,
             current,
@@ -173,6 +173,17 @@ mod tests {
     const SMALL: &str = include_str!("../../benches/small.txt");
     const MEDIUM: &str = include_str!("../../benches/medium.txt");
     const LARGE: &str = include_str!("../../benches/large.txt");
+
+    #[test]
+    fn bytes_0() {
+        let r = Rope::from(LARGE);
+        let mut i = 0;
+        for (b_rope, b_str) in r.bytes().zip(LARGE.bytes()) {
+            assert_eq!(b_rope, b_str);
+            i += 1;
+        }
+        assert_eq!(i, r.byte_len());
+    }
 
     #[test]
     fn bytes_1() {
