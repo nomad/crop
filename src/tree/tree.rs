@@ -3,8 +3,7 @@ use std::fmt::{self, Debug};
 use std::ops::{AddAssign, Range};
 use std::sync::Arc;
 
-use super::tree_slice::NodeOrSlicedLeaf;
-use super::{Chops, Inode, Leaves, Metric, Node, TreeSlice};
+use super::{Inode, Leaves, Metric, Node, TreeSlice, Units};
 
 /// TODO: docs
 pub trait Leaf: Summarize + Borrow<Self::Slice> {
@@ -43,15 +42,6 @@ impl<const N: usize, L: Leaf> Debug for Tree<N, L> {
 
 /// TODO: docs
 impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
-    /// TODO: docs
-    #[inline]
-    pub fn chops<M>(&self) -> Chops<'_, FANOUT, L, M>
-    where
-        M: Metric<L>,
-    {
-        Chops::from_stack([NodeOrSlicedLeaf::Whole(&*self.root)])
-    }
-
     /// # Panics
     ///
     /// This function will panic if the iterator is empty.
@@ -80,6 +70,12 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         Tree { root: Arc::new(Node::Internal(Inode::from_leaves(leaves))) }
     }
 
+    /// Returns an iterator over the leaves of this tree.
+    #[inline]
+    pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
+        Leaves::from(self)
+    }
+
     /// TODO: docs
     #[inline]
     pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
@@ -97,16 +93,19 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         }
     }
 
-    /// Returns an iterator over the leaves of this tree.
-    #[inline]
-    pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
-        Leaves::from(self)
-    }
-
     /// TODO: docs
     #[inline]
     pub fn summary(&self) -> &L::Summary {
         self.root.summary()
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn units<M>(&self) -> Units<'_, FANOUT, L, M>
+    where
+        M: Metric<L>,
+    {
+        Units::from(self)
     }
 }
 

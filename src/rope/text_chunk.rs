@@ -158,6 +158,10 @@ impl<'a> Iterator for TextChunkIter<'a> {
 
 impl<'a> ExactSizeIterator for TextChunkIter<'a> {
     fn len(&self) -> usize {
-        2
+        if self.str.len() > TEXT_CHUNK_MAX_BYTES {
+            2
+        } else {
+            1
+        }
     }
 }

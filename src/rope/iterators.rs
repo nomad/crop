@@ -1,6 +1,6 @@
 use super::metrics::LineMetric;
 use super::{Rope, RopeSlice, TextChunk};
-use crate::tree::{Chops, Leaves};
+use crate::tree::{Leaves, Units};
 
 /// TODO: docs
 #[derive(Clone)]
@@ -98,7 +98,7 @@ impl<'a> From<&'a Rope> for Chars<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
         let mut chunks = rope.chunks();
-        let current = chunks.next().unwrap_or_default();
+        let current = chunks.next().unwrap_or("");
         Self { chunks, current, yielded_in_current: 0 }
     }
 }
@@ -107,7 +107,7 @@ impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chars<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
         let mut chunks = slice.chunks();
-        let current = chunks.next().unwrap_or_default();
+        let current = chunks.next().unwrap_or("");
         Self { chunks, current, yielded_in_current: 0 }
     }
 }
@@ -139,20 +139,20 @@ impl<'a> Iterator for Chars<'a> {
 
 #[derive(Clone)]
 pub struct Lines<'a> {
-    chops: Chops<'a, { Rope::fanout() }, TextChunk, LineMetric>,
+    units: Units<'a, { Rope::fanout() }, TextChunk, LineMetric>,
 }
 
 impl<'a> From<&'a Rope> for Lines<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        Self { chops: rope.root().chops() }
+        Self { units: rope.root().units::<LineMetric>() }
     }
 }
 
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
-        Self { chops: slice.tree_slice().chops() }
+        Self { units: slice.tree_slice().units::<LineMetric>() }
     }
 }
 
@@ -161,7 +161,7 @@ impl<'a> Iterator for Lines<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.chops.next().map(RopeSlice::new)
+        self.units.next().map(RopeSlice::new)
     }
 }
 
@@ -192,73 +192,90 @@ mod tests {
         assert_eq!(33, r.chars().count());
     }
 
-    // #[test]
+    #[test]
     fn lines_1() {
         // Note: all these ropes should fit in a single chunk, no internal
         // nodes.
 
-        // Note: we have to slice the ropes because the Tree::chops
-        // implementation is broken rn.
+        let r = Rope::from("abc");
+        assert_eq!(1, r.lines().count());
+        assert_eq!(1, r.byte_slice(..).lines().count());
 
         let r = Rope::from("a\nb");
+        assert_eq!(2, r.lines().count());
         assert_eq!(2, r.byte_slice(..).lines().count());
 
         let r = Rope::from("a\nb\n");
+        assert_eq!(2, r.lines().count());
         assert_eq!(2, r.byte_slice(..).lines().count());
 
         let r = Rope::from("\n\n\n\n");
+        assert_eq!(4, r.lines().count());
         assert_eq!(4, r.byte_slice(..).lines().count());
 
         let r = Rope::from("\n\n\n");
+        assert_eq!(3, r.lines().count());
         assert_eq!(3, r.byte_slice(..).lines().count());
 
         let r = Rope::from("\n\n\na");
+        assert_eq!(4, r.lines().count());
         assert_eq!(4, r.byte_slice(..).lines().count());
     }
 
-    // #[test]
-    // fn lines_2() {
-    //     let s = "This is a piece\nof text that's not \ngonna fit\nin\none \
-    //              chunk\nand it also\r\nhas mixed\r\n line breaks\n and a \
-    //              trailing\nline break.\n";
+    #[test]
+    fn lines_2() {
+        let s = "Donec ut suscipit risus. Vivamus dictum auctor \
+                 vehicula\nurna tristique commodo. Sed sapien risus\nvelit.\n";
 
-    //     let r = Rope::from(s);
-    //     let r = r.byte_slice(..);
+        let rope = Rope::from(s);
+        let slice = rope.byte_slice(..);
 
-    //     assert_eq!(r.lines().count(), s.lines().count());
+        assert_eq!(rope.lines().count(), s.lines().count());
+        assert_eq!(slice.lines().count(), s.lines().count());
 
-    //     for (r_slice, s_slice) in r.lines().zip(s.lines()) {
-    //         assert_eq!(r_slice, s_slice);
-    //     }
-    // }
+        for ((rope_line, slice_line), s_line) in
+            rope.lines().zip(slice.lines()).zip(s.lines())
+        {
+            assert_eq!(rope_line, s_line);
+            assert_eq!(slice_line, s_line);
+        }
+    }
 
-    // #[test]
-    // fn lines_3() {
-    //     let s = "Donec ut suscipit risus. Vivamus dictum auctor \
-    //              vehicula\nurna tristique commodo. Sed sapien risus\nvelit.\n";
+    #[test]
+    fn lines_3() {
+        let s = "This is a piece\nof text that's not \ngonna fit\nin\none \
+                 chunk\nand it also\r\nhas mixed\r\n line breaks\n and a \
+                 trailing\nline break.\n";
 
-    //     let r = Rope::from(s);
-    //     let r = r.byte_slice(..);
+        let rope = Rope::from(s);
+        let slice = rope.byte_slice(..);
 
-    //     assert_eq!(r.lines().count(), s.lines().count());
+        assert_eq!(rope.lines().count(), s.lines().count());
+        assert_eq!(slice.lines().count(), s.lines().count());
 
-    //     for (r_slice, s_slice) in r.lines().zip(s.lines()) {
-    //         assert_eq!(r_slice, s_slice);
-    //     }
-    // }
+        for ((rope_line, slice_line), s_line) in
+            rope.lines().zip(slice.lines()).zip(s.lines())
+        {
+            assert_eq!(rope_line, s_line);
+            assert_eq!(slice_line, s_line);
+        }
+    }
 
-    // #[test]
-    // fn lines_4() {
-    //     let r = Rope::from(TINY);
-    //     assert_eq!(r.byte_slice(..).lines().count(), TINY.lines().count());
+    #[test]
+    fn lines_4() {
+        for s in [TINY, SMALL, MEDIUM, LARGE] {
+            let rope = Rope::from(s);
+            let slice = rope.byte_slice(..);
 
-    //     let r = Rope::from(SMALL);
-    //     assert_eq!(r.byte_slice(..).lines().count(), SMALL.lines().count());
+            assert_eq!(rope.lines().count(), s.lines().count());
+            assert_eq!(slice.lines().count(), s.lines().count());
 
-    //     let r = Rope::from(MEDIUM);
-    //     assert_eq!(r.byte_slice(..).lines().count(), MEDIUM.lines().count());
-
-    //     let r = Rope::from(LARGE);
-    //     assert_eq!(r.byte_slice(..).lines().count(), LARGE.lines().count());
-    // }
+            for ((rope_line, slice_line), s_line) in
+                rope.lines().zip(slice.lines()).zip(s.lines())
+            {
+                assert_eq!(rope_line, s_line);
+                assert_eq!(slice_line, s_line);
+            }
+        }
+    }
 }

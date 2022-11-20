@@ -48,23 +48,21 @@ fn iter_forward(c: &mut Criterion) {
         })
     });
 
-    // group.bench_function("lines_tiny", |bench| {
-    //     let r = Rope::from(TINY);
-    //     let r = r.byte_slice(..);
-    //     let mut iter = r.lines().cycle();
-    //     bench.iter(|| {
-    //         iter.next();
-    //     })
-    // });
+    group.bench_function("lines_tiny", |bench| {
+        let r = Rope::from(TINY);
+        let mut iter = r.lines().cycle();
+        bench.iter(|| {
+            iter.next();
+        })
+    });
 
-    // group.bench_function("lines_large", |bench| {
-    //     let r = Rope::from(LARGE);
-    //     let r = r.byte_slice(..);
-    //     let mut iter = r.lines().cycle();
-    //     bench.iter(|| {
-    //         iter.next();
-    //     })
-    // });
+    group.bench_function("lines_large", |bench| {
+        let r = Rope::from(LARGE);
+        let mut iter = r.lines().cycle();
+        bench.iter(|| {
+            iter.next();
+        })
+    });
 }
 
 criterion_group!(benches, iter_create, iter_forward);

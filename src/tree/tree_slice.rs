@@ -1,49 +1,13 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::{Chops, Inode, Leaf, Leaves, Metric, Node, Summarize};
-
-// TODO: consider making this either Sliced<slice> or Inode<inode>, there's no
-// use in keeping whole leafs.
-/// TODO: docs
-#[derive(Debug, Copy)]
-pub(super) enum NodeOrSlicedLeaf<'a, const N: usize, L: Leaf> {
-    /// No slicing was needed so we can reuse a reference to the original node.
-    Whole(&'a Node<N, L>),
-
-    /// We had to slice a leaf, getting an owned value.
-    Sliced(&'a L::Slice, L::Summary),
-}
-
-// FIXME: Why can't I derive this?
-impl<'a, const N: usize, L: Leaf> Clone for NodeOrSlicedLeaf<'a, N, L> {
-    #[inline]
-    fn clone(&self) -> Self {
-        match self {
-            Self::Whole(node) => Self::Whole(*node),
-
-            Self::Sliced(slice, summary) => {
-                Self::Sliced(*slice, summary.clone())
-            },
-        }
-    }
-}
-
-impl<'a, const N: usize, L: Leaf> NodeOrSlicedLeaf<'a, N, L> {
-    #[inline]
-    pub(super) fn summary(&self) -> &L::Summary {
-        match self {
-            Self::Whole(node) => node.summary(),
-            Self::Sliced(_slice, summary) => &summary,
-        }
-    }
-}
+use super::{Inode, Leaf, Leaves, Metric, Node, Summarize, Units};
 
 /// TODO: docs
 #[derive(Debug, Clone)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     pub(super) span: SliceSpan<'a, FANOUT, L>,
-    summary: L::Summary,
+    pub(super) summary: L::Summary,
 }
 
 #[derive(Debug)]
@@ -92,44 +56,6 @@ impl<'a, const N: usize, L: Leaf> Clone for SliceSpan<'a, N, L> {
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
-    /// TODO: docs
-    #[inline]
-    pub fn chops<M>(&'a self) -> Chops<'a, FANOUT, L, M>
-    where
-        M: Metric<L>,
-    {
-        let mut chops = Chops::new();
-        match &self.span {
-            SliceSpan::Empty => {},
-
-            SliceSpan::Single(slice) => {
-                chops.append(NodeOrSlicedLeaf::Sliced(
-                    *slice,
-                    self.summary.clone(),
-                ));
-            },
-
-            SliceSpan::Multi { start, internals, end } => {
-                let (start, start_summary) = start;
-                chops.append(NodeOrSlicedLeaf::Sliced(
-                    *start,
-                    start_summary.clone(),
-                ));
-
-                chops.extend(
-                    internals.iter().map(|n| NodeOrSlicedLeaf::Whole(n)),
-                );
-
-                let (end, end_summary) = end;
-                chops.append(NodeOrSlicedLeaf::Sliced(
-                    *end,
-                    end_summary.clone(),
-                ));
-            },
-        }
-        chops
-    }
-
     pub(super) fn empty() -> Self {
         Self { span: SliceSpan::Empty, summary: L::Summary::default() }
     }
@@ -208,8 +134,18 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     /// TODO: docs
+    #[inline]
     pub fn summary(&self) -> &L::Summary {
         &self.summary
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn units<M>(&'a self) -> Units<'a, FANOUT, L, M>
+    where
+        M: Metric<L>,
+    {
+        Units::from(self)
     }
 }
 

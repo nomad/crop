@@ -358,7 +358,7 @@ mod tests {
         assert_eq!("Hello world\nthis is\na test", r.line_slice(..));
     }
 
-    // #[test]
+    #[test]
     fn partial_eq() {
         for s in ["This is a service dog: 🐕‍🦺", TINY, SMALL, MEDIUM, LARGE]
         {
