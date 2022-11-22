@@ -1,4 +1,3 @@
-use std::collections::VecDeque;
 use std::sync::Arc;
 
 use super::tree_slice::SliceSpan;
@@ -243,12 +242,21 @@ pub struct Units<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
     start: Option<(&'a L::Slice, L::Summary)>,
 
     /// TODO: docs
-    stack: VecDeque<&'a Arc<Node<FANOUT, L>>>,
+    root_nodes: &'a [Arc<Node<FANOUT, L>>],
 
     /// TODO: docs
     end: Option<(&'a L::Slice, L::Summary)>,
 
+    /// TODO: docs
+    root_forward_idx: isize,
+
+    /// # Invariant
+    /// - the index in the last item of the vector is a leaf.
+    forward_path: Vec<(&'a Inode<FANOUT, L>, usize)>,
+
+    /// TODO: docs
     metric: std::marker::PhantomData<M>,
+    // a: usize,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Clone
@@ -258,9 +266,9 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Clone
     fn clone(&self) -> Self {
         Self {
             start: self.start.clone(),
-            stack: self.stack.clone(),
             end: self.end.clone(),
-            metric: std::marker::PhantomData,
+            forward_path: self.forward_path.clone(),
+            ..*self
         }
     }
 }
@@ -270,20 +278,25 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
 {
     #[inline]
     fn from(tree: &'a Tree<FANOUT, L>) -> Units<'a, FANOUT, L, M> {
-        let (start_slice, stack) = match &*tree.root {
+        // println!("{tree:#?}");
+
+        let (start, root_nodes) = match &*tree.root {
             Node::Leaf(leaf) => (
                 Some((leaf.value().borrow(), leaf.summary().clone())),
-                VecDeque::new(),
+                &[][..],
             ),
 
-            Node::Internal(inode) => (None, inode.children().iter().collect()),
+            Node::Internal(inode) => (None, inode.children()),
         };
 
         Units {
-            start: start_slice,
-            stack,
+            start,
+            root_nodes,
+            root_forward_idx: -1,
+            forward_path: Vec::new(),
             end: None,
             metric: std::marker::PhantomData,
+            // a: 0,
         }
     }
 }
@@ -295,321 +308,391 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>>
     fn from(
         tree_slice: &'a TreeSlice<'a, FANOUT, L>,
     ) -> Units<'a, FANOUT, L, M> {
-        let (start, stack, end) = match &tree_slice.span {
-            SliceSpan::Single(slice) => (
-                Some((*slice, tree_slice.summary().clone())),
-                VecDeque::new(),
-                None,
-            ),
+        let (start, root_nodes, end) = match &tree_slice.span {
+            SliceSpan::Single(slice) => {
+                (Some((*slice, tree_slice.summary().clone())), &[][..], None)
+            },
 
-            SliceSpan::Multi { start, internals, end } => (
-                Some(start.clone()),
-                internals.iter().collect(),
-                Some(end.clone()),
-            ),
+            SliceSpan::Multi { start, internals, end } => {
+                (Some(start.clone()), &**internals, Some(end.clone()))
+            },
 
-            SliceSpan::Empty => (None, VecDeque::new(), None),
+            SliceSpan::Empty => (None, &[][..], None),
         };
 
-        Units { start, stack, end, metric: std::marker::PhantomData }
+        Units {
+            start,
+            root_nodes,
+            root_forward_idx: -1,
+            forward_path: Vec::new(),
+            end,
+            metric: std::marker::PhantomData,
+            // a: 0,
+        }
     }
 }
+
+impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Units<'a, FANOUT, L, M> {}
 
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
     for Units<'a, FANOUT, L, M>
 {
     type Item = TreeSlice<'a, FANOUT, L>;
 
-    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let (start, mut summary) = match self.start.take() {
-            Some((slice, summary)) => {
-                if M::measure(&summary) == M::zero() {
-                    // println!("breaking here");
-                    ((slice, summary.clone()), summary)
-                } else {
-                    // println!("got here?? {slice:?}");
-                    let (left_slice, left_summary, right) =
-                        M::split_left(slice, M::one(), &summary);
+        // if self.a == 4 {
+        //     return None;
+        // }
 
-                    self.start = right;
+        let start = self.start.take();
 
-                    return Some(TreeSlice {
-                        span: SliceSpan::Single(left_slice),
-                        summary: left_summary,
-                    });
-                }
-            },
+        let (start_slice, start_summary) = match start {
+            Some((slice, ref summary)) => (slice, summary),
 
-            // TODO: if start is none and the stack is empty here we're
-            // returning none but end could me some
-            None => match &**self.stack.pop_front()? {
-                Node::Leaf(leaf) => {
-                    if M::measure(leaf.summary()) == M::zero() {
-                        (
-                            (leaf.value().borrow(), leaf.summary().clone()),
-                            leaf.summary().clone(),
-                        )
-                    } else {
-                        let (left_slice, left_summary, right) = M::split_left(
-                            leaf.value().borrow(),
-                            M::one(),
-                            leaf.summary(),
-                        );
-                        self.start = right;
-                        return Some(TreeSlice {
-                            span: SliceSpan::Single(left_slice),
-                            summary: left_summary,
-                        });
-                    }
-                },
+            None => {
+                match next_something_forward(
+                    self.root_nodes,
+                    &mut self.root_forward_idx,
+                    &mut self.forward_path,
+                    // self.a,
+                ) {
+                    Some((slice, summary)) => (slice, summary),
 
-                Node::Internal(inode) => {
-                    let mut inode = inode;
-                    loop {
-                        let mut children = inode.children().iter();
-                        match &**children.next().unwrap() {
-                            Node::Leaf(leaf) => {
-                                let (start, summary) =
-                                    if M::measure(leaf.summary()) == M::zero()
-                                    {
-                                        (
-                                            leaf.value().borrow(),
-                                            leaf.summary().clone(),
-                                        )
-                                    } else {
-                                        let (left_slice, left_summary, right) =
-                                            M::split_left(
-                                                leaf.value().borrow(),
-                                                M::one(),
-                                                leaf.summary(),
-                                            );
-                                        self.start = right;
-                                        let mut idx = 0;
-                                        for child in children {
-                                            self.stack.insert(idx, child);
-                                            idx += 1;
-                                        }
-                                        return Some(TreeSlice {
-                                            span: SliceSpan::Single(
-                                                left_slice,
-                                            ),
-                                            summary: left_summary,
-                                        });
-                                    };
-                                let mut idx = 0;
-                                for child in children {
-                                    self.stack.insert(idx, child);
-                                    idx += 1;
-                                }
-                                // println!("breaking here");
-                                break ((start, summary.clone()), summary);
-                            },
-
-                            Node::Internal(i) => {
-                                inode = i;
-                                let mut idx = 0;
-                                for child in children {
-                                    self.stack.insert(idx, child);
-                                    idx += 1;
-                                }
-                                continue;
-                            },
+                    None => {
+                        // Start is None and there's not a next leaf.
+                        let (end_slice, end_summary) = self.end.take()?;
+                        if M::measure(&end_summary) == M::zero() {
+                            return Some(TreeSlice {
+                                span: SliceSpan::Single(end_slice),
+                                summary: end_summary,
+                            });
+                        } else {
+                            let (end_slice, end_summary, right) =
+                                M::split_left(
+                                    end_slice,
+                                    M::one(),
+                                    &end_summary,
+                                );
+                            self.end = right;
+                            return Some(TreeSlice {
+                                span: SliceSpan::Single(end_slice),
+                                summary: end_summary,
+                            });
                         }
-                    }
-                },
+                    },
+                }
             },
         };
 
-        // println!("got start: {start:?}");
+        let start = if M::measure(start_summary) == M::zero() {
+            (start_slice, start_summary.clone())
+        } else {
+            let (left_slice, left_summary, right) =
+                M::split_left(start_slice, M::one(), start_summary);
+
+            self.start = right;
+
+            return Some(TreeSlice {
+                span: SliceSpan::Single(left_slice),
+                summary: left_summary,
+            });
+        };
+
+        // if self.a == 2 {
+        //     println!("found start: {start:?}");
+        //     println!("path after founding start: {:#?}", self.forward_path);
+        //     println!("alkso root_idx: {:?}", self.root_forward_idx);
+        // }
+
+        let mut summary = start.1.clone();
 
         let mut internals = Vec::new();
 
-        let mut end = None;
+        // Now we have start and we know that its measure is zero. We have to
+        // walk the tree forward, appending to internals until we find the end.
+        // println!("path at: {:#?}", self.forward_path);
 
-        while let Some(first) = self.stack.pop_front() {
-            if M::measure(first.summary()) == M::zero() {
-                summary += first.summary();
-                internals.push(Arc::clone(first));
-            } else {
-                some_name_for_this_rec::<FANOUT, L, M>(
-                    &**first,
-                    &mut self.stack,
-                    &mut self.start,
-                    &mut internals,
-                    &mut end,
-                    &mut summary,
-                    &mut false,
-                    &mut 0,
-                );
-                break;
-            }
-        }
+        // We'll find the end if the measure of the rest of the tree is not
+        // zero. To determine this we should probably check the measure at the
+        // beginning and increase it by one every time we iterate.
 
-        let end = match end {
+        let end = match next_bubugaga::<FANOUT, L, M>(
+            self.root_nodes,
+            &mut self.root_forward_idx,
+            &mut self.forward_path,
+            &mut self.start,
+            &mut summary,
+            &mut internals,
+            // self.a,
+        ) {
             Some(end) => end,
 
             None => {
+                // Start is None and there's not a next leaf.
                 let (end_slice, end_summary) = match self.end.take() {
-                    Some((a, b)) => (a, b),
+                    Some(a) => a,
 
                     None => {
-                        // TODO: if the end is not set and there's no self.end
-                        // we either: a) return a single slice if internals is
-                        // empty, or b) pop stuff off internals until we find
-                        // the last leaf and set that as our end
-
-                        match internals.pop() {
-                            Some(last) => {
-                                todo!()
-                                // match last.try_unwrap().unwrap() {
-                                //     Node::Leaf(leaf) => {
-                                //         let (left, left_summary, right) =
-                                //             M::split_left(
-                                //                 leaf.value().borrow(),
-                                //                 M::one(),
-                                //                 leaf.summary(),
-                                //             );
-                                //         self.end = right;
-                                //         (left, left_summary)
-                                //     },
-
-                                //     Node::Internal(inode) => {
-                                //         let mut inode = inode;
-                                //         todo!();
-                                //         // loop {
-                                //     let mut children =
-                                //         inode.children().iter();
-                                //     match &**children.next().unwrap() {
-                                //         Node::Leaf(leaf) => {
-                                //             let start =
-                                //                 leaf.value().borrow();
-                                //             let summary =
-                                //                 leaf.summary().clone();
-                                //             let mut idx = 0;
-                                //             for child in children {
-                                //                 self.stack.insert(
-                                //                     idx, child,
-                                //                 );
-                                //                 idx += 1;
-                                //             }
-                                //             break (
-                                //                 (
-                                //                     start,
-                                //                     summary.clone(),
-                                //                 ),
-                                //                 summary,
-                                //             );
-                                //         },
-
-                                //         Node::Internal(i) => {
-                                //             inode = i;
-                                //             let mut idx = 0;
-                                //             for child in children {
-                                //                 self.stack.insert(
-                                //                     idx, child,
-                                //                 );
-                                //                 idx += 1;
-                                //             }
-                                //             continue;
-                                //         },
-                                //     }
-                                // }
-                                // },
-                                // }
-                            },
-
-                            None => {
-                                return Some(TreeSlice {
-                                    span: SliceSpan::Single(start.0),
-                                    summary,
-                                });
-                            },
+                        if internals.is_empty() {
+                            return Some(TreeSlice {
+                                span: SliceSpan::Single(start.0),
+                                summary,
+                            });
+                        } else {
+                            // If we don't find the end:
+                            //
+                            // b) if internals is not empty we have to pop
+                            // nodes off internal and append them back until we
+                            // find.
+                            todo!()
                         }
                     },
                 };
 
-                let (end_slice, end_summary, right) =
-                    M::split_left(end_slice, M::one(), &end_summary);
-
-                summary += &end_summary;
-
-                self.end = right;
-
-                (end_slice, end_summary)
+                // Same exact code as above
+                if M::measure(&end_summary) == M::zero() {
+                    (end_slice, end_summary)
+                } else {
+                    let (end_slice, end_summary, right) =
+                        M::split_left(end_slice, M::one(), &end_summary);
+                    self.end = right;
+                    summary += &end_summary;
+                    (end_slice, end_summary)
+                }
             },
         };
 
-        // println!("=====================================================");
+        // println!("{} =====================", self.a);
+        // println!("start: {:?}", start);
+        // println!("internals: {:#?}", internals);
+        // println!("end: {:?}", end);
+        // println!("summary: {:?}", summary);
 
-        let span = SliceSpan::Multi { start, internals, end };
+        // println!("self.start: {:?}", self.start);
+        // println!("path at: {:#?}", self.forward_path);
+        // println!("root_idx: {:?}", self.root_forward_idx);
 
-        // println!("returning {span:#?}");
+        // self.a += 1;
 
-        // println!("start: {:#?}", self.start);
-        // println!("stack: {:#?}", self.stack);
-        // println!("end: {:#?}", self.end);
-        // println!("AAAAAAAAAAAAAND WE'RE DONE");
-
-        Some(TreeSlice { span, summary })
+        Some(TreeSlice {
+            span: SliceSpan::Multi { start, internals, end },
+            summary,
+        })
     }
 }
 
-fn some_name_for_this_rec<'a, const N: usize, L: Leaf, M: Metric<L>>(
-    node: &'a Node<N, L>,
-    stack: &mut VecDeque<&'a Arc<Node<N, L>>>,
-    next_start: &mut Option<(&'a L::Slice, L::Summary)>,
-    internals: &mut Vec<Arc<Node<N, L>>>,
-    end: &mut Option<(&'a L::Slice, L::Summary)>,
-    summary: &mut L::Summary,
-    appended_last: &mut bool,
-    insert_idx: &mut usize,
-) {
-    let leaf = match node {
-        Node::Internal(inode) => {
-            let mut children = inode.children().iter();
+fn next_something_forward<'a, const N: usize, L: Leaf>(
+    root_nodes: &'a [Arc<Node<N, L>>],
+    root_idx: &mut isize,
+    path: &mut Vec<(&'a Inode<N, L>, usize)>,
+    // a: usize,
+) -> Option<(&'a L::Slice, &'a L::Summary)> {
+    // if a == 2 {
+    //     println!("*******************************************");
+    //     println!("we got here");
+    // }
 
-            while let Some(child) = children.next() {
-                if *appended_last {
-                    stack.insert(*insert_idx, child);
-                    *insert_idx += 1;
-                    for c in children {
-                        stack.insert(*insert_idx, c);
-                        *insert_idx += 1;
-                    }
-                    return;
-                }
-
-                if M::measure(child.summary()) == M::zero() {
-                    *summary += child.summary();
-                    internals.push(Arc::clone(child));
+    let mut inode = loop {
+        match path.last_mut() {
+            Some(&mut (inode, ref mut visited)) => {
+                if inode.children().len() == *visited + 1 {
+                    path.pop();
                 } else {
-                    some_name_for_this_rec::<N, L, M>(
-                        &*child,
-                        stack,
-                        next_start,
-                        internals,
-                        end,
-                        summary,
-                        appended_last,
-                        insert_idx,
-                    );
+                    *visited += 1;
+                    match &*inode.children()[*visited] {
+                        Node::Internal(inode) => {
+                            // println!("ih?");
+                            break inode;
+                        },
+                        Node::Leaf(leaf) => {
+                            // path.push((inode, 0));
+                            return Some((
+                                leaf.value().borrow(),
+                                leaf.summary(),
+                            ));
+                        },
+                    }
                 }
-            }
+            },
 
-            return;
-        },
+            None => {
+                if root_nodes.len() == (*root_idx + 1) as usize {
+                    return None;
+                } else {
+                    *root_idx += 1;
+                    match &*root_nodes[*root_idx as usize] {
+                        Node::Internal(inode) => {
+                            // println!("ih?");
+                            // path.push((inode, 0));
+                            break inode;
+                        },
 
-        Node::Leaf(leaf) => leaf,
+                        Node::Leaf(leaf) => {
+                            return Some((
+                                leaf.value().borrow(),
+                                leaf.summary(),
+                            ));
+                        },
+                    }
+                }
+            },
+        }
     };
 
-    let (left, left_summary, right) =
-        M::split_left(leaf.value().borrow(), M::one(), leaf.summary());
+    loop {
+        path.push((inode, 0));
+        match &*inode.children()[0] {
+            Node::Internal(i) => {
+                // TODO: this is wrong probably
+                inode = i;
+            },
+            Node::Leaf(leaf) => {
+                // panic!("hi?");
+                return Some((leaf.value().borrow(), leaf.summary()));
+            },
+        }
+    }
+}
 
-    *summary += &left_summary;
-    *end = Some((left, left_summary));
-    *next_start = right;
-    *appended_last = true;
+/*
+
+*/
+
+fn next_bubugaga<'a, const N: usize, L: Leaf, M: Metric<L>>(
+    root_nodes: &'a [Arc<Node<N, L>>],
+    root_idx: &mut isize,
+    path: &mut Vec<(&'a Inode<N, L>, usize)>,
+    next_start: &mut Option<(&'a L::Slice, L::Summary)>,
+    summary: &mut L::Summary,
+    internals: &mut Vec<Arc<Node<N, L>>>,
+    // a: usize,
+) -> Option<(&'a L::Slice, L::Summary)> {
+    // if a == 2 {
+    //     println!("we got to bugabuga");
+    // }
+
+    let mut inode = loop {
+        match path.last_mut() {
+            Some(&mut (inode, ref mut visited)) => {
+                if inode.children().len() == *visited + 1 {
+                    path.pop();
+                } else {
+                    *visited += 1;
+                    match &*inode.children()[*visited] {
+                        Node::Internal(inode) => {
+                            if M::measure(inode.summary()) == M::zero() {
+                                *summary += inode.summary();
+                                internals.push(Arc::clone(
+                                    &inode.children()[*visited],
+                                ));
+                            } else {
+                                break inode;
+                            }
+                        },
+
+                        Node::Leaf(leaf) => {
+                            if M::measure(leaf.summary()) == M::zero() {
+                                *summary += leaf.summary();
+                                internals.push(Arc::clone(
+                                    &inode.children()[*visited],
+                                ));
+                            } else {
+                                let (end_slice, end_summary, right) =
+                                    M::split_left(
+                                        leaf.value().borrow(),
+                                        M::one(),
+                                        leaf.summary(),
+                                    );
+                                *summary += &end_summary;
+                                *next_start = right;
+                                return Some((end_slice, end_summary));
+                            }
+                        },
+                    }
+                }
+            },
+
+            None => {
+                if root_nodes.len() == (*root_idx + 1) as usize {
+                    return None;
+                } else {
+                    *root_idx += 1;
+                    match &*root_nodes[*root_idx as usize] {
+                        Node::Internal(inode) => {
+                            if M::measure(inode.summary()) == M::zero() {
+                                *summary += inode.summary();
+                                internals.push(Arc::clone(
+                                    &root_nodes[*root_idx as usize],
+                                ));
+                            } else {
+                                break inode;
+                            }
+                        },
+
+                        Node::Leaf(leaf) => {
+                            if M::measure(leaf.summary()) == M::zero() {
+                                *summary += leaf.summary();
+                                internals.push(Arc::clone(
+                                    &root_nodes[*root_idx as usize],
+                                ));
+                            } else {
+                                let (end_slice, end_summary, right) =
+                                    M::split_left(
+                                        leaf.value().borrow(),
+                                        M::one(),
+                                        leaf.summary(),
+                                    );
+                                *summary += &end_summary;
+                                *next_start = right;
+                                return Some((end_slice, end_summary));
+                            }
+                        },
+                    }
+                }
+            },
+        }
+    };
+
+    // path.push((inode, 0));
+
+    // if a == 2 {
+    //     println!("found inode: {inode:#?} ");
+    //     println!("path is now: {path:#?} ");
+    // }
+
+    'outer: loop {
+        for (idx, child) in inode.children().iter().enumerate() {
+            match &**child {
+                Node::Internal(i) => {
+                    if M::measure(inode.summary()) == M::zero() {
+                        *summary += i.summary();
+                        internals.push(Arc::clone(child));
+                    } else {
+                        path.push((inode, idx));
+                        inode = i;
+                        continue 'outer;
+                    }
+                },
+
+                Node::Leaf(leaf) => {
+                    if M::measure(leaf.summary()) == M::zero() {
+                        *summary += leaf.summary();
+                        internals.push(Arc::clone(child));
+                    } else {
+                        path.push((inode, idx));
+                        let (end_slice, end_summary, right) = M::split_left(
+                            leaf.value().borrow(),
+                            M::one(),
+                            leaf.summary(),
+                        );
+                        *summary += &end_summary;
+                        *next_start = right;
+                        return Some((end_slice, end_summary));
+                    }
+                },
+            }
+        }
+    }
 }
 
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> DoubleEndedIterator
@@ -625,45 +708,6 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> std::iter::FusedIterator
     for Units<'a, FANOUT, L, M>
 {
 }
-
-// pub struct Unitos<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
-//     start: Option<(&'a L::Slice, L::Summary)>,
-
-//     root_nodes: &'a [Arc<Node<FANOUT, L>>],
-
-//     root_forward_idx: usize,
-
-//     forward_path: Vec<(&'a Inode<FANOUT, L>, usize)>,
-
-//     metric: std::marker::PhantomData<M>,
-// }
-
-// impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
-//     for Unitos<'a, FANOUT, L, M>
-// {
-//     type Item = TreeSlice<'a, FANOUT, L>;
-
-//     fn next(&mut self) -> Option<Self::Item> {
-//         // Let's assume forward path is [(32,0), (16,0),(8,0)] and that (8,0)
-//         // is a leaf
-
-//         let (leaf, summary) =
-//             self.start.as_ref().map(|(sl, su)| (*sl, su)).unwrap_or({
-//                 let &(inode, idx) = self.forward_path.last()?;
-//                 let leaf =
-//                     unsafe { inode.children()[idx].as_leaf_unchecked() };
-//                 (leaf.value().borrow(), leaf.summary())
-//             });
-
-//         if M::measure(summary) == 0 {
-//             start = (leaf, summary.clone())
-//         } else {
-//             let (left, left_summary, right) =
-//         }
-
-//         todo!()
-//     }
-// }
 
 #[cfg(test)]
 mod tests {

@@ -232,4 +232,16 @@ mod tests {
         assert_eq!("a chunk", right.deref());
         assert_eq!(0, right_summary.line_breaks);
     }
+
+    #[test]
+    fn split_crlf_left() {
+        let chunk = "\r\n".into();
+
+        let (left, summary, right) =
+            LineMetric::split_left(chunk, LineMetric(1), &chunk.summarize());
+
+        assert_eq!("", left.deref());
+        assert_eq!(TextSummary::default(), summary);
+        assert_eq!(None, right);
+    }
 }
