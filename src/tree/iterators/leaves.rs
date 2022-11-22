@@ -8,9 +8,9 @@ use crate::tree::{Inode, Leaf, Node, Tree, TreeSlice};
 /// This iterator is created via the `leaves` method on
 /// [`Tree`](super::Tree::leaves) and [`TreeSlice`](super::TreeSlice::leaves).
 pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
-    /// The first slice to yield. If we're iterating over the leaves of a tree
-    /// this is `Some` only if the tree's root is a leaf. It's always `Some` if
-    /// iterating over a tree slice.
+    /// The first slice to yield. When iterating over the leaves of a tree this
+    /// is `Some` only if the tree's root is a leaf, while it's always `Some`
+    /// if iterating over a tree slice.
     start: Option<&'a L::Slice>,
 
     /// Whether [start](Self::start) has already been yielded in a previous
@@ -18,37 +18,52 @@ pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
     /// [`next_back`](Leaves::next_back()).
     start_been_yielded: bool,
 
-    /// TODO: docs
+    /// A slice of top level nodes containing the majority (possibly all) of
+    /// the leaves that this iterator will yield in their subtrees. It's equal
+    /// to the root's children when iterating over a tree (when the root is an
+    /// internal node), and to the `internals` of a multi slice span when
+    /// iterating over a tree slice.
     root_nodes: &'a [Arc<Node<FANOUT, L>>],
 
-    /// TODO: docs
+    /// The last slice to yield. It's `Some` only when iterating over tree
+    /// slices.
     end: Option<&'a L::Slice>,
 
-    /// TODO: docs
+    /// Whether [end](Self::end) has already been yielded in a previous
+    /// call to either [`next`](Leaves::next()) or
+    /// [`next_back`](Leaves::next_back()).
     end_been_yielded: bool,
 
-    /// TODO: docs
+    /// An index into `root_nodes` representing the root node that we're
+    /// currently in. It's an isize instead of a usize because it starts
+    /// off as -1.
     forward_root_idx: isize,
 
-    /// TODO: docs
+    /// A path of internal nodes starting from the current root node going down
+    /// to the tree. The second element in each tuple is an index representing
+    /// the inode's children we're currently in.
     forward_path: Vec<(&'a Inode<FANOUT, L>, usize)>,
 
-    /// TODO: docs
+    /// The current leaves, usually the result of calling the
+    /// [`children()`](Inode::children) method on an internal node. All the
+    /// nodes in the slice are guaranteed to be leaf nodes.
     forward_leaves: &'a [Arc<Node<FANOUT, L>>],
 
-    /// TODO: docs
+    /// An index into `forward_leaves` representing the next leaf to yield.
     forward_leaf_idx: usize,
 
-    /// TODO: docs
+    /// Same as `forward_root_idx` for backward iteration (used in
+    /// `next_back`).
     _backward_root_idx: usize,
 
-    /// TODO: docs
+    /// Same as `forward_path` for backward iteration (used in `next_back`).
     backward_path: Vec<(&'a Inode<FANOUT, L>, usize)>,
 
-    /// TODO: docs
+    /// Same as `forward_leaves` for backward iteration (used in `next_back`).
     _backward_leaves: &'a [Arc<Node<FANOUT, L>>],
 
-    /// TODO: docs
+    /// Same as `forward_leaf_idx` for backward iteration (used in
+    /// `next_back`).
     _backward_leaf_idx: usize,
 }
 
