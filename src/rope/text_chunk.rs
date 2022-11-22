@@ -142,6 +142,16 @@ impl<'a> Iterator for TextChunkIter<'a> {
                     bytes += 1;
                 }
 
+                // Increase by one more byte if we'd be splitting a `\r\n`
+                // pair.
+                if self.str.as_bytes()[bytes - 1] == b'\r' {
+                    if self.str.len() > bytes + 1 {
+                        if self.str.as_bytes()[bytes] == b'\n' {
+                            bytes += 1;
+                        }
+                    }
+                }
+
                 let text = self.str[..bytes].to_owned();
                 self.str = &self.str[bytes..];
                 Some(TextChunk { text })
