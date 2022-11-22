@@ -256,7 +256,6 @@ pub struct Units<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
 
     /// TODO: docs
     metric: std::marker::PhantomData<M>,
-    // a: usize,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Clone
@@ -278,8 +277,6 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
 {
     #[inline]
     fn from(tree: &'a Tree<FANOUT, L>) -> Units<'a, FANOUT, L, M> {
-        // println!("{tree:#?}");
-
         let (start, root_nodes) = match &*tree.root {
             Node::Leaf(leaf) => (
                 Some((leaf.value().borrow(), leaf.summary().clone())),
@@ -296,7 +293,6 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
             forward_path: Vec::new(),
             end: None,
             metric: std::marker::PhantomData,
-            // a: 0,
         }
     }
 }
@@ -327,7 +323,6 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>>
             forward_path: Vec::new(),
             end,
             metric: std::marker::PhantomData,
-            // a: 0,
         }
     }
 }
@@ -340,10 +335,6 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
     type Item = TreeSlice<'a, FANOUT, L>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        // if self.a == 4 {
-        //     return None;
-        // }
-
         let start = self.start.take();
 
         let (start_slice, start_summary) = match start {
@@ -354,7 +345,6 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
                     self.root_nodes,
                     &mut self.root_forward_idx,
                     &mut self.forward_path,
-                    // self.a,
                 ) {
                     Some((slice, summary)) => (slice, summary),
 
@@ -398,12 +388,6 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
             });
         };
 
-        // if self.a == 2 {
-        //     println!("found start: {start:?}");
-        //     println!("path after founding start: {:#?}", self.forward_path);
-        //     println!("alkso root_idx: {:?}", self.root_forward_idx);
-        // }
-
         let mut summary = start.1.clone();
 
         let mut internals = Vec::new();
@@ -423,7 +407,6 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
             &mut self.start,
             &mut summary,
             &mut internals,
-            // self.a,
         ) {
             Some(end) => end,
 
@@ -485,13 +468,7 @@ fn next_something_forward<'a, const N: usize, L: Leaf>(
     root_nodes: &'a [Arc<Node<N, L>>],
     root_idx: &mut isize,
     path: &mut Vec<(&'a Inode<N, L>, usize)>,
-    // a: usize,
 ) -> Option<(&'a L::Slice, &'a L::Summary)> {
-    // if a == 2 {
-    //     println!("*******************************************");
-    //     println!("we got here");
-    // }
-
     let mut inode = loop {
         match path.last_mut() {
             Some(&mut (inode, ref mut visited)) => {
@@ -501,11 +478,9 @@ fn next_something_forward<'a, const N: usize, L: Leaf>(
                     *visited += 1;
                     match &*inode.children()[*visited] {
                         Node::Internal(inode) => {
-                            // println!("ih?");
                             break inode;
                         },
                         Node::Leaf(leaf) => {
-                            // path.push((inode, 0));
                             return Some((
                                 leaf.value().borrow(),
                                 leaf.summary(),
@@ -522,8 +497,6 @@ fn next_something_forward<'a, const N: usize, L: Leaf>(
                     *root_idx += 1;
                     match &*root_nodes[*root_idx as usize] {
                         Node::Internal(inode) => {
-                            // println!("ih?");
-                            // path.push((inode, 0));
                             break inode;
                         },
 
@@ -543,20 +516,14 @@ fn next_something_forward<'a, const N: usize, L: Leaf>(
         path.push((inode, 0));
         match &*inode.children()[0] {
             Node::Internal(i) => {
-                // TODO: this is wrong probably
                 inode = i;
             },
             Node::Leaf(leaf) => {
-                // panic!("hi?");
                 return Some((leaf.value().borrow(), leaf.summary()));
             },
         }
     }
 }
-
-/*
-
-*/
 
 fn next_bubugaga<'a, const N: usize, L: Leaf, M: Metric<L>>(
     root_nodes: &'a [Arc<Node<N, L>>],
@@ -565,12 +532,7 @@ fn next_bubugaga<'a, const N: usize, L: Leaf, M: Metric<L>>(
     next_start: &mut Option<(&'a L::Slice, L::Summary)>,
     summary: &mut L::Summary,
     internals: &mut Vec<Arc<Node<N, L>>>,
-    // a: usize,
 ) -> Option<(&'a L::Slice, L::Summary)> {
-    // if a == 2 {
-    //     println!("we got to bugabuga");
-    // }
-
     let mut inode = loop {
         match path.last_mut() {
             Some(&mut (inode, ref mut visited)) => {
@@ -579,14 +541,14 @@ fn next_bubugaga<'a, const N: usize, L: Leaf, M: Metric<L>>(
                 } else {
                     *visited += 1;
                     match &*inode.children()[*visited] {
-                        Node::Internal(inode) => {
-                            if M::measure(inode.summary()) == M::zero() {
-                                *summary += inode.summary();
+                        Node::Internal(i) => {
+                            if M::measure(i.summary()) == M::zero() {
+                                *summary += i.summary();
                                 internals.push(Arc::clone(
                                     &inode.children()[*visited],
                                 ));
                             } else {
-                                break inode;
+                                break i;
                             }
                         },
 
@@ -653,18 +615,11 @@ fn next_bubugaga<'a, const N: usize, L: Leaf, M: Metric<L>>(
         }
     };
 
-    // path.push((inode, 0));
-
-    // if a == 2 {
-    //     println!("found inode: {inode:#?} ");
-    //     println!("path is now: {path:#?} ");
-    // }
-
     'outer: loop {
         for (idx, child) in inode.children().iter().enumerate() {
             match &**child {
                 Node::Internal(i) => {
-                    if M::measure(inode.summary()) == M::zero() {
+                    if M::measure(i.summary()) == M::zero() {
                         *summary += i.summary();
                         internals.push(Arc::clone(child));
                     } else {
