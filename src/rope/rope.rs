@@ -109,7 +109,7 @@ impl std::fmt::Debug for Rope {
 
 /// Used in the implementation of `From<&str>` for `Rope`s if the string is big
 /// enough.
-fn str_to_rope_parallel(
+fn _str_to_rope_parallel(
     mut s: &str,
     n_cores: std::num::NonZeroUsize,
 ) -> Tree<ROPE_FANOUT, TextChunk> {
@@ -163,18 +163,23 @@ impl From<&str> for Rope {
         let last_byte_is_newline =
             s.as_bytes().last().map(|b| *b == b'\n').unwrap_or_default();
 
-        // This threshold value was determined empirically on a single machine.
-        // TODO: test this on multiple machines and with varying parallelism.
-        let root = if s.len() <= 2 * 1024 * TextChunk::max_bytes() {
-            Tree::from_leaves(TextChunkIter::new(s))
-        } else {
-            match std::thread::available_parallelism() {
-                Ok(n_cores) => str_to_rope_parallel(s, n_cores),
-                _ => Tree::from_leaves(TextChunkIter::new(s)),
-            }
-        };
+        Rope {
+            root: Tree::from_leaves(TextChunkIter::new(s)),
+            last_byte_is_newline,
+        }
 
-        Rope { root, last_byte_is_newline }
+        // // This threshold value was determined empirically on a single machine.
+        // // TODO: test this on multiple machines and with varying parallelism.
+        // let root = if s.len() <= 2 * 1024 * TextChunk::max_bytes() {
+        //     Tree::from_leaves(TextChunkIter::new(s))
+        // } else {
+        //     match std::thread::available_parallelism() {
+        //         Ok(n_cores) => str_to_rope_parallel(s, n_cores),
+        //         _ => Tree::from_leaves(TextChunkIter::new(s)),
+        //     }
+        // };
+
+        // Rope { root, last_byte_is_newline }
     }
 }
 

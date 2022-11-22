@@ -170,7 +170,6 @@ mod tests {
     fn slice() {
         let tree = Tree::<2, usize>::from_leaves(0..10);
         let slice = tree.slice(4..6);
-        println!("{:#?}", tree);
         assert_eq!(Count(3), *slice.summary());
     }
 }

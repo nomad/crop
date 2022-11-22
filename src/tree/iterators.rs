@@ -557,16 +557,6 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
             },
         };
 
-        // println!("{} =====================", self.a);
-        // println!("start: {:?}", start);
-        // println!("internals: {:#?}", internals);
-        // println!("end: {:?}", end);
-        // println!("summary: {:?}", summary);
-
-        // println!("self.start: {:?}", self.start);
-        // println!("path at: {:#?}", self.forward_path);
-        // println!("root_idx: {:?}", self.root_forward_idx);
-
         self.yielded_forward += M::one();
 
         Some(TreeSlice {
@@ -828,6 +818,7 @@ mod tests {
         }
     }
 
+    #[ignore]
     #[test]
     fn leaves_2() {
         let tree = Tree::<2, usize>::from_leaves(0..3);
