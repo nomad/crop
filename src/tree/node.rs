@@ -53,7 +53,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         matches!(self, Node::Internal(_))
     }
 
-    pub(super) fn _is_leaf(&self) -> bool {
+    pub(super) fn is_leaf(&self) -> bool {
         matches!(self, Node::Leaf(_))
     }
 
@@ -63,6 +63,13 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         match self {
             Node::Internal(inode) => inode.summary(),
             Node::Leaf(leaf) => leaf.summary(),
+        }
+    }
+
+    pub(super) unsafe fn as_internal_unchecked(&self) -> &Inode<N, L> {
+        match self {
+            Node::Leaf(_) => std::hint::unreachable_unchecked(),
+            Node::Internal(inode) => inode,
         }
     }
 

@@ -262,7 +262,7 @@ mod tests {
     fn lines_3() {
         let s = "This is a piece\nof text that's not \ngonna fit\nin\none \
                  chunk\nand it also\r\nhas mixed\r\n line breaks\n and a \
-                 trailing\nline break.\n";
+                 trailing\nline break.";
 
         let rope = Rope::from(s);
         let slice = rope.byte_slice(..);
@@ -280,13 +280,12 @@ mod tests {
 
     #[test]
     fn lines_4() {
-        for s in [SMALL, MEDIUM, LARGE] {
-            // for s in [TINY] {
+        for s in [TINY, SMALL, MEDIUM, LARGE] {
             let rope = Rope::from(s);
             let slice = rope.byte_slice(..);
 
-            // assert_eq!(rope.lines().count(), s.lines().count());
-            // assert_eq!(slice.lines().count(), s.lines().count());
+            assert_eq!(rope.lines().count(), s.lines().count());
+            assert_eq!(slice.lines().count(), s.lines().count());
 
             for ((rope_line, slice_line), s_line) in
                 rope.lines().zip(slice.lines()).zip(s.lines())

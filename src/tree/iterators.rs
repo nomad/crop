@@ -18,27 +18,34 @@ pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
     root_nodes: &'a [Arc<Node<FANOUT, L>>],
 
     /// TODO: docs
-    root_forward_idx: isize,
-
-    /// TODO: docs
     end: Option<&'a L::Slice>,
 
     /// TODO: docs
     end_been_yielded: bool,
 
     /// TODO: docs
+    forward_root_idx: isize,
+
+    /// TODO: docs
     forward_path: Vec<(&'a Inode<FANOUT, L>, usize)>,
 
     /// TODO: docs
-    leaves_forward: &'a [Arc<Node<FANOUT, L>>],
+    forward_leaves: &'a [Arc<Node<FANOUT, L>>],
 
-    leaf_forward_idx: usize,
+    /// TODO: docs
+    forward_leaf_idx: usize,
+
+    /// TODO: docs
+    _backward_root_idx: usize,
 
     /// TODO: docs
     backward_path: Vec<(&'a Inode<FANOUT, L>, usize)>,
 
     /// TODO: docs
-    current_leaves_backward: (&'a [Arc<Node<FANOUT, L>>], usize),
+    _backward_leaves: &'a [Arc<Node<FANOUT, L>>],
+
+    /// TODO: docs
+    _backward_leaf_idx: usize,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> Clone for Leaves<'a, FANOUT, L> {
@@ -68,12 +75,14 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
             root_nodes,
             end: None,
             end_been_yielded: true,
+            forward_root_idx: -1,
             forward_path: Vec::new(),
-            root_forward_idx: -1,
-            leaves_forward: &[],
-            leaf_forward_idx: 0,
+            forward_leaves: &[],
+            forward_leaf_idx: 0,
+            _backward_root_idx: root_nodes.len(),
             backward_path: Vec::new(),
-            current_leaves_backward: (&[], 0),
+            _backward_leaves: &[],
+            _backward_leaf_idx: 0,
         }
     }
 }
@@ -105,11 +114,13 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
             end,
             end_been_yielded,
             forward_path: Vec::new(),
-            root_forward_idx: -1,
-            leaves_forward: &[],
-            leaf_forward_idx: 0,
+            forward_root_idx: -1,
+            forward_leaves: &[],
+            forward_leaf_idx: 0,
+            _backward_root_idx: root_nodes.len(),
             backward_path: Vec::new(),
-            current_leaves_backward: (&[], 0),
+            _backward_leaves: &[],
+            _backward_leaf_idx: 0,
         }
     }
 }
@@ -126,15 +137,15 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
             }
         }
 
-        if self.leaf_forward_idx == self.leaves_forward.len() {
+        if self.forward_leaf_idx == self.forward_leaves.len() {
             match next_leaves_forward(
                 self.root_nodes,
-                &mut self.root_forward_idx,
+                &mut self.forward_root_idx,
                 &mut self.forward_path,
             ) {
                 Some(leaves) => {
-                    self.leaves_forward = leaves;
-                    self.leaf_forward_idx = 0;
+                    self.forward_leaves = leaves;
+                    self.forward_leaf_idx = 0;
                 },
                 None => {
                     if !self.end_been_yielded {
@@ -147,13 +158,19 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
             }
         }
 
+        debug_assert!(
+            self.forward_leaves[self.forward_leaf_idx].is_leaf(),
+            "TODO: explain why"
+        );
+
+        // Safety: TODO.
         let leaf = unsafe {
-            self.leaves_forward[self.leaf_forward_idx].as_leaf_unchecked()
+            self.forward_leaves[self.forward_leaf_idx].as_leaf_unchecked()
         }
         .value()
         .borrow();
 
-        self.leaf_forward_idx += 1;
+        self.forward_leaf_idx += 1;
 
         Some(leaf)
     }
@@ -169,25 +186,26 @@ fn next_leaves_forward<'a, const N: usize, L: Leaf>(
             Some(&mut (inode, ref mut visited)) => {
                 if inode.children().len() == *visited + 1 {
                     path.pop();
-                    continue;
                 } else {
                     *visited += 1;
-                    match &*inode.children()[*visited] {
-                        Node::Internal(inode) => {
-                            break inode;
-                        },
-                        Node::Leaf(_) => {
-                            unreachable!()
-                        },
-                    }
+
+                    debug_assert!(
+                        inode.children()[*visited].is_internal(),
+                        "TODO: explain why"
+                    );
+
+                    // Safety: TODO.
+                    break unsafe {
+                        inode.children()[*visited].as_internal_unchecked()
+                    };
                 }
             },
 
             None => {
-                *root_idx += 1;
-                if *root_idx as usize >= root_nodes.len() {
+                if root_nodes.len() == (*root_idx + 1) as usize {
                     return None;
                 } else {
+                    *root_idx += 1;
                     match &*root_nodes[*root_idx as usize] {
                         Node::Internal(inode) => {
                             break inode;
@@ -255,6 +273,15 @@ pub struct Units<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
     forward_path: Vec<(&'a Inode<FANOUT, L>, usize)>,
 
     /// TODO: docs
+    yielded_forward: M,
+
+    /// TODO: docs
+    _yielded_backward: M,
+
+    /// TODO: docs
+    total: M,
+
+    /// TODO: docs
     metric: std::marker::PhantomData<M>,
 }
 
@@ -292,6 +319,9 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
             root_forward_idx: -1,
             forward_path: Vec::new(),
             end: None,
+            yielded_forward: M::zero(),
+            _yielded_backward: M::zero(),
+            total: M::measure(tree.summary()),
             metric: std::marker::PhantomData,
         }
     }
@@ -322,6 +352,9 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>>
             root_forward_idx: -1,
             forward_path: Vec::new(),
             end,
+            yielded_forward: M::zero(),
+            _yielded_backward: M::zero(),
+            total: M::measure(tree_slice.summary()),
             metric: std::marker::PhantomData,
         }
     }
@@ -351,6 +384,9 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
                     None => {
                         // Start is None and there's not a next leaf.
                         let (end_slice, end_summary) = self.end.take()?;
+
+                        self.yielded_forward += M::one();
+
                         if M::measure(&end_summary) == M::zero() {
                             return Some(TreeSlice {
                                 span: SliceSpan::Single(end_slice),
@@ -382,6 +418,8 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
 
             self.start = right;
 
+            self.yielded_forward += M::one();
+
             return Some(TreeSlice {
                 span: SliceSpan::Single(left_slice),
                 summary: left_summary,
@@ -390,15 +428,104 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
 
         let mut summary = start.1.clone();
 
-        let mut internals = Vec::new();
-
-        // Now we have start and we know that its measure is zero. We have to
-        // walk the tree forward, appending to internals until we find the end.
-        // println!("path at: {:#?}", self.forward_path);
-
         // We'll find the end if the measure of the rest of the tree is not
         // zero. To determine this we should probably check the measure at the
         // beginning and increase it by one every time we iterate.
+
+        if self.yielded_forward == self.total {
+            let mut internals = Vec::new();
+
+            next_babagugu::<FANOUT, L, M>(
+                self.root_nodes,
+                &mut self.root_forward_idx,
+                &mut self.forward_path,
+                &mut summary,
+                &mut internals,
+            );
+
+            self.start = None;
+
+            match self.end.take() {
+                Some(end) => {
+                    // a) if there's self.end we need to push all the remaining
+                    // nodes in the tree to internals.
+                    let internals =
+                        internals.drain(..).map(Arc::clone).collect();
+
+                    summary += &end.1;
+
+                    return Some(TreeSlice {
+                        span: SliceSpan::Multi { start, internals, end },
+                        summary,
+                    });
+                },
+
+                None => {
+                    // b) if there's no self.end we need to do the same except
+                    // the last leaf in the tree is the end. except how do you
+                    // know if the leaf next to the one you're on the is the
+                    // last one?
+
+                    match internals.pop() {
+                        Some(last) => {
+                            let mut internals = internals
+                                .drain(..)
+                                .map(Arc::clone)
+                                .collect::<Vec<_>>();
+
+                            let end = {
+                                let mut node = &**last;
+
+                                loop {
+                                    match node {
+                                        Node::Internal(inode) => {
+                                            internals.extend(
+                                                inode.children()[..inode
+                                                    .children()
+                                                    .len()
+                                                    - 1]
+                                                    .iter()
+                                                    .map(Arc::clone),
+                                            );
+
+                                            node = &**inode
+                                                .children()
+                                                .last()
+                                                .unwrap();
+                                        },
+
+                                        Node::Leaf(leaf) => {
+                                            break (
+                                                leaf.value().borrow(),
+                                                leaf.summary().clone(),
+                                            );
+                                        },
+                                    }
+                                }
+                            };
+
+                            return Some(TreeSlice {
+                                span: SliceSpan::Multi {
+                                    start,
+                                    internals,
+                                    end,
+                                },
+                                summary,
+                            });
+                        },
+
+                        None => {
+                            return Some(TreeSlice {
+                                span: SliceSpan::Single(start.0),
+                                summary,
+                            });
+                        },
+                    }
+                },
+            }
+        }
+
+        let mut internals = Vec::new();
 
         let end = match next_bubugaga::<FANOUT, L, M>(
             self.root_nodes,
@@ -411,26 +538,11 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
             Some(end) => end,
 
             None => {
-                // Start is None and there's not a next leaf.
-                let (end_slice, end_summary) = match self.end.take() {
-                    Some(a) => a,
+                debug_assert!(self.end.is_some(), "TODO: explain why");
 
-                    None => {
-                        if internals.is_empty() {
-                            return Some(TreeSlice {
-                                span: SliceSpan::Single(start.0),
-                                summary,
-                            });
-                        } else {
-                            // If we don't find the end:
-                            //
-                            // b) if internals is not empty we have to pop
-                            // nodes off internal and append them back until we
-                            // find.
-                            todo!()
-                        }
-                    },
-                };
+                // Safety: TODO.
+                let (end_slice, end_summary) =
+                    unsafe { self.end.take().unwrap_unchecked() };
 
                 // Same exact code as above
                 if M::measure(&end_summary) == M::zero() {
@@ -455,7 +567,7 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
         // println!("path at: {:#?}", self.forward_path);
         // println!("root_idx: {:?}", self.root_forward_idx);
 
-        // self.a += 1;
+        self.yielded_forward += M::one();
 
         Some(TreeSlice {
             span: SliceSpan::Multi { start, internals, end },
@@ -646,6 +758,38 @@ fn next_bubugaga<'a, const N: usize, L: Leaf, M: Metric<L>>(
                     }
                 },
             }
+        }
+    }
+}
+
+fn next_babagugu<'a, const N: usize, L: Leaf, M: Metric<L>>(
+    root_nodes: &'a [Arc<Node<N, L>>],
+    root_idx: &mut isize,
+    path: &mut Vec<(&'a Inode<N, L>, usize)>,
+    summary: &mut L::Summary,
+    internals: &mut Vec<&'a Arc<Node<N, L>>>,
+) {
+    loop {
+        match path.last_mut() {
+            Some(&mut (inode, ref mut visited)) => {
+                if inode.children().len() == *visited + 1 {
+                    path.pop();
+                } else {
+                    *visited += 1;
+                    *summary += inode.children()[*visited].summary();
+                    internals.push(&inode.children()[*visited]);
+                }
+            },
+
+            None => {
+                if root_nodes.len() == (*root_idx + 1) as usize {
+                    return;
+                } else {
+                    *root_idx += 1;
+                    *summary += root_nodes[*root_idx as usize].summary();
+                    internals.push(&root_nodes[*root_idx as usize]);
+                }
+            },
         }
     }
 }
