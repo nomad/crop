@@ -28,19 +28,35 @@ impl<const N: usize, L: Leaf> Debug for Node<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Node<N, L> {
-    // pub(super) fn as_inode(&self) -> Option<&Inode<N, Leaf>> {
-    //     match self {
-    //         Node::Internal(inode) => Some(inode),
-    //         Node::Leaf(_) => None,
-    //     }
-    // }
+    pub(super) unsafe fn as_internal_unchecked(&self) -> &Inode<N, L> {
+        debug_assert!(
+            self.is_internal(),
+            "A node was expected to be an internal node but it's a leaf. This \
+            is a logic bug in crop. Please file an issue at \
+            https://github.com/noib3/crop."
+        );
 
-    // pub(super) fn as_leaf(&self) -> Option<&super::Leaf<Leaf>> {
-    //     match self {
-    //         Node::Internal(_) => None,
-    //         Node::Leaf(leaf) => Some(leaf),
-    //     }
-    // }
+        match self {
+            Node::Leaf(_) => std::hint::unreachable_unchecked(),
+            Node::Internal(inode) => inode,
+        }
+    }
+
+    pub(super) unsafe fn as_leaf_unchecked(
+        &self,
+    ) -> &super::node_leaf::Leaf<L> {
+        debug_assert!(
+            self.is_leaf(),
+            "A node was expected to be a leaf but it's an internal node. This \
+            is a logic bug in crop. Please file an issue at \
+            https://github.com/noib3/crop."
+        );
+
+        match self {
+            Node::Leaf(leaf) => leaf,
+            Node::Internal(_) => std::hint::unreachable_unchecked(),
+        }
+    }
 
     pub(super) fn depth(&self) -> usize {
         match self {
@@ -57,28 +73,10 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         matches!(self, Node::Leaf(_))
     }
 
-    /// TODO: docs
-    #[inline]
     pub(super) fn summary(&self) -> &L::Summary {
         match self {
             Node::Internal(inode) => inode.summary(),
             Node::Leaf(leaf) => leaf.summary(),
-        }
-    }
-
-    pub(super) unsafe fn as_internal_unchecked(&self) -> &Inode<N, L> {
-        match self {
-            Node::Leaf(_) => std::hint::unreachable_unchecked(),
-            Node::Internal(inode) => inode,
-        }
-    }
-
-    pub(super) unsafe fn as_leaf_unchecked(
-        &self,
-    ) -> &super::node_leaf::Leaf<L> {
-        match self {
-            Node::Leaf(leaf) => leaf,
-            Node::Internal(_) => std::hint::unreachable_unchecked(),
         }
     }
 }
