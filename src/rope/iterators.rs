@@ -15,28 +15,64 @@ impl<'a> Iterator for Chunks<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.chunks.next().map(std::ops::Deref::deref)
     }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = self.chunks.len();
+        (exact, Some(exact))
+    }
 }
+
+impl<'a> DoubleEndedIterator for Chunks<'a> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        self.chunks.next_back().map(std::ops::Deref::deref)
+    }
+}
+
+impl<'a> ExactSizeIterator for Chunks<'a> {}
+
+impl<'a> std::iter::FusedIterator for Chunks<'a> {}
 
 /// TODO: docs
 #[derive(Clone)]
 pub struct Bytes<'a> {
+    /// TODO: docs
     chunks: Chunks<'a>,
-    current: &'a [u8],
-    yielded_in_current: usize,
-    total_yielded: usize,
+
+    /// TODO: docs
+    current_forward: &'a [u8],
+
+    /// TODO: docs
+    forward_byte_idx: usize,
+
+    /// TODO: docs
+    current_backward: &'a [u8],
+
+    /// TODO: docs
+    backward_byte_idx: usize,
+
+    /// TODO: docs
+    yielded_forward: usize,
+
+    /// TODO: docs
+    yielded_backward: usize,
+
+    /// TODO: docs
     total_bytes: usize,
 }
 
 impl<'a> From<&'a Rope> for Bytes<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        let mut chunks = rope.chunks();
-        let current = chunks.next().unwrap_or("").as_bytes();
         Self {
-            chunks,
-            current,
-            yielded_in_current: 0,
-            total_yielded: 0,
+            chunks: rope.chunks(),
+            current_forward: &[],
+            forward_byte_idx: 0,
+            yielded_forward: 0,
+            current_backward: &[],
+            backward_byte_idx: 0,
+            yielded_backward: 0,
             total_bytes: rope.byte_len(),
         }
     }
@@ -45,13 +81,14 @@ impl<'a> From<&'a Rope> for Bytes<'a> {
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Bytes<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
-        let mut chunks = slice.chunks();
-        let current = chunks.next().unwrap_or_default().as_bytes();
         Self {
-            chunks,
-            current,
-            yielded_in_current: 0,
-            total_yielded: 0,
+            chunks: slice.chunks(),
+            current_forward: &[],
+            forward_byte_idx: 0,
+            yielded_forward: 0,
+            current_backward: &[],
+            backward_byte_idx: 0,
+            yielded_backward: 0,
             total_bytes: slice.byte_len(),
         }
     }
@@ -62,27 +99,61 @@ impl<'a> Iterator for Bytes<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.yielded_in_current == self.current.len() {
-            // NOTE: make sure there are never empty chunks or this will make
-            // the byte indexing below fail.
-            self.current = self.chunks.next()?.as_bytes();
-            self.yielded_in_current = 0;
+        if self.yielded_forward + self.yielded_backward == self.total_bytes {
+            return None;
         }
 
-        let byte = self.current[self.yielded_in_current];
-        self.yielded_in_current += 1;
-        self.total_yielded += 1;
+        if self.forward_byte_idx == self.current_forward.len() {
+            self.current_forward = loop {
+                let chunk = self.chunks.next()?;
+                if !chunk.is_empty() {
+                    break chunk.as_bytes();
+                }
+            };
+            self.forward_byte_idx = 0;
+        }
+
+        let byte = self.current_forward[self.forward_byte_idx];
+        self.forward_byte_idx += 1;
+        self.yielded_forward += 1;
         Some(byte)
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let remaining = self.total_bytes - self.total_yielded;
-        (remaining, Some(remaining))
+        let exact =
+            self.total_bytes - self.yielded_forward - self.yielded_backward;
+        (exact, Some(exact))
+    }
+}
+
+impl<'a> DoubleEndedIterator for Bytes<'a> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.yielded_forward + self.yielded_backward == self.total_bytes {
+            return None;
+        }
+
+        if self.backward_byte_idx == 0 {
+            self.current_backward = loop {
+                let chunk = self.chunks.next_back()?;
+                if !chunk.is_empty() {
+                    break chunk.as_bytes();
+                }
+            };
+            self.backward_byte_idx = self.current_backward.len();
+        }
+
+        let byte = self.current_backward[self.backward_byte_idx - 1];
+        self.backward_byte_idx -= 1;
+        self.yielded_backward += 1;
+        Some(byte)
     }
 }
 
 impl<'a> ExactSizeIterator for Bytes<'a> {}
+
+impl<'a> std::iter::FusedIterator for Bytes<'a> {}
 
 /// TODO: docs
 #[derive(Clone)]
@@ -137,6 +208,15 @@ impl<'a> Iterator for Chars<'a> {
     }
 }
 
+impl<'a> DoubleEndedIterator for Chars<'a> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        todo!()
+    }
+}
+
+impl<'a> std::iter::FusedIterator for Chars<'a> {}
+
 #[derive(Clone)]
 pub struct Lines<'a> {
     units: Units<'a, { Rope::fanout() }, TextChunk, LineMetric>,
@@ -165,6 +245,8 @@ impl<'a> Iterator for Lines<'a> {
     }
 }
 
+impl<'a> std::iter::FusedIterator for Lines<'a> {}
+
 #[cfg(test)]
 mod tests {
     use crate::Rope;
@@ -175,10 +257,21 @@ mod tests {
     const LARGE: &str = include_str!("../../benches/large.txt");
 
     #[test]
-    fn bytes_0() {
+    fn bytes_forward() {
         let r = Rope::from(LARGE);
         let mut i = 0;
         for (b_rope, b_str) in r.bytes().zip(LARGE.bytes()) {
+            assert_eq!(b_rope, b_str);
+            i += 1;
+        }
+        assert_eq!(i, r.byte_len());
+    }
+
+    #[test]
+    fn bytes_backward() {
+        let r = Rope::from(LARGE);
+        let mut i = 0;
+        for (b_rope, b_str) in r.bytes().rev().zip(LARGE.bytes().rev()) {
             assert_eq!(b_rope, b_str);
             i += 1;
         }
