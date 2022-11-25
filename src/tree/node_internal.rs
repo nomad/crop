@@ -8,6 +8,7 @@ pub(super) struct Inode<const N: usize, L: Leaf> {
     children: Vec<Arc<Node<N, L>>>,
     summary: L::Summary,
     depth: usize,
+    leaves: usize,
 }
 
 impl<const N: usize, L: Leaf> Debug for Inode<N, L> {
@@ -29,6 +30,7 @@ impl<const N: usize, L: Leaf> Default for Inode<N, L> {
             children: Vec::with_capacity(N),
             summary: Default::default(),
             depth: 1,
+            leaves: 0,
         }
     }
 }
@@ -40,6 +42,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     pub(super) fn depth(&self) -> usize {
         self.depth
+    }
+
+    pub(super) fn leaves(&self) -> usize {
+        self.leaves
     }
 
     /// # Panics
@@ -59,6 +65,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         let mut inode = Self::default();
 
         for child in children {
+            inode.leaves += child.leaves();
             inode.summary += child.summary();
             inode.children.push(child);
         }

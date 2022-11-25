@@ -66,6 +66,15 @@ pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
     /// `next_back`), except it represents the index of the *previous* yielded
     /// leaf, not the next one.
     backward_leaf_idx: usize,
+
+    /// The total number of leaves this iterator will yield.
+    total_leaves: usize,
+
+    /// The number of leaves yielded by calling `next`.
+    yielded_forward: usize,
+
+    /// The number of leaves yielded by calling `next_back`.
+    yielded_backward: usize,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> Clone for Leaves<'a, FANOUT, L> {
@@ -103,6 +112,9 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
             backward_path: Vec::new(),
             backward_leaves: &[],
             backward_leaf_idx: 0,
+            total_leaves: tree.root.leaves(),
+            yielded_forward: 0,
+            yielded_backward: 0,
         }
     }
 }
@@ -114,18 +126,26 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
     fn from(
         tree_slice: &'a TreeSlice<'a, FANOUT, L>,
     ) -> Leaves<'a, FANOUT, L> {
-        let (start, start_been_yielded, root_nodes, end, end_been_yielded) =
-            match &tree_slice.span {
-                SliceSpan::Empty => (None, true, &[][..], None, true),
+        let (
+            start,
+            start_been_yielded,
+            root_nodes,
+            end,
+            end_been_yielded,
+            total_leaves,
+        ) = match &tree_slice.span {
+            SliceSpan::Empty => (None, true, &[][..], None, true, 0),
 
-                SliceSpan::Single(slice) => {
-                    (Some(*slice), false, &[][..], None, true)
-                },
+            SliceSpan::Single(slice) => {
+                (Some(*slice), false, &[][..], None, true, 1)
+            },
 
-                SliceSpan::Multi { start, internals, end } => {
-                    (Some(start.0), false, &**internals, Some(end.0), false)
-                },
-            };
+            SliceSpan::Multi { start, internals, end } => {
+                let total =
+                    internals.iter().map(|n| n.leaves()).sum::<usize>() + 2;
+                (Some(start.0), false, &**internals, Some(end.0), false, total)
+            },
+        };
 
         Leaves {
             start,
@@ -141,6 +161,9 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
             backward_path: Vec::new(),
             backward_leaves: &[],
             backward_leaf_idx: 0,
+            total_leaves,
+            yielded_forward: 0,
+            yielded_backward: 0,
         }
     }
 }
@@ -150,9 +173,14 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
+        if self.yielded_forward + self.yielded_backward == self.total_leaves {
+            return None;
+        }
+
         if !self.start_been_yielded {
             self.start_been_yielded = true;
             if self.start.is_some() {
+                self.yielded_forward += 1;
                 return self.start;
             }
         }
@@ -174,6 +202,7 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
                     // and we're done.
                     if !self.end_been_yielded {
                         self.end_been_yielded = true;
+                        self.yielded_forward += 1;
                         return self.end;
                     } else {
                         return None;
@@ -193,7 +222,17 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
         // Increase the current leaf index for the next iteration.
         self.forward_leaf_idx += 1;
 
+        self.yielded_forward += 1;
+
         Some(leaf)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact =
+            self.total_leaves - self.yielded_forward - self.yielded_backward;
+
+        (exact, Some(exact))
     }
 }
 
@@ -262,9 +301,14 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
     for Leaves<'a, FANOUT, L>
 {
     fn next_back(&mut self) -> Option<Self::Item> {
+        if self.yielded_forward + self.yielded_backward == self.total_leaves {
+            return None;
+        }
+
         if !self.end_been_yielded {
             self.end_been_yielded = true;
             if self.end.is_some() {
+                self.yielded_backward += 1;
                 return self.end;
             }
         }
@@ -286,6 +330,7 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
                     // slice and we're done.
                     if !self.start_been_yielded {
                         self.start_been_yielded = true;
+                        self.yielded_backward += 1;
                         return self.start;
                     } else {
                         return None;
@@ -305,6 +350,8 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
 
         // Decrease the current leaf index for the next iteration.
         self.backward_leaf_idx -= 1;
+
+        self.yielded_backward += 1;
 
         Some(leaf)
     }
@@ -371,6 +418,11 @@ fn next_leaves_backward<'a, const N: usize, L: Leaf>(
     }
 }
 
+impl<'a, const FANOUT: usize, L: Leaf> ExactSizeIterator
+    for Leaves<'a, FANOUT, L>
+{
+}
+
 impl<'a, const FANOUT: usize, L: Leaf> std::iter::FusedIterator
     for Leaves<'a, FANOUT, L>
 {
@@ -378,17 +430,20 @@ impl<'a, const FANOUT: usize, L: Leaf> std::iter::FusedIterator
 
 #[cfg(test)]
 mod tests {
+    use rand::{thread_rng, Rng};
+
     use super::*;
 
     #[test]
     fn leaves_forward() {
-        for n in 1..100 {
+        for n in 1..256 {
             let tree = Tree::<2, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
             let mut i = 0;
             while let Some(leaf) = leaves.next() {
                 assert_eq!(i, *leaf);
                 i += 1;
+                assert_eq!(n - i, leaves.len());
             }
             assert_eq!(i, n);
             assert_eq!(None, leaves.next());
@@ -398,16 +453,36 @@ mod tests {
 
     #[test]
     fn leaves_backward() {
-        for n in 1..100 {
+        for n in 1..256 {
             let tree = Tree::<2, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
             let mut i = n;
             while let Some(leaf) = leaves.next_back() {
                 i -= 1;
                 assert_eq!(i, *leaf);
+                assert_eq!(i, leaves.len());
             }
             assert_eq!(i, 0);
             assert_eq!(None, leaves.next_back());
+            assert_eq!(None, leaves.next_back());
+        }
+    }
+
+    #[test]
+    fn leaves_both_ways() {
+        let mut rng = thread_rng();
+
+        for n in 1..256 {
+            let tree = Tree::<2, usize>::from_leaves(0..n);
+            let mut leaves = tree.leaves();
+            let i = rng.gen_range(0..=n);
+            for j in 0..i {
+                assert_eq!(j, *leaves.next().unwrap());
+            }
+            for j in (i..n).rev() {
+                assert_eq!(j, *leaves.next_back().unwrap());
+            }
+            assert_eq!(None, leaves.next());
             assert_eq!(None, leaves.next_back());
         }
     }

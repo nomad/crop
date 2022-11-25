@@ -65,6 +65,13 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    pub(super) fn leaves(&self) -> usize {
+        match self {
+            Node::Internal(inode) => inode.leaves(),
+            Node::Leaf(_) => 1,
+        }
+    }
+
     pub(super) fn is_internal(&self) -> bool {
         matches!(self, Node::Internal(_))
     }
