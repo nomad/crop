@@ -54,17 +54,18 @@ pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
 
     /// Same as `forward_root_idx` for backward iteration (used in
     /// `next_back`).
-    _backward_root_idx: usize,
+    backward_root_idx: usize,
 
     /// Same as `forward_path` for backward iteration (used in `next_back`).
     backward_path: Vec<(&'a Inode<FANOUT, L>, usize)>,
 
     /// Same as `forward_leaves` for backward iteration (used in `next_back`).
-    _backward_leaves: &'a [Arc<Node<FANOUT, L>>],
+    backward_leaves: &'a [Arc<Node<FANOUT, L>>],
 
     /// Same as `forward_leaf_idx` for backward iteration (used in
-    /// `next_back`).
-    _backward_leaf_idx: usize,
+    /// `next_back`), except it represents the index of the *previous* yielded
+    /// leaf, not the next one.
+    backward_leaf_idx: usize,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> Clone for Leaves<'a, FANOUT, L> {
@@ -98,10 +99,10 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
             forward_path: Vec::new(),
             forward_leaves: &[],
             forward_leaf_idx: 0,
-            _backward_root_idx: root_nodes.len(),
+            backward_root_idx: root_nodes.len(),
             backward_path: Vec::new(),
-            _backward_leaves: &[],
-            _backward_leaf_idx: 0,
+            backward_leaves: &[],
+            backward_leaf_idx: 0,
         }
     }
 }
@@ -136,10 +137,10 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
             forward_root_idx: -1,
             forward_leaves: &[],
             forward_leaf_idx: 0,
-            _backward_root_idx: root_nodes.len(),
+            backward_root_idx: root_nodes.len(),
             backward_path: Vec::new(),
-            _backward_leaves: &[],
-            _backward_leaf_idx: 0,
+            backward_leaves: &[],
+            backward_leaf_idx: 0,
         }
     }
 }
@@ -267,7 +268,106 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
                 return self.end;
             }
         }
-        todo!()
+
+        if self.backward_leaf_idx == 0 {
+            // If we've exhausted the current leaves we look for the previous
+            // bunch.
+            match next_leaves_backward(
+                self.root_nodes,
+                &mut self.backward_root_idx,
+                &mut self.backward_path,
+            ) {
+                Some(leaves) => {
+                    self.backward_leaves = leaves;
+                    self.backward_leaf_idx = leaves.len();
+                },
+                None => {
+                    // If these were the first leaves we return the initial
+                    // slice and we're done.
+                    if !self.start_been_yielded {
+                        self.start_been_yielded = true;
+                        return self.start;
+                    } else {
+                        return None;
+                    }
+                },
+            }
+        }
+
+        // Safety: the implementation of [`next_leaves_backward`] guarantees
+        // that all the nodes in the `backward_leaves` slice are leaf nodes.
+        let leaf = unsafe {
+            self.backward_leaves[self.backward_leaf_idx - 1]
+                .as_leaf_unchecked()
+        }
+        .value()
+        .borrow();
+
+        // Decrease the current leaf index for the next iteration.
+        self.backward_leaf_idx -= 1;
+
+        Some(leaf)
+    }
+}
+
+fn next_leaves_backward<'a, const N: usize, L: Leaf>(
+    root_nodes: &'a [Arc<Node<N, L>>],
+    root_idx: &mut usize,
+    path: &mut Vec<(&'a Inode<N, L>, usize)>,
+) -> Option<&'a [Arc<Node<N, L>>]> {
+    let mut inode = loop {
+        match path.last_mut() {
+            Some(&mut (inode, ref mut visited)) => {
+                if *visited == 0 {
+                    path.pop();
+                } else {
+                    *visited -= 1;
+
+                    // Safety: the last internal node in `path` is always *2*
+                    // levels above a leaf, so all its children are internal
+                    // nodes 1 level above a leaf.
+                    break unsafe {
+                        inode.children()[*visited].as_internal_unchecked()
+                    };
+                }
+            },
+
+            None => {
+                // If there's nothing left in the path it means we've gone
+                // through all the leaves under the current root.
+                if *root_idx == 0 {
+                    // If this was the first root we're done.
+                    return None;
+                } else {
+                    *root_idx -= 1;
+                    match &*root_nodes[*root_idx as usize] {
+                        Node::Internal(inode) => {
+                            break inode;
+                        },
+                        Node::Leaf(_) => {
+                            // The previous root is itself a leaf. We return a
+                            // slice containing only this node.
+                            return Some(
+                                &root_nodes[*root_idx as usize
+                                    ..*root_idx as usize + 1],
+                            );
+                        },
+                    }
+                }
+            },
+        }
+    };
+
+    loop {
+        match &*inode.children()[inode.children().len() - 1] {
+            Node::Internal(i) => {
+                path.push((inode, inode.children().len() - 1));
+                inode = i;
+            },
+            Node::Leaf(_) => {
+                return Some(inode.children());
+            },
+        }
     }
 }
 
@@ -281,7 +381,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn leaves_1() {
+    fn leaves_forward() {
         for n in 1..100 {
             let tree = Tree::<2, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
@@ -296,16 +396,19 @@ mod tests {
         }
     }
 
-    #[ignore]
     #[test]
-    fn leaves_2() {
-        let tree = Tree::<2, usize>::from_leaves(0..3);
-        let mut leaves = tree.leaves();
-
-        assert_eq!(Some(&2), leaves.next_back());
-        assert_eq!(Some(&1), leaves.next_back());
-        assert_eq!(Some(&0), leaves.next_back());
-        assert_eq!(None, leaves.next_back());
-        assert_eq!(None, leaves.next_back());
+    fn leaves_backward() {
+        for n in 1..100 {
+            let tree = Tree::<2, usize>::from_leaves(0..n);
+            let mut leaves = tree.leaves();
+            let mut i = n;
+            while let Some(leaf) = leaves.next_back() {
+                i -= 1;
+                assert_eq!(i, *leaf);
+            }
+            assert_eq!(i, 0);
+            assert_eq!(None, leaves.next_back());
+            assert_eq!(None, leaves.next_back());
+        }
     }
 }
