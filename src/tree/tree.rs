@@ -158,18 +158,4 @@ mod tests {
         let tree = Tree::<4, usize>::from_leaves(0..20);
         assert_eq!(Count(190), *tree.summary());
     }
-
-    #[test]
-    fn pretty_print() {
-        let _tree = Tree::<2, usize>::from_leaves(0..10);
-        // println!("{:#?}", tree);
-        // panic!("")
-    }
-
-    #[test]
-    fn slice() {
-        let tree = Tree::<2, usize>::from_leaves(0..10);
-        let slice = tree.slice(4..6);
-        assert_eq!(Count(3), *slice.summary());
-    }
 }
