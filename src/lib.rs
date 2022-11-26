@@ -4,7 +4,8 @@ mod rope;
 mod tree;
 
 pub mod iter {
-    //! Iterators over [`Rope`](crate::Rope)s.
+    //! Iterators over [`Rope`](crate::Rope)s and
+    //! [`RopeSlice`](crate::RopeSlice)s.
 
     pub use crate::rope::iterators::*;
 }

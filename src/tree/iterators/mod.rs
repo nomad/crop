@@ -1,5 +1,5 @@
-//! Iterators over [Tree](crate::tree:Tree)s and
-//! [TreeSlice](crate::tree::TreeSlice)s.
+//! Iterators over [`Tree`](crate::tree::Tree)s and
+//! [`TreeSlice`](crate::tree::TreeSlice)s.
 
 mod leaves;
 mod units;

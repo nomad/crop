@@ -422,6 +422,7 @@ impl<'a> DoubleEndedIterator for Chars<'a> {
 
 impl<'a> std::iter::FusedIterator for Chars<'a> {}
 
+/// TODO: docs
 #[derive(Clone)]
 pub struct Lines<'a> {
     units: Units<'a, { Rope::fanout() }, TextChunk, LineMetric>,
