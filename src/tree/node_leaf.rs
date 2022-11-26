@@ -1,5 +1,3 @@
-use std::fmt::{self, Debug};
-
 use super::Summarize;
 
 pub(super) struct Leaf<L: Summarize> {
@@ -7,8 +5,8 @@ pub(super) struct Leaf<L: Summarize> {
     summary: L::Summary,
 }
 
-impl<Leaf: Summarize> Debug for self::Leaf<Leaf> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<Leaf: Summarize> std::fmt::Debug for self::Leaf<Leaf> {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if !f.alternate() {
             f.debug_struct("Leaf")
                 .field("value", &self.value)

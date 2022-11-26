@@ -1,26 +1,7 @@
-use std::borrow::Borrow;
-use std::fmt::{self, Debug};
 use std::ops::{AddAssign, Range};
 use std::sync::Arc;
 
-use super::{Inode, Leaves, Metric, Node, TreeSlice, Units};
-
-/// TODO: docs
-pub trait Leaf: Summarize + Borrow<Self::Slice> {
-    type Slice: ?Sized
-        + Summarize<Summary = <Self as Summarize>::Summary>
-        + ToOwned<Owned = Self>;
-}
-
-/// TODO: docs
-pub trait Summarize: Debug {
-    type Summary: Debug
-        + Default
-        + Clone
-        + for<'a> AddAssign<&'a Self::Summary>;
-
-    fn summarize(&self) -> Self::Summary;
-}
+use super::{Inode, Leaf, Leaves, Metric, Node, TreeSlice, Units};
 
 /// TODO: docs
 pub struct Tree<const FANOUT: usize, L: Leaf> {
@@ -34,20 +15,17 @@ impl<const N: usize, L: Leaf> Clone for Tree<N, L> {
     }
 }
 
-impl<const N: usize, L: Leaf> Debug for Tree<N, L> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<const N: usize, L: Leaf> std::fmt::Debug for Tree<N, L> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if !f.alternate() {
             f.debug_struct("Tree").field("root", &self.root).finish()
         } else {
-            let punctuation =
-                if self.root.is_internal() { " —" } else { ":" };
-
-            write!(f, "root{} {:#?}", punctuation, self.root)
+            write!(f, "{:#?}", self.root)
         }
     }
 }
 
-/// TODO: docs
 impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     /// # Panics
     ///
@@ -124,6 +102,7 @@ impl<const FANOUT: usize, L: Leaf> AddAssign<Self> for Tree<FANOUT, L> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tree::Summarize;
 
     #[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
     pub struct Count(usize);

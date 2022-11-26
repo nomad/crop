@@ -1,5 +1,3 @@
-use std::fmt::{self, Debug};
-
 use super::{Inode, Leaf};
 
 pub(super) enum Node<const N: usize, L: Leaf> {
@@ -7,8 +5,9 @@ pub(super) enum Node<const N: usize, L: Leaf> {
     Leaf(super::node_leaf::Leaf<L>),
 }
 
-impl<const N: usize, L: Leaf> Debug for Node<N, L> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if !f.alternate() {
             match self {
                 Self::Internal(inode) => {

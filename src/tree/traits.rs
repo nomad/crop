@@ -1,7 +1,23 @@
+use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 
-use super::Leaf;
+/// TODO: docs
+pub trait Summarize: Debug {
+    type Summary: Debug
+        + Default
+        + Clone
+        + for<'a> AddAssign<&'a Self::Summary>;
+
+    fn summarize(&self) -> Self::Summary;
+}
+
+/// TODO: docs
+pub trait Leaf: Summarize + Borrow<Self::Slice> {
+    type Slice: ?Sized
+        + Summarize<Summary = <Self as Summarize>::Summary>
+        + ToOwned<Owned = Self>;
+}
 
 /// TODO: docs
 pub trait Metric<L: Leaf>:

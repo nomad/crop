@@ -1,4 +1,3 @@
-use std::fmt::{self, Debug};
 use std::sync::Arc;
 
 use super::{Leaf, Node};
@@ -11,8 +10,9 @@ pub(super) struct Inode<const N: usize, L: Leaf> {
     leaves: usize,
 }
 
-impl<const N: usize, L: Leaf> Debug for Inode<N, L> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+impl<const N: usize, L: Leaf> std::fmt::Debug for Inode<N, L> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if !f.alternate() {
             f.debug_struct("Inode")
                 .field("children", &self.children)
@@ -145,8 +145,8 @@ fn pretty_print_inode<const N: usize, L: Leaf>(
     shifts: &mut String,
     ident: &str,
     last_shift_byte_len: usize,
-    f: &mut fmt::Formatter,
-) -> fmt::Result {
+    f: &mut std::fmt::Formatter,
+) -> std::fmt::Result {
     writeln!(
         f,
         "{}{}{:?}",
