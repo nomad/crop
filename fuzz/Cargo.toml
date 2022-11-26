@@ -19,7 +19,7 @@ path = ".."
 members = ["."]
 
 [[bin]]
-name = "byte_slicing"
-path = "fuzz_targets/byte_slicing.rs"
+name = "slicing"
+path = "fuzz_targets/slicing.rs"
 test = false
 doc = false
