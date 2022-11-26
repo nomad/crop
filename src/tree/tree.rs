@@ -1,4 +1,4 @@
-use std::ops::{AddAssign, Range};
+use std::ops::Range;
 use std::sync::Arc;
 
 use super::{Inode, Leaf, Leaves, Metric, Node, TreeSlice, Units};
@@ -92,11 +92,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     {
         Units::from(self)
     }
-}
-
-impl<const FANOUT: usize, L: Leaf> AddAssign<Self> for Tree<FANOUT, L> {
-    #[inline]
-    fn add_assign(&mut self, _rhs: Self) {}
 }
 
 #[cfg(test)]

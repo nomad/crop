@@ -3,21 +3,6 @@ use std::ops::{Bound, RangeBounds};
 use super::iterators::Chunks;
 use super::{TextSlice, TextSummary};
 
-/// TODO: docs
-pub(super) fn split_at_byte<'a>(s: &mut &'a str, mut idx: usize) -> &'a str {
-    if s.len() <= idx {
-        return *s;
-    }
-
-    while !s.is_char_boundary(idx) {
-        idx += 1;
-    }
-
-    let left = &s[..idx];
-    *s = &s[idx..];
-    left
-}
-
 /// Checks equality between the chunks yielded by iterating over a [`Chunks`]
 /// and a string slice.
 ///
