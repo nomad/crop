@@ -27,6 +27,13 @@ pub struct Tree<const FANOUT: usize, L: Leaf> {
     pub(super) root: Arc<Node<FANOUT, L>>,
 }
 
+impl<const N: usize, L: Leaf> Clone for Tree<N, L> {
+    #[inline]
+    fn clone(&self) -> Self {
+        Tree { root: Arc::clone(&self.root) }
+    }
+}
+
 impl<const N: usize, L: Leaf> Debug for Tree<N, L> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if !f.alternate() {

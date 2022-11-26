@@ -1,12 +1,13 @@
 use std::ops::RangeBounds;
 
 use super::iterators::{Bytes, Chars, Chunks, Lines};
-use super::metrics::ByteMetric;
+use super::metrics::{ByteMetric, LineMetric};
 use super::utils::*;
 use super::{Rope, TextChunk};
 use crate::tree::TreeSlice;
 
 /// TODO: docs
+#[derive(Clone)]
 pub struct RopeSlice<'a> {
     tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
 }
@@ -30,28 +31,48 @@ impl<'a> RopeSlice<'a> {
 
     /// TODO: docs
     #[inline]
-    pub fn bytes(&self) -> Bytes<'_> {
+    pub fn bytes(&'a self) -> Bytes<'a> {
         Bytes::from(self)
     }
 
     /// TODO: docs
     #[inline]
-    pub fn chars(&self) -> Chars<'_> {
+    pub fn chars(&'a self) -> Chars<'a> {
         Chars::from(self)
     }
 
     /// TODO: docs
-    pub(super) fn chunks(&self) -> Chunks<'_> {
-        Chunks { chunks: self.tree_slice.leaves() }
+    #[inline]
+    pub fn chunks(&'a self) -> Chunks<'a> {
+        Chunks::from(self)
     }
 
     /// TODO: docs
     #[inline]
-    pub fn lines(&self) -> Lines<'_> {
+    pub fn line_len(&self) -> usize {
+        todo!()
+        // self.tree_slice.summary().line_breaks + 1
+        //     - (self.last_byte_is_newline as usize)
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn line_slice<R>(&'a self, line_range: R) -> RopeSlice<'a>
+    where
+        R: RangeBounds<usize>,
+    {
+        let (start, end) = range_to_tuple(line_range, 0, self.line_len());
+        RopeSlice::new(
+            self.tree_slice.slice(LineMetric(start)..LineMetric(end)),
+        )
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn lines(&'a self) -> Lines<'a> {
         Lines::from(self)
     }
 
-    #[inline]
     pub(super) fn new(
         tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
     ) -> Self {

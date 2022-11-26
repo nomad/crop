@@ -15,6 +15,7 @@ const ROPE_FANOUT: usize = 8;
 const ROPE_FANOUT: usize = 2;
 
 /// TODO: docs
+#[derive(Clone)]
 pub struct Rope {
     root: Tree<ROPE_FANOUT, TextChunk>,
     last_byte_is_newline: bool,
@@ -49,8 +50,10 @@ impl Rope {
         Chars::from(self)
     }
 
-    pub(super) fn chunks(&self) -> Chunks<'_> {
-        Chunks { chunks: self.root.leaves() }
+    /// TODO: docs
+    #[inline]
+    pub fn chunks(&self) -> Chunks<'_> {
+        Chunks::from(self)
     }
 
     pub(super) const fn fanout() -> usize {

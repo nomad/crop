@@ -4,10 +4,17 @@ use std::sync::Arc;
 use super::{Inode, Leaf, Leaves, Metric, Node, Summarize, Units};
 
 /// TODO: docs
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     pub(super) span: SliceSpan<'a, FANOUT, L>,
     pub(super) summary: L::Summary,
+}
+
+impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
+    #[inline]
+    fn clone(&self) -> Self {
+        TreeSlice { span: self.span.clone(), summary: self.summary.clone() }
+    }
 }
 
 #[derive(Debug)]

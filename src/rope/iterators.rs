@@ -4,8 +4,22 @@ use crate::tree::{Leaves, Units};
 
 /// TODO: docs
 #[derive(Clone)]
-pub(super) struct Chunks<'a> {
-    pub(super) chunks: Leaves<'a, { Rope::fanout() }, TextChunk>,
+pub struct Chunks<'a> {
+    chunks: Leaves<'a, { Rope::fanout() }, TextChunk>,
+}
+
+impl<'a> From<&'a Rope> for Chunks<'a> {
+    #[inline]
+    fn from(rope: &'a Rope) -> Self {
+        Self { chunks: rope.root().leaves() }
+    }
+}
+
+impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chunks<'a> {
+    #[inline]
+    fn from(slice: &'a RopeSlice<'b>) -> Self {
+        Self { chunks: slice.tree_slice().leaves() }
+    }
 }
 
 impl<'a> Iterator for Chunks<'a> {
