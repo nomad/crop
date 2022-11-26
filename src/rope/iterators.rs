@@ -104,9 +104,35 @@ impl<'a> Iterator for Bytes<'a> {
         }
 
         if self.forward_byte_idx == self.current_forward.len() {
-            // NOTE: make sure  there are never empty chunks or this will make
-            // the byte indexing below fail.
-            self.current_forward = self.chunks.next()?.as_bytes();
+            self.current_forward = match self.chunks.next() {
+                Some(chunk) => {
+                    // NOTE: make sure  there are never empty chunks or this
+                    // will make the byte indexing below fail.
+                    chunk.as_bytes()
+                },
+
+                None => {
+                    // There are no more chunks to get but there may be some
+                    // bytes yet to yielded on the backward chunk.
+                    if self.backward_byte_idx == 0 {
+                        return None;
+                    } else {
+                        // Return the first byte of the backward chunk, make
+                        // it one byte smaller and return.
+
+                        let byte = self.current_backward[0];
+                        self.current_backward = &self.current_backward[1..];
+
+                        // After making the backward chunk 1 byte smaller we
+                        // have to decrease the backward byte idx by one to
+                        // keep those in sync.
+                        self.backward_byte_idx -= 1;
+
+                        self.yielded_forward += 1;
+                        return Some(byte);
+                    }
+                },
+            };
             self.forward_byte_idx = 0;
         }
 
@@ -132,9 +158,33 @@ impl<'a> DoubleEndedIterator for Bytes<'a> {
         }
 
         if self.backward_byte_idx == 0 {
-            // NOTE: make sure  there are never empty chunks or this will make
-            // the byte indexing below fail.
-            self.current_backward = self.chunks.next_back()?.as_bytes();
+            self.current_backward = match self.chunks.next_back() {
+                Some(chunk) => {
+                    // NOTE: make sure  there are never empty chunks or this
+                    // will make the byte indexing below fail.
+                    chunk.as_bytes()
+                },
+
+                None => {
+                    // There are no more chunks to get but there may be some
+                    // bytes yet to yielded on the forward chunk.
+                    if self.forward_byte_idx == self.current_forward.len() {
+                        return None;
+                    } else {
+                        // Return the last byte of the forward chunk, make
+                        // it one byte smaller and return.
+                        let byte = self.current_forward
+                            [self.current_forward.len() - 1];
+
+                        self.current_forward = &self.current_forward
+                            [..self.current_forward.len() - 1];
+
+                        self.yielded_backward += 1;
+
+                        return Some(byte);
+                    }
+                },
+            };
             self.backward_byte_idx = self.current_backward.len();
         }
 
@@ -363,11 +413,12 @@ mod tests {
     fn bytes_both_ways() {
         let rope = Rope::from(LARGE);
 
+        let i = thread_rng().gen_range(0..=LARGE.len());
+
+        // Go forward for the first `i` bytes, then backward.
+
         let mut slice_bytes = LARGE.bytes();
         let mut rope_bytes = rope.bytes();
-
-        let i = 689134;
-        // let i = thread_rng().gen_range(0..=LARGE.len());
 
         for _ in 0..i {
             let rope_b = rope_bytes.next().unwrap();
@@ -375,10 +426,29 @@ mod tests {
             assert_eq!(rope_b, slice_b);
         }
 
-        for j in i..LARGE.len() {
-            println!("{j}");
+        for _ in i..LARGE.len() {
             let rope_b = rope_bytes.next_back().unwrap();
             let slice_b = slice_bytes.next_back().unwrap();
+            assert_eq!(rope_b, slice_b);
+        }
+
+        assert_eq!(None, rope_bytes.next());
+        assert_eq!(None, rope_bytes.next_back());
+
+        // Now the opposite, go backward for the first `i` bytes, then forward.
+
+        let mut slice_bytes = LARGE.bytes();
+        let mut rope_bytes = rope.bytes();
+
+        for _ in 0..i {
+            let rope_b = rope_bytes.next_back().unwrap();
+            let slice_b = slice_bytes.next_back().unwrap();
+            assert_eq!(rope_b, slice_b);
+        }
+
+        for _ in i..LARGE.len() {
+            let rope_b = rope_bytes.next().unwrap();
+            let slice_b = slice_bytes.next().unwrap();
             assert_eq!(rope_b, slice_b);
         }
 
