@@ -104,12 +104,9 @@ impl<'a> Iterator for Bytes<'a> {
         }
 
         if self.forward_byte_idx == self.current_forward.len() {
-            self.current_forward = loop {
-                let chunk = self.chunks.next()?;
-                if !chunk.is_empty() {
-                    break chunk.as_bytes();
-                }
-            };
+            // NOTE: make sure  there are never empty chunks or this will make
+            // the byte indexing below fail.
+            self.current_forward = self.chunks.next()?.as_bytes();
             self.forward_byte_idx = 0;
         }
 
@@ -135,12 +132,9 @@ impl<'a> DoubleEndedIterator for Bytes<'a> {
         }
 
         if self.backward_byte_idx == 0 {
-            self.current_backward = loop {
-                let chunk = self.chunks.next_back()?;
-                if !chunk.is_empty() {
-                    break chunk.as_bytes();
-                }
-            };
+            // NOTE: make sure  there are never empty chunks or this will make
+            // the byte indexing below fail.
+            self.current_backward = self.chunks.next_back()?.as_bytes();
             self.backward_byte_idx = self.current_backward.len();
         }
 
@@ -158,28 +152,67 @@ impl<'a> std::iter::FusedIterator for Bytes<'a> {}
 /// TODO: docs
 #[derive(Clone)]
 pub struct Chars<'a> {
+    /// TODO: docs
     chunks: Chunks<'a>,
-    current: &'a str,
+
+    /// TODO: docs
+    current_forward: &'a str,
+
     /// Note: this is the number of *bytes* already yielded in `current`, not
     /// chars.
-    yielded_in_current: usize,
+    forward_byte_idx: usize,
+
+    /// TODO: docs
+    current_backward: &'a str,
+
+    /// TODO: docs
+    backward_byte_idx: usize,
+
+    /// TODO: docs
+    chunks_yielded_forward: usize,
+
+    /// TODO: docs
+    chunks_yielded_backward: usize,
+
+    /// TODO: docs
+    total_chunks: usize,
 }
 
 impl<'a> From<&'a Rope> for Chars<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        let mut chunks = rope.chunks();
-        let current = chunks.next().unwrap_or("");
-        Self { chunks, current, yielded_in_current: 0 }
+        let chunks = rope.chunks();
+        let total_chunks = chunks.len();
+
+        Self {
+            chunks,
+            current_forward: "",
+            forward_byte_idx: 0,
+            current_backward: "",
+            backward_byte_idx: 0,
+            chunks_yielded_forward: 0,
+            chunks_yielded_backward: 0,
+            total_chunks,
+        }
     }
 }
 
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chars<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
-        let mut chunks = slice.chunks();
-        let current = chunks.next().unwrap_or("");
-        Self { chunks, current, yielded_in_current: 0 }
+        let chunks = slice.chunks();
+        let total_chunks = chunks.len();
+
+        Self {
+            chunks,
+            current_forward: "",
+            forward_byte_idx: 0,
+            current_backward: "",
+            backward_byte_idx: 0,
+            chunks_yielded_forward: 0,
+            chunks_yielded_backward: 0,
+            total_chunks,
+        }
     }
 }
 
@@ -188,22 +221,37 @@ impl<'a> Iterator for Chars<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.yielded_in_current == self.current.len() {
+        if self.chunks_yielded_forward + self.chunks_yielded_backward
+            == self.total_chunks
+        {
+            debug_assert!(
+                (self.current_forward == self.current_backward)
+                    || (self.chunks_yielded_forward == 0
+                        || self.chunks_yielded_backward == 0)
+            );
+
+            if self.forward_byte_idx + 1 == self.backward_byte_idx {
+                return None;
+            }
+        }
+
+        if self.forward_byte_idx == self.current_forward.len() {
             // NOTE: make sure there are never empty chunks or this will make
             // the byte indexing below fail.
-            self.current = self.chunks.next()?;
-            self.yielded_in_current = 0;
+            self.current_forward = self.chunks.next()?;
+            self.chunks_yielded_forward += 1;
+            self.forward_byte_idx = 0;
         }
 
         let char = unsafe {
-            self.current[self.yielded_in_current..]
+            self.current_forward[self.forward_byte_idx..]
                 .chars()
                 .next()
-                // Safety: `yielded_in_current < current.len()`, so there are
-                // still chars to yield in this chunk.
+                // Safety: `forward_byte_idx < current_forward.len()`, so there
+                // are still chars to yield in this chunk.
                 .unwrap_unchecked()
         };
-        self.yielded_in_current += char.len_utf8();
+        self.forward_byte_idx += char.len_utf8();
         Some(char)
     }
 }
@@ -211,7 +259,38 @@ impl<'a> Iterator for Chars<'a> {
 impl<'a> DoubleEndedIterator for Chars<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        todo!()
+        if self.chunks_yielded_forward + self.chunks_yielded_backward
+            == self.total_chunks
+        {
+            debug_assert!(
+                (self.current_forward == self.current_backward)
+                    || (self.chunks_yielded_forward == 0
+                        || self.chunks_yielded_backward == 0)
+            );
+
+            if self.forward_byte_idx == self.backward_byte_idx {
+                return None;
+            }
+        }
+
+        if self.backward_byte_idx == 0 {
+            // NOTE: make sure there are never empty chunks or this will make
+            // the byte indexing below fail.
+            self.current_backward = self.chunks.next_back()?;
+            self.chunks_yielded_backward += 1;
+            self.backward_byte_idx = self.current_backward.len();
+        }
+
+        let char = unsafe {
+            self.current_backward[..self.backward_byte_idx]
+                .chars()
+                .next_back()
+                // Safety: `self.backward_byte_idx > 0`, so there are still
+                // chars to yield in this chunk.
+                .unwrap_unchecked()
+        };
+        self.backward_byte_idx -= char.len_utf8();
+        Some(char)
     }
 }
 
@@ -249,6 +328,8 @@ impl<'a> std::iter::FusedIterator for Lines<'a> {}
 
 #[cfg(test)]
 mod tests {
+    use rand::{thread_rng, Rng};
+
     use crate::Rope;
 
     const TINY: &str = include_str!("../../benches/tiny.txt");
@@ -276,6 +357,81 @@ mod tests {
             i += 1;
         }
         assert_eq!(i, r.byte_len());
+    }
+
+    #[test]
+    fn bytes_both_ways() {
+        let rope = Rope::from(LARGE);
+
+        let mut slice_bytes = LARGE.bytes();
+        let mut rope_bytes = rope.bytes();
+
+        let i = 689134;
+        // let i = thread_rng().gen_range(0..=LARGE.len());
+
+        for _ in 0..i {
+            let rope_b = rope_bytes.next().unwrap();
+            let slice_b = slice_bytes.next().unwrap();
+            assert_eq!(rope_b, slice_b);
+        }
+
+        for j in i..LARGE.len() {
+            println!("{j}");
+            let rope_b = rope_bytes.next_back().unwrap();
+            let slice_b = slice_bytes.next_back().unwrap();
+            assert_eq!(rope_b, slice_b);
+        }
+
+        assert_eq!(None, rope_bytes.next());
+        assert_eq!(None, rope_bytes.next_back());
+    }
+
+    #[test]
+    fn chars_both_ways() {
+        let rope = Rope::from(LARGE);
+
+        let mut slice_chars = LARGE.chars();
+        let mut rope_chars = rope.chars();
+
+        let total_chars = LARGE.chars().count();
+        let i = thread_rng().gen_range(0..=total_chars);
+
+        for _ in 0..i {
+            let rope_c = rope_chars.next().unwrap();
+            let slice_c = slice_chars.next().unwrap();
+            assert_eq!(rope_c, slice_c);
+        }
+
+        for _ in i..total_chars {
+            let rope_c = rope_chars.next_back().unwrap();
+            let slice_c = slice_chars.next_back().unwrap();
+            assert_eq!(rope_c, slice_c);
+        }
+
+        assert_eq!(None, rope_chars.next());
+        assert_eq!(None, rope_chars.next_back());
+    }
+
+    #[test]
+    fn chars_forward() {
+        let r = Rope::from(LARGE);
+        let mut i = 0;
+        for (c_rope, c_str) in r.chars().zip(LARGE.chars()) {
+            assert_eq!(c_rope, c_str);
+            i += 1;
+        }
+        assert_eq!(i, LARGE.chars().count());
+    }
+
+    #[test]
+    fn chars_backward() {
+        let r = Rope::from(LARGE);
+        let mut i = 0;
+        for (c_rope, c_str) in r.chars().rev().zip(LARGE.chars().rev()) {
+            assert_eq!(c_rope, c_str);
+            i += 1;
+        }
+        assert_eq!(i, LARGE.chars().count());
     }
 
     #[test]
