@@ -156,6 +156,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 }
 
+/// TODO: docs
 fn tree_slice_from_range_in_inode<'a, const N: usize, L, M>(
     inode: &'a Inode<N, L>,
     range: Range<M>,
@@ -166,7 +167,7 @@ where
 {
     let mut summary = L::Summary::default();
     let mut span = None;
-    some_name_for_this_rec(
+    set_slice_span_from_range_in_nodes_rec(
         inode.children(),
         range,
         &mut M::zero(),
@@ -179,6 +180,7 @@ where
     TreeSlice { span: span.unwrap(), summary }
 }
 
+/// TODO: docs
 fn tree_slice_from_range_in_multi_span<'a, const N: usize, L, M>(
     start_slice: &'a L::Slice,
     start_summary: &L::Summary,
@@ -220,7 +222,7 @@ where
 
     let mut new_internals = StackVec::new();
 
-    some_name_for_this_rec(
+    set_slice_span_from_range_in_nodes_rec(
         internals,
         Range { start: range.start, end: range.end },
         &mut measured,
@@ -252,7 +254,8 @@ where
     }
 }
 
-fn some_name_for_this_rec<'a, const N: usize, L, M>(
+/// TODO: docs
+fn set_slice_span_from_range_in_nodes_rec<'a, const N: usize, L, M>(
     nodes: &'a [Arc<Node<N, L>>],
     range: Range<M>,
     measured: &mut M,
@@ -283,7 +286,7 @@ fn some_name_for_this_rec<'a, const N: usize, L, M>(
                         // This inode contains the starting leaf somewhere in
                         // its subtree. Run this function again looping over
                         // the inode's children.
-                        some_name_for_this_rec(
+                        set_slice_span_from_range_in_nodes_rec(
                             inode.children(),
                             Range { start: range.start, end: range.end },
                             measured,
@@ -304,7 +307,7 @@ fn some_name_for_this_rec<'a, const N: usize, L, M>(
                         // This inode contains the ending leaf somewhere in its
                         // subtree. Run this function again looping over the
                         // inode's children.
-                        some_name_for_this_rec(
+                        set_slice_span_from_range_in_nodes_rec(
                             inode.children(),
                             Range { start: range.start, end: range.end },
                             measured,
@@ -384,6 +387,7 @@ fn some_name_for_this_rec<'a, const N: usize, L, M>(
     }
 }
 
+/// TODO: docs
 struct StackVec<T> {
     ptr: *mut T,
     len: usize,

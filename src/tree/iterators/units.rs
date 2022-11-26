@@ -15,11 +15,18 @@ pub struct Units<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
     end: Option<(&'a L::Slice, L::Summary)>,
 
     /// TODO: docs
-    root_forward_idx: isize,
+    forward_root_idx: isize,
 
     /// # Invariant
-    /// - the index in the last item of the vector is a leaf.
+    /// - the node in the last item of the vector is a leaf.
     forward_path: Vec<(&'a Inode<FANOUT, L>, usize)>,
+
+    /// TODO: docs
+    _backward_root_idx: usize,
+
+    /// # Invariant
+    /// - the node in the last item of the vector is a leaf.
+    backward_path: Vec<(&'a Inode<FANOUT, L>, usize)>,
 
     /// TODO: docs
     yielded_forward: M,
@@ -43,6 +50,7 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Clone
             start: self.start.clone(),
             end: self.end.clone(),
             forward_path: self.forward_path.clone(),
+            backward_path: self.backward_path.clone(),
             ..*self
         }
     }
@@ -65,9 +73,11 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
         Units {
             start,
             root_nodes,
-            root_forward_idx: -1,
-            forward_path: Vec::new(),
             end: None,
+            forward_root_idx: -1,
+            forward_path: Vec::new(),
+            _backward_root_idx: root_nodes.len(),
+            backward_path: Vec::new(),
             yielded_forward: M::zero(),
             _yielded_backward: M::zero(),
             total: M::measure(tree.summary()),
@@ -98,9 +108,11 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>>
         Units {
             start,
             root_nodes,
-            root_forward_idx: -1,
-            forward_path: Vec::new(),
             end,
+            forward_root_idx: -1,
+            forward_path: Vec::new(),
+            _backward_root_idx: root_nodes.len(),
+            backward_path: Vec::new(),
             yielded_forward: M::zero(),
             _yielded_backward: M::zero(),
             total: M::measure(tree_slice.summary()),
@@ -123,12 +135,12 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
             Some((slice, ref summary)) => (slice, summary),
 
             None => {
-                match next_something_forward(
+                match go_to_next_leaf_forward(
                     self.root_nodes,
-                    &mut self.root_forward_idx,
+                    &mut self.forward_root_idx,
                     &mut self.forward_path,
                 ) {
-                    Some((slice, summary)) => (slice, summary),
+                    Some(leaf) => (leaf.value().borrow(), leaf.summary()),
 
                     None => {
                         // Start is None and there's not a next leaf.
@@ -184,9 +196,9 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
         if self.yielded_forward == self.total {
             let mut internals = Vec::new();
 
-            next_babagugu::<FANOUT, L, M>(
+            accumulate_to_end::<FANOUT, L, M>(
                 self.root_nodes,
-                &mut self.root_forward_idx,
+                &mut self.forward_root_idx,
                 &mut self.forward_path,
                 &mut summary,
                 &mut internals,
@@ -276,9 +288,9 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
 
         let mut internals = Vec::new();
 
-        let end = match next_bubugaga::<FANOUT, L, M>(
+        let end = match go_to_next_unit_while_accumulating::<FANOUT, L, M>(
             self.root_nodes,
-            &mut self.root_forward_idx,
+            &mut self.forward_root_idx,
             &mut self.forward_path,
             &mut self.start,
             &mut summary,
@@ -315,27 +327,24 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
     }
 }
 
-fn next_something_forward<'a, const N: usize, L: Leaf>(
+fn go_to_next_leaf_forward<'a, const N: usize, L: Leaf>(
     root_nodes: &'a [Arc<Node<N, L>>],
     root_idx: &mut isize,
     path: &mut Vec<(&'a Inode<N, L>, usize)>,
-) -> Option<(&'a L::Slice, &'a L::Summary)> {
+) -> Option<&'a super::super::node_leaf::Leaf<L>> {
     let mut inode = loop {
         match path.last_mut() {
             Some(&mut (inode, ref mut visited)) => {
-                if inode.children().len() == *visited + 1 {
+                *visited += 1;
+                if inode.children().len() == *visited {
                     path.pop();
                 } else {
-                    *visited += 1;
                     match &*inode.children()[*visited] {
                         Node::Internal(inode) => {
                             break inode;
                         },
                         Node::Leaf(leaf) => {
-                            return Some((
-                                leaf.value().borrow(),
-                                leaf.summary(),
-                            ));
+                            return Some(leaf);
                         },
                     }
                 }
@@ -352,10 +361,7 @@ fn next_something_forward<'a, const N: usize, L: Leaf>(
                         },
 
                         Node::Leaf(leaf) => {
-                            return Some((
-                                leaf.value().borrow(),
-                                leaf.summary(),
-                            ));
+                            return Some(leaf);
                         },
                     }
                 }
@@ -370,13 +376,23 @@ fn next_something_forward<'a, const N: usize, L: Leaf>(
                 inode = i;
             },
             Node::Leaf(leaf) => {
-                return Some((leaf.value().borrow(), leaf.summary()));
+                return Some(leaf);
             },
         }
     }
 }
 
-fn next_bubugaga<'a, const N: usize, L: Leaf, M: Metric<L>>(
+/// Starts at `path` and traverses the subtrees in `root_nodes` forward until
+/// it gets to the next unit of the `M` metric, accumulating summaries into
+/// `summary` and nodes into `internals` for all nodes with 0 measure. If
+/// there's a next unit after `path` it returns the final slice and its
+/// summary, otherwise it'll return `None`.
+fn go_to_next_unit_while_accumulating<
+    'a,
+    const N: usize,
+    L: Leaf,
+    M: Metric<L>,
+>(
     root_nodes: &'a [Arc<Node<N, L>>],
     root_idx: &mut isize,
     path: &mut Vec<(&'a Inode<N, L>, usize)>,
@@ -501,7 +517,11 @@ fn next_bubugaga<'a, const N: usize, L: Leaf, M: Metric<L>>(
     }
 }
 
-fn next_babagugu<'a, const N: usize, L: Leaf, M: Metric<L>>(
+/// Same as [`go_to_next_unit_while_accumulating`], except it assumes that all
+/// the nodes after `path` have measure zero (so all the
+/// `if M::measure(_) == M::zero()` are assumed to be `true`), and it pushes
+/// `&Arc<Node>`s to `internals` instead of `Arc<Node>`.
+fn accumulate_to_end<'a, const N: usize, L: Leaf, M: Metric<L>>(
     root_nodes: &'a [Arc<Node<N, L>>],
     root_idx: &mut isize,
     path: &mut Vec<(&'a Inode<N, L>, usize)>,
