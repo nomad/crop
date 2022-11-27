@@ -458,27 +458,77 @@ pub use graphemes::Graphemes;
 mod graphemes {
     use std::borrow::Cow;
 
-    use unicode_segmentation;
+    use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
     use super::*;
 
     /// TODO: docs
     #[derive(Clone)]
     pub struct Graphemes<'a> {
+        /// TODO: docs
         chunks: Chunks<'a>,
+
+        /// TODO: docs
+        forward_chunk: &'a str,
+
+        /// TODO: docs
+        offset_of_forward_chunk: usize,
+
+        /// TODO: docs
+        yielded_in_forward_chunk: usize,
+
+        /// TODO: docs
+        current_backward: &'a str,
+
+        /// TODO: docs
+        backward_byte_idx: usize,
+
+        /// TODO: docs
+        yielded_forward: usize,
+
+        /// TODO: docs
+        yielded_backward: usize,
+
+        /// TODO: docs
+        total_bytes: usize,
+
+        /// TODO: docs
+        cursor: GraphemeCursor,
     }
 
     impl<'a> From<&'a Rope> for Graphemes<'a> {
         #[inline]
         fn from(rope: &'a Rope) -> Self {
-            Self { chunks: rope.chunks() }
+            Self {
+                chunks: rope.chunks(),
+                forward_chunk: "",
+                yielded_in_forward_chunk: 0,
+                offset_of_forward_chunk: 0,
+                current_backward: "",
+                backward_byte_idx: 0,
+                yielded_forward: 0,
+                yielded_backward: 0,
+                total_bytes: rope.byte_len(),
+                cursor: GraphemeCursor::new(0, rope.byte_len(), true),
+            }
         }
     }
 
     impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Graphemes<'a> {
         #[inline]
         fn from(slice: &'a RopeSlice<'b>) -> Self {
-            Self { chunks: slice.chunks() }
+            Self {
+                chunks: slice.chunks(),
+                forward_chunk: "",
+                yielded_in_forward_chunk: 0,
+                offset_of_forward_chunk: 0,
+                current_backward: "",
+                backward_byte_idx: 0,
+                yielded_forward: 0,
+                yielded_backward: 0,
+                total_bytes: slice.byte_len(),
+                cursor: GraphemeCursor::new(0, slice.byte_len(), true),
+            }
         }
     }
 
@@ -487,6 +537,112 @@ mod graphemes {
 
         #[inline]
         fn next(&mut self) -> Option<Self::Item> {
+            if self.yielded_forward + self.yielded_backward == self.total_bytes
+            {
+                return None;
+            }
+
+            if self.yielded_in_forward_chunk == self.forward_chunk.len() {
+                self.forward_chunk = match self.chunks.next() {
+                    Some(chunk) => {
+                        // NOTE: make sure  there are never empty chunks or
+                        // this will make the byte indexing below fail.
+                        chunk
+                    },
+
+                    None => {
+                        todo!()
+                    },
+                }
+            };
+
+            let start = self.cursor.cur_cursor();
+
+            let end = match self.cursor.next_boundary(
+                self.forward_chunk,
+                self.offset_of_forward_chunk,
+            ) {
+                Ok(None) => return None,
+
+                Ok(Some(n)) => n,
+
+                Err(GraphemeIncomplete::NextChunk) => {
+                    let mut grapheme = String::from(
+                        &self.forward_chunk[self.yielded_in_forward_chunk..],
+                    );
+
+                    self.offset_of_forward_chunk += self.forward_chunk.len();
+
+                    self.forward_chunk = match self.chunks.next() {
+                        Some(chunk) => chunk,
+                        None => todo!(),
+                    };
+
+                    println!("grapheme: {grapheme}");
+                    println!("forward_chunk: {}", self.forward_chunk);
+                    println!(
+                        "offset_forward_chunk: {}",
+                        self.offset_of_forward_chunk
+                    );
+
+                    loop {
+                        let grapheme = match self.cursor.next_boundary(
+                            self.forward_chunk,
+                            self.offset_of_forward_chunk,
+                        ) {
+                            Ok(None) => grapheme,
+
+                            Ok(Some(n)) => {
+                                println!("bb");
+                                let end = n - self.offset_of_forward_chunk;
+                                grapheme.push_str(&self.forward_chunk[..end]);
+                                grapheme
+                            },
+
+                            Err(GraphemeIncomplete::NextChunk) => {
+                                println!("aa");
+                                self.offset_of_forward_chunk +=
+                                    self.forward_chunk.len();
+
+                                self.forward_chunk = match self.chunks.next() {
+                                    Some(chunk) => chunk,
+                                    None => todo!(),
+                                };
+
+                                continue;
+                            },
+
+                            Err(GraphemeIncomplete::PreContext(_)) => todo!(),
+
+                            _ => unreachable!(),
+                        };
+
+                        println!(
+                            "returning {grapheme} which is {} long",
+                            grapheme.len()
+                        );
+
+                        self.yielded_in_forward_chunk += grapheme.len();
+                        self.yielded_forward += grapheme.len();
+                        return Some(Cow::Owned(grapheme));
+                    }
+                },
+
+                Err(GraphemeIncomplete::PreContext(_)) => todo!(),
+
+                _ => unreachable!(),
+            };
+
+            let grapheme = &self.forward_chunk[start..end];
+            self.yielded_in_forward_chunk += grapheme.len();
+            self.yielded_forward += grapheme.len();
+            Some(Cow::Borrowed(grapheme))
+        }
+    }
+
+    impl<'a> DoubleEndedIterator for Graphemes<'a> {
+        #[inline]
+        fn next_back(&mut self) -> Option<Self::Item> {
             todo!()
         }
     }
@@ -823,5 +979,54 @@ mod tests {
         // for (l1, l2) in r.lines().rev().zip(s.lines().rev()) {
         //     assert_eq!(l1, l2);
         // }
+    }
+
+    #[cfg(feature = "graphemes")]
+    mod graphemes {
+        use std::borrow::Cow;
+
+        use super::*;
+
+        #[test]
+        fn graphemes_ascii() {
+            let r = Rope::from("abcd");
+
+            assert_eq!(4, r.graphemes().count());
+
+            let mut graphemes = r.graphemes();
+
+            assert_eq!(Cow::<str>::Borrowed("a"), graphemes.next().unwrap());
+            assert_eq!(Cow::<str>::Borrowed("b"), graphemes.next().unwrap());
+            assert_eq!(Cow::<str>::Borrowed("c"), graphemes.next().unwrap());
+            assert_eq!(Cow::<str>::Borrowed("d"), graphemes.next().unwrap());
+            assert_eq!(None, graphemes.next());
+        }
+
+        #[test]
+        fn graphemes_two_flags() {
+            // Each flag is made by 2 4-byte codepoints, for a total of 16
+            // bytes.
+            //
+            // Since 8 > TEXT_CHUNK_MAX_BYTES in test mode we should get owned
+            // strings.
+
+            let r = Rope::from("🇷🇸🇮🇴");
+
+            assert_eq!(2, r.graphemes().count());
+
+            let mut graphemes = r.graphemes();
+
+            assert_eq!(
+                Cow::<str>::Owned(String::from("🇷🇸")),
+                graphemes.next().unwrap()
+            );
+
+            assert_eq!(
+                Cow::<str>::Owned(String::from("🇮🇴")),
+                graphemes.next().unwrap()
+            );
+
+            assert_eq!(None, graphemes.next());
+        }
     }
 }
