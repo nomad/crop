@@ -1,7 +1,7 @@
 [package]
 name = "crop"
 version = "0.1.0"
-authors = ["Riccardo Mazzarini <riccardo.mazzarini@pm.me>"]
+authors = ["Riccardo Mazzarini <me@noib3.dev>"]
 edition = "2021"
 
 [features]
