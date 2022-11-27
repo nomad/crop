@@ -66,6 +66,22 @@ impl Rope {
         todo!()
     }
 
+    /// Returns `true` if the `Rope`'s byte length is zero.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let r = Rope::from("");
+    /// assert!(r.is_empty());
+    ///
+    /// let r = Rope::from("foo");
+    /// assert!(!r.is_empty());
+    /// ```
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.byte_len() == 0
+    }
+
     /// TODO: docs
     #[inline]
     pub fn line_len(&self) -> usize {
@@ -256,12 +272,9 @@ mod tests {
     const LARGE: &str = include_str!("../../benches/large.txt");
 
     #[test]
-    fn easy() {
-        let r = Rope::from("Hello there");
-        assert_eq!(11, r.byte_len());
-
-        let r = Rope::from("🐕‍🦺");
-        assert_eq!(11, r.byte_len());
+    fn empty_rope() {
+        let r = Rope::from("");
+        assert!(r.is_empty());
     }
 
     #[test]

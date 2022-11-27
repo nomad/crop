@@ -96,6 +96,8 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
 #[cfg(test)]
 mod tests {
+    use std::ops::AddAssign;
+
     use super::*;
     use crate::tree::Summarize;
 

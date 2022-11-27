@@ -464,6 +464,23 @@ mod tests {
     const MEDIUM: &str = include_str!("../../benches/medium.txt");
     const LARGE: &str = include_str!("../../benches/large.txt");
 
+    /// A cursed version of a lorem ipsum paragraph taken from [this online
+    /// tool][1] with mixed line breaks (LF and CRLF).
+    ///
+    /// [1]: https://jeff.cis.cabrillo.edu/tools/homoglyphs
+    const CURSED_LIPSUM: &str = "Ḽơᶉëᶆ ȋṕšᶙṁ\nḍỡḽǭᵳ ʂǐť ӓṁệẗ,\r\n \
+                                 ĉṓɲṩḙċťᶒțûɾ \nấɖḯƥĭ\r\nṩčįɳġ ḝłįʈ, șế\r\nᶑ \
+                                 ᶁⱺ ẽḭŭŝḿꝋď\n ṫĕᶆᶈṓɍ ỉñḉīḑȋᵭṵńť \nṷŧ ḹẩḇőꝛế \
+                                 éȶ đꝍꞎ\r\nôꝛȇ ᵯáꞡ\r\nᶇā ąⱡ\nîɋṹẵ.";
+
+    #[test]
+    fn empty_rope() {
+        let r = Rope::from("");
+        assert_eq!(0, r.bytes().count());
+        assert_eq!(0, r.chars().count());
+        assert_eq!(0, r.lines().count());
+    }
+
     #[test]
     fn bytes_forward() {
         let r = Rope::from(LARGE);
@@ -533,6 +550,23 @@ mod tests {
 
         assert_eq!(None, rope_bytes.next());
         assert_eq!(None, rope_bytes.next_back());
+    }
+
+    #[test]
+    fn bytes_cursed() {
+        let s = CURSED_LIPSUM;
+        let r = Rope::from(s);
+
+        assert_eq!(r.bytes().count(), s.bytes().count());
+        assert_eq!(r.byte_slice(..).bytes().count(), s.bytes().count());
+
+        for (b1, b2) in r.bytes().zip(s.bytes()) {
+            assert_eq!(b1, b2);
+        }
+
+        for (b1, b2) in r.bytes().rev().zip(s.bytes().rev()) {
+            assert_eq!(b1, b2);
+        }
     }
 
     #[test]
@@ -608,16 +642,26 @@ mod tests {
     }
 
     #[test]
-    fn bytes_1() {
-        let r = Rope::from("Hello world this is my dog -> 🐕‍🦺");
-        assert_eq!(41, r.bytes().count());
-        assert_eq!(33, r.chars().count());
+    fn chars_cursed() {
+        let s = CURSED_LIPSUM;
+        let r = Rope::from(s);
+
+        assert_eq!(r.chars().count(), s.chars().count());
+        assert_eq!(r.byte_slice(..).chars().count(), s.chars().count());
+
+        for (c1, c2) in r.chars().zip(s.chars()) {
+            assert_eq!(c1, c2);
+        }
+
+        for (c1, c2) in r.chars().rev().zip(s.chars().rev()) {
+            assert_eq!(c1, c2);
+        }
     }
 
     #[test]
     fn lines_0() {
-        // Note: all these ropes should fit in a single chunk, no internal
-        // nodes.
+        // Note: all these ropes should fit in a single leaf node assuming a
+        // `TEXT_CHUNK_MAX_BYTES` of 4 in test mode.
 
         let r = Rope::from("abc");
         assert_eq!(1, r.lines().count());
@@ -631,13 +675,13 @@ mod tests {
         assert_eq!(2, r.lines().count());
         assert_eq!(2, r.byte_slice(..).lines().count());
 
-        let r = Rope::from("\n\n\n\n");
-        assert_eq!(4, r.lines().count());
-        assert_eq!(4, r.byte_slice(..).lines().count());
-
         let r = Rope::from("\n\n\n");
         assert_eq!(3, r.lines().count());
         assert_eq!(3, r.byte_slice(..).lines().count());
+
+        let r = Rope::from("\n\n\n\n");
+        assert_eq!(4, r.lines().count());
+        assert_eq!(4, r.byte_slice(..).lines().count());
 
         let r = Rope::from("\n\n\na");
         assert_eq!(4, r.lines().count());
@@ -683,8 +727,8 @@ mod tests {
     #[test]
     fn lines_3() {
         let s = "This is a piece\nof text that's not \ngonna fit\nin\none \
-                 chunk\nand it also\r\nhas mixed\r\n line breaks\n and a \
-                 trailing\nline break.";
+                 chunk\nand it also\r\nhas mixed\r\n line breaks\n and no \
+                 trailing\nline breaks.";
 
         let rope = Rope::from(s);
         let slice = rope.byte_slice(..);
@@ -716,5 +760,25 @@ mod tests {
                 assert_eq!(slice_line, s_line);
             }
         }
+    }
+
+    #[test]
+    fn lines_cursed() {
+        let s = CURSED_LIPSUM;
+        let r = Rope::from(s);
+
+        assert_eq!(r.lines().count(), s.lines().count());
+        assert_eq!(r.byte_slice(..).lines().count(), s.lines().count());
+
+        for (l1, l2) in r.lines().zip(s.lines()) {
+            assert_eq!(l1, l2);
+        }
+
+        // TODO: uncomment this once we can iterate through lines from the
+        // back.
+        //
+        // for (l1, l2) in r.lines().rev().zip(s.lines().rev()) {
+        //     assert_eq!(l1, l2);
+        // }
     }
 }
