@@ -451,6 +451,7 @@ impl<'a> Iterator for Lines<'a> {
     }
 }
 
+#[doc(hidden)]
 #[cfg(feature = "graphemes")]
 pub use graphemes::Graphemes;
 
@@ -478,10 +479,10 @@ mod graphemes {
         yielded_in_forward_chunk: usize,
 
         /// TODO: docs
-        current_backward: &'a str,
+        _backward_chunk: &'a str,
 
         /// TODO: docs
-        backward_byte_idx: usize,
+        _to_be_yielded_in_backward_chunk: usize,
 
         /// TODO: docs
         yielded_forward: usize,
@@ -504,8 +505,8 @@ mod graphemes {
                 forward_chunk: "",
                 yielded_in_forward_chunk: 0,
                 offset_of_forward_chunk: 0,
-                current_backward: "",
-                backward_byte_idx: 0,
+                _backward_chunk: "",
+                _to_be_yielded_in_backward_chunk: 0,
                 yielded_forward: 0,
                 yielded_backward: 0,
                 total_bytes: rope.byte_len(),
@@ -522,8 +523,8 @@ mod graphemes {
                 forward_chunk: "",
                 yielded_in_forward_chunk: 0,
                 offset_of_forward_chunk: 0,
-                current_backward: "",
-                backward_byte_idx: 0,
+                _backward_chunk: "",
+                _to_be_yielded_in_backward_chunk: 0,
                 yielded_forward: 0,
                 yielded_backward: 0,
                 total_bytes: slice.byte_len(),
@@ -1002,6 +1003,7 @@ mod tests {
             assert_eq!(None, graphemes.next());
         }
 
+        #[ignore]
         #[test]
         fn graphemes_two_flags() {
             // Each flag is made by 2 4-byte codepoints, for a total of 16

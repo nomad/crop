@@ -60,6 +60,7 @@ impl Rope {
     }
 
     /// TODO: docs
+    #[doc(hidden)]
     #[cfg(feature = "graphemes")]
     #[inline]
     pub fn graphemes(&self) -> crate::iter::Graphemes<'_> {

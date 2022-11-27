@@ -48,6 +48,7 @@ impl<'a> RopeSlice<'a> {
     }
 
     /// TODO: docs
+    #[doc(hidden)]
     #[cfg(feature = "graphemes")]
     #[inline]
     pub fn graphemes(&'a self) -> crate::iter::Graphemes<'a> {
