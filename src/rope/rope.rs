@@ -60,6 +60,13 @@ impl Rope {
     }
 
     /// TODO: docs
+    #[cfg(feature = "graphemes")]
+    #[inline]
+    pub fn graphemes(&self) -> crate::iter::Graphemes<'_> {
+        crate::iter::Graphemes::from(self)
+    }
+
+    /// TODO: docs
     #[inline]
     pub fn insert(&mut self, after_byte: usize, _text: &str) {
         assert!(after_byte <= self.byte_len());

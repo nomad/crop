@@ -5,20 +5,20 @@ use crate::tree::{Leaves, Units};
 /// TODO: docs
 #[derive(Clone)]
 pub struct Chunks<'a> {
-    chunks: Leaves<'a, { Rope::fanout() }, TextChunk>,
+    leaves: Leaves<'a, { Rope::fanout() }, TextChunk>,
 }
 
 impl<'a> From<&'a Rope> for Chunks<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        Self { chunks: rope.root().leaves() }
+        Self { leaves: rope.root().leaves() }
     }
 }
 
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chunks<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
-        Self { chunks: slice.tree_slice().leaves() }
+        Self { leaves: slice.tree_slice().leaves() }
     }
 }
 
@@ -27,12 +27,12 @@ impl<'a> Iterator for Chunks<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.chunks.next().map(std::ops::Deref::deref)
+        self.leaves.next().map(std::ops::Deref::deref)
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let exact = self.chunks.len();
+        let exact = self.leaves.len();
         (exact, Some(exact))
     }
 }
@@ -40,7 +40,7 @@ impl<'a> Iterator for Chunks<'a> {
 impl<'a> DoubleEndedIterator for Chunks<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.chunks.next_back().map(std::ops::Deref::deref)
+        self.leaves.next_back().map(std::ops::Deref::deref)
     }
 }
 
@@ -449,6 +449,49 @@ impl<'a> Iterator for Lines<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         self.units.next().map(RopeSlice::new)
     }
+}
+
+#[cfg(feature = "graphemes")]
+pub use graphemes::Graphemes;
+
+#[cfg(feature = "graphemes")]
+mod graphemes {
+    use std::borrow::Cow;
+
+    use unicode_segmentation;
+
+    use super::*;
+
+    /// TODO: docs
+    #[derive(Clone)]
+    pub struct Graphemes<'a> {
+        chunks: Chunks<'a>,
+    }
+
+    impl<'a> From<&'a Rope> for Graphemes<'a> {
+        #[inline]
+        fn from(rope: &'a Rope) -> Self {
+            Self { chunks: rope.chunks() }
+        }
+    }
+
+    impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Graphemes<'a> {
+        #[inline]
+        fn from(slice: &'a RopeSlice<'b>) -> Self {
+            Self { chunks: slice.chunks() }
+        }
+    }
+
+    impl<'a> Iterator for Graphemes<'a> {
+        type Item = Cow<'a, str>;
+
+        #[inline]
+        fn next(&mut self) -> Option<Self::Item> {
+            todo!()
+        }
+    }
+
+    impl<'a> std::iter::FusedIterator for Graphemes<'a> {}
 }
 
 impl<'a> std::iter::FusedIterator for Lines<'a> {}

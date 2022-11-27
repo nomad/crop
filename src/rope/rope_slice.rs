@@ -48,6 +48,13 @@ impl<'a> RopeSlice<'a> {
     }
 
     /// TODO: docs
+    #[cfg(feature = "graphemes")]
+    #[inline]
+    pub fn graphemes(&'a self) -> crate::iter::Graphemes<'a> {
+        crate::iter::Graphemes::from(self)
+    }
+
+    /// TODO: docs
     #[inline]
     pub fn line_len(&self) -> usize {
         todo!()
