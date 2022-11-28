@@ -41,6 +41,7 @@ pub trait Metric<L: Leaf>:
 
     /// TODO: docs
     #[allow(unused_variables)]
+    #[allow(clippy::type_complexity)]
     fn split_left<'a>(
         slice: &'a L::Slice,
         up_to: Self,
@@ -56,6 +57,7 @@ pub trait Metric<L: Leaf>:
 
     /// TODO: docs
     #[allow(unused_variables)]
+    #[allow(clippy::type_complexity)]
     fn split_right<'a>(
         slice: &'a L::Slice,
         from: Self,
@@ -72,7 +74,11 @@ pub trait Metric<L: Leaf>:
     /// Slice the leaf in the given range. This method should be implemented
     /// only if it makes sense to take "part of a leaf".
     #[allow(unused_variables)]
-    fn slice<'a>(leaf: &'a L::Slice, range: Range<Self>) -> &'a L::Slice {
+    fn slice<'a>(
+        leaf: &'a L::Slice,
+        range: Range<Self>,
+        summary: &L::Summary,
+    ) -> (&'a L::Slice, L::Summary) {
         unimplemented!(
             "Trying to slice {leaf:?} in the {range:?} range, but {} cannot \
              be sliced by {}",

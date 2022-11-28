@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::{Inode, Leaf, Leaves, Metric, Node, Summarize, Units};
+use super::{Inode, Leaf, Leaves, Metric, Node, Units};
 
 /// TODO: docs
 #[derive(Debug)]
@@ -76,11 +76,10 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     {
         match node {
             Node::Leaf(leaf) => {
-                let slice = M::slice(leaf.value().borrow(), range);
-                Self {
-                    span: SliceSpan::Single(slice),
-                    summary: slice.summarize(),
-                }
+                let (slice, summary) =
+                    M::slice(leaf.value().borrow(), range, leaf.summary());
+
+                Self { span: SliceSpan::Single(slice), summary }
             },
 
             Node::Internal(inode) => {
@@ -116,12 +115,10 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
                 SliceSpan::Empty => panic!("TODO: explain why"),
 
                 SliceSpan::Single(slice) => {
-                    let sliced = M::slice(slice, range);
+                    let (slice, summary) =
+                        M::slice(slice, range, self.summary());
 
-                    Self {
-                        summary: sliced.summarize(),
-                        span: SliceSpan::Single(sliced),
-                    }
+                    Self { span: SliceSpan::Single(slice), summary }
                 },
 
                 SliceSpan::Multi { start, internals, end } => {
@@ -157,10 +154,10 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 }
 
 /// TODO: docs
-fn tree_slice_from_range_in_inode<'a, const N: usize, L, M>(
-    inode: &'a Inode<N, L>,
+fn tree_slice_from_range_in_inode<const N: usize, L, M>(
+    inode: &Inode<N, L>,
     range: Range<M>,
-) -> TreeSlice<'a, N, L>
+) -> TreeSlice<'_, N, L>
 where
     L: Leaf,
     M: Metric<L>,
@@ -199,8 +196,9 @@ where
             // The starting slice contains the start of the range.
             if start_size >= range.end {
                 // The starting slice also contains the end of the range.
-                let slice = M::slice(start_slice, range);
-                let summary = slice.summarize();
+                let (slice, summary) =
+                    M::slice(start_slice, range, start_summary);
+
                 return TreeSlice { span: SliceSpan::Single(slice), summary };
             } else {
                 let (_, start_slice, start_summary) =
@@ -255,6 +253,7 @@ where
 }
 
 /// TODO: docs
+#[allow(clippy::collapsible_else_if, clippy::too_many_arguments)]
 fn set_slice_span_from_range_in_nodes_rec<'a, const N: usize, L, M>(
     nodes: &'a [Arc<Node<N, L>>],
     range: Range<M>,
@@ -338,11 +337,11 @@ fn set_slice_span_from_range_in_nodes_rec<'a, const N: usize, L, M>(
                             // The end of the range is also contained in this
                             // leaf so the final slice only spans this single
                             // leaf.
-                            let slice = M::slice(
+                            let (slice, slice_summary) = M::slice(
                                 leaf.value().borrow(),
                                 range.start - *measured..range.end - *measured,
+                                leaf.summary(),
                             );
-                            let slice_summary = slice.summarize();
                             *final_span = Some(SliceSpan::Single(slice));
                             *final_summary = slice_summary;
                             *span_is_some = true;

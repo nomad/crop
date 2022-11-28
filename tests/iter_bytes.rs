@@ -88,8 +88,8 @@ fn bytes_cursed() {
     let s = CURSED_LIPSUM;
     let r = Rope::from(s);
 
-    assert_eq!(r.bytes().count(), s.bytes().count());
-    assert_eq!(r.byte_slice(..).bytes().count(), s.bytes().count());
+    assert_eq!(r.bytes().count(), s.bytes().len());
+    assert_eq!(r.byte_slice(..).bytes().count(), s.bytes().len());
 
     for (b1, b2) in r.bytes().zip(s.bytes()) {
         assert_eq!(b1, b2);

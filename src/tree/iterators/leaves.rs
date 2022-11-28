@@ -387,7 +387,7 @@ fn next_leaves_backward<'a, const N: usize, L: Leaf>(
                     return None;
                 } else {
                     *root_idx -= 1;
-                    match &*root_nodes[*root_idx as usize] {
+                    match &*root_nodes[*root_idx] {
                         Node::Internal(inode) => {
                             break inode;
                         },
@@ -395,8 +395,7 @@ fn next_leaves_backward<'a, const N: usize, L: Leaf>(
                             // The previous root is itself a leaf. We return a
                             // slice containing only this node.
                             return Some(
-                                &root_nodes[*root_idx as usize
-                                    ..*root_idx as usize + 1],
+                                &root_nodes[*root_idx..*root_idx + 1],
                             );
                         },
                     }

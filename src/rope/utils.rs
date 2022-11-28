@@ -9,7 +9,7 @@ use super::{TextSlice, TextSummary};
 /// This is used in the `PartialEq` implementation between `Rope`/`RopeSlice`s
 /// and strings. It's assumed that if we get this far `chunks` and `s` have the
 /// same number of bytes.
-pub(super) fn chunks_eq_str<'a>(chunks: Chunks<'a>, s: &str) -> bool {
+pub(super) fn chunks_eq_str(chunks: Chunks<'_>, s: &str) -> bool {
     let mut checked = 0;
     for chunk in chunks {
         if chunk != &s[checked..(checked + chunk.len())] {
@@ -26,9 +26,9 @@ pub(super) fn chunks_eq_str<'a>(chunks: Chunks<'a>, s: &str) -> bool {
 /// This is used in the `PartialEq` implementation between `Rope`s and
 /// `RopeSlice`s. It's assumed that if we get this far both chunks yield the
 /// same number of bytes.
-pub(super) fn chunks_eq_chunks<'a, 'b>(
-    mut lhs: Chunks<'a>,
-    mut rhs: Chunks<'b>,
+pub(super) fn chunks_eq_chunks(
+    mut lhs: Chunks<'_>,
+    mut rhs: Chunks<'_>,
 ) -> bool {
     let mut left_chunk = lhs.next().unwrap_or("").as_bytes();
     let mut right_chunk = rhs.next().unwrap_or("").as_bytes();
@@ -98,6 +98,7 @@ where
 /// returning the left and right slices together with their summary if they are
 /// not empty. The line break itself, be it a `\n` or a `\r\n`, is not part of
 /// any of the 2 returned slices.
+#[allow(clippy::type_complexity)]
 pub(super) fn split_slice_at_line_break<'a>(
     chunk: &'a TextSlice,
     line_break: usize,
@@ -140,11 +141,11 @@ pub(super) fn split_slice_at_line_break<'a>(
 }
 
 /// TODO: docs
-pub(super) fn slice_between_line_breaks<'a>(
-    chunk: &'a TextSlice,
+pub(super) fn slice_between_line_breaks(
+    chunk: &TextSlice,
     start: usize,
     end: usize,
-) -> &'a TextSlice {
+) -> &'_ TextSlice {
     debug_assert!(start < end);
 
     let byte_start = str_indices::lines_lf::to_byte_idx(chunk, start);

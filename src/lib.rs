@@ -1,3 +1,5 @@
+#![allow(clippy::explicit_auto_deref)]
+#![allow(clippy::module_inception)]
 #![feature(iter_next_chunk)]
 
 mod rope;

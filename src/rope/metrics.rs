@@ -63,7 +63,7 @@ impl Metric<TextChunk> for ByteMetric {
     ) -> (&'a TextSlice, TextSummary, Option<(&'a TextSlice, TextSummary)>)
     {
         if up_to == chunk.len() {
-            (chunk, summary.clone(), None)
+            (chunk, *summary, None)
         } else {
             let left = chunk[..up_to].into();
             let right = chunk[up_to..].into();
@@ -79,7 +79,7 @@ impl Metric<TextChunk> for ByteMetric {
     ) -> (Option<(&'a TextSlice, TextSummary)>, &'a TextSlice, TextSummary)
     {
         if from == 0 {
-            (None, chunk, summary.clone())
+            (None, chunk, *summary)
         } else {
             let left = chunk[..from].into();
             let right = chunk[from..].into();
@@ -88,8 +88,13 @@ impl Metric<TextChunk> for ByteMetric {
     }
 
     #[inline]
-    fn slice(chunk: &TextSlice, range: Range<Self>) -> &TextSlice {
-        chunk[range.start.0..range.end.0].into()
+    fn slice<'a>(
+        chunk: &'a TextSlice,
+        range: Range<Self>,
+        _summary: &TextSummary,
+    ) -> (&'a TextSlice, TextSummary) {
+        let slice = chunk[range.start.0..range.end.0].into();
+        (slice, slice.summarize())
     }
 }
 
@@ -175,11 +180,16 @@ impl Metric<TextChunk> for LineMetric {
     }
 
     #[inline]
-    fn slice(
-        chunk: &TextSlice,
-        Range { start, end }: Range<Self>,
-    ) -> &TextSlice {
-        slice_between_line_breaks(chunk, start.0, end.0)
+    fn slice<'a>(
+        chunk: &'a TextSlice,
+        Range { start: LineMetric(start), end: LineMetric(end) }: Range<Self>,
+        _summary: &TextSummary,
+    ) -> (&'a TextSlice, TextSummary) {
+        let slice = slice_between_line_breaks(chunk, start, end);
+        (
+            slice,
+            TextSummary { bytes: slice.len(), line_breaks: start - end - 1 },
+        )
     }
 }
 
