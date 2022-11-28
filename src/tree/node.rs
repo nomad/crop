@@ -5,6 +5,13 @@ pub(super) enum Node<const N: usize, L: Leaf> {
     Leaf(super::node_leaf::Leaf<L>),
 }
 
+impl<const N: usize, L: Leaf + Default> Default for Node<N, L> {
+    #[inline]
+    fn default() -> Self {
+        Node::Leaf(super::node_leaf::Leaf::default())
+    }
+}
+
 impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {

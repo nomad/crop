@@ -4,6 +4,7 @@ use std::sync::Arc;
 use super::{Inode, Leaf, Leaves, Metric, Node, TreeSlice, Units};
 
 /// TODO: docs
+#[derive(Default)]
 pub struct Tree<const FANOUT: usize, L: Leaf> {
     pub(super) root: Arc<Node<FANOUT, L>>,
 }

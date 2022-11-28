@@ -14,7 +14,7 @@ const ROPE_FANOUT: usize = 8;
 const ROPE_FANOUT: usize = 2;
 
 /// TODO: docs
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Rope {
     root: Tree<ROPE_FANOUT, TextChunk>,
     last_byte_is_newline: bool,
@@ -118,7 +118,7 @@ impl Rope {
     /// TODO: docs
     #[inline]
     pub fn new() -> Self {
-        Self::from("")
+        Self::default()
     }
 
     pub(super) fn root(&self) -> &Tree<ROPE_FANOUT, TextChunk> {
@@ -144,19 +144,21 @@ impl std::fmt::Display for Rope {
     }
 }
 
-impl Default for Rope {
-    #[inline]
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl From<&str> for Rope {
     #[inline]
     fn from(s: &str) -> Self {
-        Rope {
-            root: Tree::from_leaves(TextChunkIter::new(s)),
-            last_byte_is_newline: matches!(s.as_bytes().last(), Some(b'\n')),
+        if s.is_empty() {
+            // Building a rope from empty string has to be special-cased
+            // because `TextChunkIter` would yield 0 items.
+            Rope::new()
+        } else {
+            Rope {
+                root: Tree::from_leaves(TextChunkIter::new(s)),
+                last_byte_is_newline: matches!(
+                    s.as_bytes().last(),
+                    Some(b'\n')
+                ),
+            }
         }
     }
 }

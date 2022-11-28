@@ -1,11 +1,12 @@
 use super::Summarize;
 
+#[derive(Default)]
 pub(super) struct Leaf<L: Summarize> {
     value: L,
     summary: L::Summary,
 }
 
-impl<Leaf: Summarize> std::fmt::Debug for self::Leaf<Leaf> {
+impl<L: Summarize> std::fmt::Debug for Leaf<L> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if !f.alternate() {
             f.debug_struct("Leaf")
@@ -18,17 +19,17 @@ impl<Leaf: Summarize> std::fmt::Debug for self::Leaf<Leaf> {
     }
 }
 
-impl<Leaf: Summarize> self::Leaf<Leaf> {
-    pub(super) fn from_value(value: Leaf) -> Self {
+impl<L: Summarize> Leaf<L> {
+    pub(super) fn from_value(value: L) -> Self {
         Self { summary: value.summarize(), value }
     }
 
     #[inline]
-    pub(super) fn summary(&self) -> &Leaf::Summary {
+    pub(super) fn summary(&self) -> &L::Summary {
         &self.summary
     }
 
-    pub(super) fn value(&self) -> &Leaf {
+    pub(super) fn value(&self) -> &L {
         &self.value
     }
 }

@@ -10,6 +10,7 @@ const TEXT_CHUNK_MAX_BYTES: usize = 1024;
 #[cfg(test)]
 const TEXT_CHUNK_MAX_BYTES: usize = 4;
 
+#[derive(Default)]
 pub(super) struct TextChunk {
     text: String,
 }
