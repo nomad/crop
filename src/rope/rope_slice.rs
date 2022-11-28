@@ -81,7 +81,7 @@ impl<'a> RopeSlice<'a> {
         Lines::from(self)
     }
 
-    /// Returns `true` if the `Rope`'s byte length is zero.
+    /// Returns `true` if the `RopeSlice`'s byte length is zero.
     ///
     /// # Examples
     ///

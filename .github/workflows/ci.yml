@@ -29,6 +29,14 @@ jobs:
           components: clippy
       - run: cargo clippy --all-targets --all-features -- -D warnings
 
+  docs:
+    name: docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo doc --all-features
+
   format:
     name: format
     runs-on: ubuntu-latest

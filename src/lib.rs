@@ -1,5 +1,6 @@
 #![allow(clippy::explicit_auto_deref)]
 #![allow(clippy::module_inception)]
+#![deny(rustdoc::broken_intra_doc_links)]
 #![feature(iter_next_chunk)]
 
 mod rope;
