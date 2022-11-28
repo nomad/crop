@@ -2,8 +2,8 @@ use super::Summarize;
 
 #[derive(Default)]
 pub(super) struct Leaf<L: Summarize> {
-    value: L,
-    summary: L::Summary,
+    pub(super) value: L,
+    pub(super) summary: L::Summary,
 }
 
 impl<L: Summarize> std::fmt::Debug for Leaf<L> {

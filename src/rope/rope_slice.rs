@@ -9,7 +9,7 @@ use crate::tree::TreeSlice;
 /// TODO: docs
 #[derive(Clone)]
 pub struct RopeSlice<'a> {
-    tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
+    pub(super) tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
 }
 
 impl<'a> RopeSlice<'a> {

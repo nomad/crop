@@ -273,3 +273,13 @@ impl<'a> std::cmp::PartialEq<Rope> for std::borrow::Cow<'a, str> {
 }
 
 impl std::cmp::Eq for Rope {}
+
+impl<'a> From<RopeSlice<'a>> for Rope {
+    #[inline]
+    fn from(rope_slice: RopeSlice<'a>) -> Rope {
+        Rope {
+            root: Tree::from(rope_slice.tree_slice),
+            last_byte_is_newline: false, // TODO
+        }
+    }
+}

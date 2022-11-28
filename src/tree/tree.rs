@@ -1,6 +1,8 @@
 use std::ops::Range;
 use std::sync::Arc;
 
+use super::node_leaf;
+use super::tree_slice::SliceSpan;
 use super::{Inode, Leaf, Leaves, Metric, Node, TreeSlice, Units};
 
 /// TODO: docs
@@ -27,6 +29,26 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Tree<N, L> {
     }
 }
 
+impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
+    for Tree<FANOUT, L>
+{
+    #[inline]
+    fn from(tree_slice: TreeSlice<'a, FANOUT, L>) -> Tree<FANOUT, L> {
+        match tree_slice.span {
+            SliceSpan::Empty => todo!(),
+
+            SliceSpan::Single(slice) => Self::new_leaf_with_summary(
+                slice.to_owned(),
+                tree_slice.summary,
+            ),
+
+            SliceSpan::Multi { start, internals, end } => {
+                todo!()
+            },
+        }
+    }
+}
+
 impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     /// # Panics
     ///
@@ -48,9 +70,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         }
 
         if leaves.len() == 1 {
-            let leaf =
-                super::node_leaf::Leaf::from_value(leaves.next().unwrap());
-            return Tree { root: Arc::new(Node::Leaf(leaf)) };
+            return Self::new_leaf(leaves.next().unwrap());
         }
 
         Tree { root: Arc::new(Node::Internal(Inode::from_leaves(leaves))) }
@@ -60,6 +80,24 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
         Leaves::from(self)
+    }
+
+    fn new_leaf(leaf: L) -> Self {
+        Self {
+            root: Arc::new(Node::Leaf(node_leaf::Leaf {
+                summary: leaf.summarize(),
+                value: leaf,
+            })),
+        }
+    }
+
+    fn new_leaf_with_summary(leaf: L, summary: L::Summary) -> Self {
+        Self {
+            root: Arc::new(Node::Leaf(node_leaf::Leaf {
+                value: leaf,
+                summary,
+            })),
+        }
     }
 
     /// TODO: docs
