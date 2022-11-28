@@ -86,6 +86,8 @@ impl<'a> RopeSlice<'a> {
     /// # Examples
     ///
     /// ```
+    /// use crop::Rope;
+    ///
     /// let r = Rope::from("");
     /// assert!(r.byte_slice(..).is_empty());
     ///
@@ -209,26 +211,3 @@ impl<'a, 'b> std::cmp::PartialEq<RopeSlice<'a>> for std::borrow::Cow<'b, str> {
 }
 
 impl<'a> std::cmp::Eq for RopeSlice<'a> {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn empty_slice() {
-        let r = Rope::from("");
-        let s = r.byte_slice(..);
-        assert!(s.is_empty());
-    }
-
-    #[test]
-    fn grapheme_slice() {
-        let r = Rope::from("🐕‍🦺");
-
-        assert_eq!(11, r.byte_slice(..).byte_len());
-
-        assert_eq!('🐕'.to_string(), r.byte_slice(0..4));
-        assert_eq!('‍'.to_string(), r.byte_slice(4..7));
-        assert_eq!('🦺'.to_string(), r.byte_slice(7..11));
-    }
-}

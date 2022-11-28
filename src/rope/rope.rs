@@ -79,6 +79,8 @@ impl Rope {
     /// # Examples
     ///
     /// ```
+    /// use crop::Rope;
+    ///
     /// let r = Rope::from("");
     /// assert!(r.is_empty());
     ///
@@ -269,85 +271,3 @@ impl<'a> std::cmp::PartialEq<Rope> for std::borrow::Cow<'a, str> {
 }
 
 impl std::cmp::Eq for Rope {}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const TINY: &str = include_str!("../../benches/tiny.txt");
-    const SMALL: &str = include_str!("../../benches/small.txt");
-    const MEDIUM: &str = include_str!("../../benches/medium.txt");
-    const LARGE: &str = include_str!("../../benches/large.txt");
-
-    #[test]
-    fn empty_rope() {
-        let r = Rope::from("");
-        assert!(r.is_empty());
-    }
-
-    #[test]
-    fn byte_slice() {
-        let r = Rope::from("Hello there");
-
-        let s = r.byte_slice(..);
-        assert_eq!(11, s.byte_len());
-
-        let s = s.byte_slice(0..5);
-        assert_eq!(5, s.byte_len());
-
-        let t = "Hello there this is a really long line that I'm gonna use \
-                 to test this fucking slicing methods that we got going on \
-                 well hope this shit works 'cause if it doesn't I'm gonna \
-                 fucking lose it ok bye :)";
-
-        let r = Rope::from(t);
-
-        let s = r.byte_slice(14..79);
-        assert_eq!(65, s.byte_len());
-        assert_eq!(&t[14..79], s);
-
-        let s = r.byte_slice(0..11);
-        assert_eq!(11, s.byte_len());
-
-        let s = r.byte_slice(0..=10);
-        assert_eq!(11, s.byte_len());
-    }
-
-    #[test]
-    fn line_slice() {
-        let r = Rope::from("Hello world");
-        assert_eq!(1, r.line_len());
-        assert_eq!("Hello world", r.line_slice(..));
-
-        let r = Rope::from("Hello world\n");
-        assert_eq!(1, r.line_len());
-        assert_eq!("Hello world", r.line_slice(..));
-
-        let r = Rope::from("Hello world\nthis is \na test");
-        assert_eq!("Hello world", r.line_slice(..1));
-        assert_eq!("Hello world\nthis is", r.line_slice(..2));
-        assert_eq!("Hello world\nthis is\na test", r.line_slice(..3));
-        assert_eq!("Hello world\nthis is\na test", r.line_slice(..));
-
-        let r = Rope::from("Hello world\nthis is \na test\n");
-        assert_eq!("Hello world", r.line_slice(..1));
-        assert_eq!("Hello world\nthis is", r.line_slice(..2));
-        assert_eq!("Hello world\nthis is\na test", r.line_slice(..3));
-        assert_eq!("Hello world\nthis is\na test", r.line_slice(..));
-    }
-
-    #[test]
-    fn partial_eq() {
-        for s in ["This is a service dog: 🐕‍🦺", TINY, SMALL, MEDIUM, LARGE]
-        {
-            let r = Rope::from(s);
-
-            assert_eq!(r, r);
-            assert_eq!(r.byte_slice(..), r.byte_slice(..));
-
-            assert_eq!(r, s);
-            assert_eq!(r.byte_slice(..), s);
-            assert_eq!(r, r.byte_slice(..));
-        }
-    }
-}
