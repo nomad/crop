@@ -121,12 +121,14 @@ impl Rope {
         Self::default()
     }
 
+    #[inline]
     pub(super) fn root(&self) -> &Tree<ROPE_FANOUT, TextChunk> {
         &self.root
     }
 }
 
 impl std::fmt::Debug for Rope {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // TODO: escape \r, \n, etc.
         f.write_str("Rope(\"")?;
@@ -136,6 +138,7 @@ impl std::fmt::Debug for Rope {
 }
 
 impl std::fmt::Display for Rope {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         for chunk in self.chunks() {
             f.write_str(chunk)?;

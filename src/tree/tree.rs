@@ -82,6 +82,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         Leaves::from(self)
     }
 
+    #[inline]
     fn new_leaf(leaf: L) -> Self {
         Self {
             root: Arc::new(Node::Leaf(node_leaf::Leaf {
@@ -91,6 +92,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         }
     }
 
+    #[inline]
     fn new_leaf_with_summary(leaf: L, summary: L::Summary) -> Self {
         Self {
             root: Arc::new(Node::Leaf(node_leaf::Leaf {

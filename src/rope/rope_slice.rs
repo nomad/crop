@@ -99,12 +99,14 @@ impl<'a> RopeSlice<'a> {
         self.byte_len() == 0
     }
 
+    #[inline]
     pub(super) fn new(
         tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
     ) -> Self {
         Self { tree_slice }
     }
 
+    #[inline]
     pub(super) fn tree_slice(
         &'a self,
     ) -> &'a TreeSlice<'a, { Rope::fanout() }, TextChunk> {

@@ -236,6 +236,7 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
     }
 }
 
+#[inline]
 fn next_leaves_forward<'a, const N: usize, L: Leaf>(
     root_nodes: &'a [Arc<Node<N, L>>],
     root_idx: &mut isize,
@@ -300,6 +301,7 @@ fn next_leaves_forward<'a, const N: usize, L: Leaf>(
 impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
     for Leaves<'a, FANOUT, L>
 {
+    #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.yielded_forward + self.yielded_backward == self.total_leaves {
             return None;
@@ -357,6 +359,7 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
     }
 }
 
+#[inline]
 fn next_leaves_backward<'a, const N: usize, L: Leaf>(
     root_nodes: &'a [Arc<Node<N, L>>],
     root_idx: &mut usize,

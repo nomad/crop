@@ -128,6 +128,7 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
 {
     type Item = TreeSlice<'a, FANOUT, L>;
 
+    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let start = self.start.take();
 
@@ -327,6 +328,7 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
     }
 }
 
+#[inline]
 fn go_to_next_leaf_forward<'a, const N: usize, L: Leaf>(
     root_nodes: &'a [Arc<Node<N, L>>],
     root_idx: &mut isize,
@@ -387,6 +389,7 @@ fn go_to_next_leaf_forward<'a, const N: usize, L: Leaf>(
 /// `summary` and nodes into `internals` for all nodes with 0 measure. If
 /// there's a next unit after `path` it returns the final slice and its
 /// summary, otherwise it'll return `None`.
+#[inline]
 fn go_to_next_unit_while_accumulating<
     'a,
     const N: usize,
@@ -521,6 +524,7 @@ fn go_to_next_unit_while_accumulating<
 /// the nodes after `path` have measure zero (so all the
 /// `if M::measure(_) == M::zero()` are assumed to be `true`), and it pushes
 /// `&Arc<Node>`s to `internals` instead of `Arc<Node>`.
+#[inline]
 fn accumulate_to_end<'a, const N: usize, L: Leaf, M: Metric<L>>(
     root_nodes: &'a [Arc<Node<N, L>>],
     root_idx: &mut isize,

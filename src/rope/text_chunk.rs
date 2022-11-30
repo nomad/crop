@@ -33,6 +33,7 @@ impl From<String> for TextChunk {
 }
 
 impl Debug for TextChunk {
+    #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.text)
     }
@@ -123,6 +124,7 @@ pub(super) struct TextChunkIter<'a> {
 }
 
 impl<'a> TextChunkIter<'a> {
+    #[inline]
     pub(super) fn new(str: &'a str) -> Self {
         Self { str }
     }
@@ -167,6 +169,7 @@ impl<'a> Iterator for TextChunkIter<'a> {
 }
 
 impl<'a> ExactSizeIterator for TextChunkIter<'a> {
+    #[inline]
     fn len(&self) -> usize {
         if self.str.len() > TEXT_CHUNK_MAX_BYTES {
             2

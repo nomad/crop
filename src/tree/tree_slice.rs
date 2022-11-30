@@ -63,10 +63,12 @@ impl<'a, const N: usize, L: Leaf> Clone for SliceSpan<'a, N, L> {
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
+    #[inline]
     pub(super) fn empty() -> Self {
         Self { span: SliceSpan::Empty, summary: L::Summary::default() }
     }
 
+    #[inline]
     pub(super) fn from_range_in_node<M>(
         node: &'a Node<FANOUT, L>,
         range: Range<M>,
@@ -154,6 +156,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 }
 
 /// TODO: docs
+#[inline]
 fn tree_slice_from_range_in_inode<const N: usize, L, M>(
     inode: &Inode<N, L>,
     range: Range<M>,
@@ -178,6 +181,7 @@ where
 }
 
 /// TODO: docs
+#[inline]
 fn tree_slice_from_range_in_multi_span<'a, const N: usize, L, M>(
     start_slice: &'a L::Slice,
     start_summary: &L::Summary,
@@ -253,6 +257,7 @@ where
 }
 
 /// TODO: docs
+#[inline]
 #[allow(clippy::collapsible_else_if, clippy::too_many_arguments)]
 fn set_slice_span_from_range_in_nodes_rec<'a, const N: usize, L, M>(
     nodes: &'a [Arc<Node<N, L>>],
@@ -394,6 +399,7 @@ struct StackVec<T> {
 }
 
 impl<T> Clone for StackVec<T> {
+    #[inline]
     fn clone(&self) -> Self {
         Self { ptr: self.ptr, len: self.len, capacity: self.capacity }
     }
@@ -402,6 +408,7 @@ impl<T> Clone for StackVec<T> {
 impl<T> Copy for StackVec<T> {}
 
 impl<T> StackVec<T> {
+    #[inline]
     fn new() -> Self {
         let mut vec = Vec::new();
         let stack = Self {
@@ -413,6 +420,7 @@ impl<T> StackVec<T> {
         stack
     }
 
+    #[inline]
     unsafe fn push(&mut self, value: T) {
         let mut vec = Vec::from_raw_parts(self.ptr, self.len, self.capacity);
         vec.push(value);
@@ -422,6 +430,7 @@ impl<T> StackVec<T> {
         std::mem::forget(vec);
     }
 
+    #[inline]
     unsafe fn into_vec(self) -> Vec<T> {
         Vec::from_raw_parts(self.ptr, self.len, self.capacity)
     }

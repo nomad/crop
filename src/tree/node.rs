@@ -34,6 +34,7 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Node<N, L> {
+    #[inline]
     pub(super) unsafe fn as_internal_unchecked(&self) -> &Inode<N, L> {
         debug_assert!(
             self.is_internal(),
@@ -48,6 +49,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    #[inline]
     pub(super) unsafe fn as_leaf_unchecked(
         &self,
     ) -> &super::node_leaf::Leaf<L> {
@@ -64,6 +66,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    #[inline]
     pub(super) fn depth(&self) -> usize {
         match self {
             Node::Internal(inode) => inode.depth(),
@@ -71,6 +74,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    #[inline]
     pub(super) fn leaves(&self) -> usize {
         match self {
             Node::Internal(inode) => inode.leaves(),
@@ -78,14 +82,17 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    #[inline]
     pub(super) fn is_internal(&self) -> bool {
         matches!(self, Node::Internal(_))
     }
 
+    #[inline]
     pub(super) fn is_leaf(&self) -> bool {
         matches!(self, Node::Leaf(_))
     }
 
+    #[inline]
     pub(super) fn summary(&self) -> &L::Summary {
         match self {
             Node::Internal(inode) => inode.summary(),

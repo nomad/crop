@@ -7,6 +7,7 @@ pub(super) struct Leaf<L: Summarize> {
 }
 
 impl<L: Summarize> std::fmt::Debug for Leaf<L> {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if !f.alternate() {
             f.debug_struct("Leaf")
@@ -20,6 +21,7 @@ impl<L: Summarize> std::fmt::Debug for Leaf<L> {
 }
 
 impl<L: Summarize> Leaf<L> {
+    #[inline]
     pub(super) fn from_value(value: L) -> Self {
         Self { summary: value.summarize(), value }
     }
@@ -29,6 +31,7 @@ impl<L: Summarize> Leaf<L> {
         &self.summary
     }
 
+    #[inline]
     pub(super) fn value(&self) -> &L {
         &self.value
     }

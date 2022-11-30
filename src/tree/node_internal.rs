@@ -25,6 +25,7 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Inode<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Default for Inode<N, L> {
+    #[inline]
     fn default() -> Self {
         Self {
             children: Vec::with_capacity(N),
@@ -36,14 +37,17 @@ impl<const N: usize, L: Leaf> Default for Inode<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Inode<N, L> {
+    #[inline]
     pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
         &self.children
     }
 
+    #[inline]
     pub(super) fn depth(&self) -> usize {
         self.depth
     }
 
+    #[inline]
     pub(super) fn leaves(&self) -> usize {
         self.leaves
     }
@@ -51,6 +55,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// # Panics
     ///
     /// This function will panic if the iterator yields more than `N` items.
+    #[inline]
     fn from_children<I>(children: I) -> Self
     where
         I: IntoIterator<Item = Arc<Node<N, L>>>,
@@ -75,6 +80,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         inode
     }
 
+    #[inline]
     pub(super) fn from_leaves<I>(leaves: I) -> Self
     where
         I: IntoIterator<Item = L>,
@@ -140,6 +146,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 ///
 /// Called by the `Debug` impl of [`Inode`] when using the pretty-print
 /// modifier (i.e. `{:#?}`).
+#[inline]
 fn pretty_print_inode<const N: usize, L: Leaf>(
     inode: &Inode<N, L>,
     shifts: &mut String,
