@@ -1,3 +1,4 @@
+use std::fmt::Write;
 use std::ops::{Bound, RangeBounds};
 
 use super::iterators::Chunks;
@@ -70,6 +71,33 @@ pub(super) fn chunks_eq_chunks(
             }
         }
     }
+}
+
+/// Iterates over the string slices yielded by [`Chunks`], writing the debug
+/// output of each chunk to a formatter.
+#[inline]
+pub(super) fn debug_chunks(
+    chunks: Chunks<'_>,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    for chunk in chunks {
+        // This is basically the Debug impl of a string slice except it doesn't
+        // enclose the output in double quotes and also escapes single quotes.
+        let mut from = 0;
+        for (idx, char) in chunk.char_indices() {
+            let esc = char.escape_debug();
+            if esc.len() != 1 {
+                f.write_str(&chunk[from..idx])?;
+                for c in esc {
+                    f.write_char(c)?;
+                }
+                from = idx + char.len_utf8();
+            }
+        }
+        f.write_str(&chunk[from..])?;
+    }
+
+    Ok(())
 }
 
 /// TODO: docs

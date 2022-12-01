@@ -119,7 +119,7 @@ impl<'a> std::fmt::Debug for RopeSlice<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         // TODO: escape \r, \n, etc.
         f.write_str("RopeSlice(\"")?;
-        std::fmt::Display::fmt(self, f)?;
+        debug_chunks(self.chunks(), f)?;
         f.write_str("\")")
     }
 }

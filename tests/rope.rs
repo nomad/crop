@@ -14,7 +14,17 @@ fn empty_rope() {
 }
 
 #[test]
-fn partial_eq() {
+fn trait_debug() {
+    let s = "A string with \"quotes\" and\ttabs and escaped \
+             escapes\\and\nnewlines\r\nand Unicode \u{2122} and emojis 😋";
+
+    let r = Rope::from(s);
+
+    assert_eq!(format!("Rope({s:?})"), format!("{r:?}"));
+}
+
+#[test]
+fn trait_partial_eq() {
     for s in ["This is a service dog: 🐕‍🦺", TINY, SMALL, MEDIUM, LARGE]
     {
         let r = Rope::from(s);
