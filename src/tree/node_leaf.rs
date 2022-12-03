@@ -1,12 +1,12 @@
 use super::Summarize;
 
 #[derive(Default)]
-pub(super) struct Leaf<L: Summarize> {
+pub(super) struct Leaf<L: super::Leaf> {
     pub(super) value: L,
     pub(super) summary: L::Summary,
 }
 
-impl<L: Summarize> std::fmt::Debug for Leaf<L> {
+impl<L: super::Leaf> std::fmt::Debug for Leaf<L> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if !f.alternate() {
@@ -20,10 +20,15 @@ impl<L: Summarize> std::fmt::Debug for Leaf<L> {
     }
 }
 
-impl<L: Summarize> Leaf<L> {
+impl<L: super::Leaf> Leaf<L> {
     #[inline]
     pub(super) fn from_value(value: L) -> Self {
         Self { summary: value.summarize(), value }
+    }
+
+    #[inline]
+    pub fn slice(&self) -> &L::Slice {
+        self.value.borrow()
     }
 
     #[inline]

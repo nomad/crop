@@ -76,6 +76,25 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         Tree { root: Arc::new(Node::Internal(Inode::from_leaves(leaves))) }
     }
 
+    /// Returns the leaf at `measure` (0-indexed) together with its `M` offset.
+    ///
+    /// Note: this function doesn't do any bounds checks. Those are expected to
+    /// be performed by the caller.
+    #[inline]
+    pub fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
+    where
+        M: Metric<L>,
+    {
+        debug_assert!(
+            measure < M::measure(self.summary()),
+            "Trying to get the leaf at {:?}, but this tree is only {:?} long",
+            measure,
+            M::measure(self.summary()),
+        );
+
+        self.root.leaf_at_measure(measure)
+    }
+
     /// Returns an iterator over the leaves of this tree.
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {

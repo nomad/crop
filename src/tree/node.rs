@@ -1,4 +1,4 @@
-use super::{Inode, Leaf};
+use super::{Inode, Leaf, Metric};
 
 pub(super) enum Node<const N: usize, L: Leaf> {
     Internal(Inode<N, L>),
@@ -71,6 +71,43 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         match self {
             Node::Internal(inode) => inode.depth(),
             Node::Leaf(_) => 0,
+        }
+    }
+
+    /// Note: doesn't do bounds checks.
+    #[inline]
+    pub fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
+    where
+        M: Metric<L>,
+    {
+        debug_assert!(measure < M::measure(self.summary()));
+
+        let mut measured = M::zero();
+
+        let mut node = self;
+
+        'outer: loop {
+            match node {
+                Node::Internal(inode) => {
+                    for child in inode.children() {
+                        let this = M::measure(child.summary());
+                        if measure < measured + this {
+                            node = &**child;
+                            continue 'outer;
+                        } else {
+                            measured += this;
+                        }
+                    }
+                    unreachable!(
+                        "Didn't I tell you to do bounds checks before \
+                         callign this function?"
+                    );
+                },
+
+                Node::Leaf(leaf) => {
+                    return (leaf.slice(), measured);
+                },
+            }
         }
     }
 

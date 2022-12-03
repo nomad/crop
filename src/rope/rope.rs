@@ -21,6 +21,24 @@ pub struct Rope {
 }
 
 impl Rope {
+    /// Returns the byte at `byte_idx`.
+    #[inline]
+    pub fn byte(&self, byte_idx: usize) -> u8 {
+        if byte_idx >= self.byte_len() {
+            panic!(
+                "Trying to get a byte past the end of the rope: the byte \
+                 length is {} but the byte index is {}",
+                self.byte_len(),
+                byte_idx
+            );
+        }
+
+        let (chunk, ByteMetric(chunk_idx)) =
+            self.root.leaf_at_measure(ByteMetric(byte_idx));
+
+        chunk.as_bytes()[byte_idx - chunk_idx]
+    }
+
     /// TODO: docs
     #[inline]
     pub fn byte_len(&self) -> usize {
@@ -69,8 +87,11 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
-    pub fn insert(&mut self, after_byte: usize, _text: &str) {
+    pub fn insert<T: AsRef<str>>(&mut self, after_byte: usize, text: T) {
         assert!(after_byte <= self.byte_len());
+
+        let text = text.as_ref();
+
         todo!()
     }
 
