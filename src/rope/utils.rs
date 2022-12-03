@@ -102,7 +102,7 @@ pub(super) fn debug_chunks(
 
 /// TODO: docs
 #[inline]
-pub(super) fn range_to_tuple<B>(
+pub(super) fn range_bounds_to_start_end<B>(
     range: B,
     lo: usize,
     hi: usize,

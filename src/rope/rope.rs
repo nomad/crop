@@ -26,8 +26,8 @@ impl Rope {
     pub fn byte(&self, byte_idx: usize) -> u8 {
         if byte_idx >= self.byte_len() {
             panic!(
-                "Trying to get a byte past the end of the rope: the byte \
-                 length is {} but the byte index is {}",
+                "Trying to index past the end of the Rope: the byte length \
+                 is {} but the byte index is {}",
                 self.byte_len(),
                 byte_idx
             );
@@ -51,7 +51,18 @@ impl Rope {
     where
         R: RangeBounds<usize>,
     {
-        let (start, end) = range_to_tuple(byte_range, 0, self.byte_len());
+        let (start, end) =
+            range_bounds_to_start_end(byte_range, 0, self.byte_len());
+
+        if end > self.byte_len() {
+            panic!(
+                "Trying to slice past the end of the Rope: the byte length \
+                 is {} but the end of the byte range is {}",
+                self.byte_len(),
+                end
+            );
+        }
+
         RopeSlice::new(self.root.slice(ByteMetric(start)..ByteMetric(end)))
     }
 
@@ -126,7 +137,8 @@ impl Rope {
     where
         R: RangeBounds<usize>,
     {
-        let (start, end) = range_to_tuple(line_range, 0, self.line_len());
+        let (start, end) =
+            range_bounds_to_start_end(line_range, 0, self.line_len());
         RopeSlice::new(self.root.slice(LineMetric(start)..LineMetric(end)))
     }
 
