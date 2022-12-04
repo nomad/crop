@@ -99,6 +99,15 @@ impl Rope {
         Chunks::from(self)
     }
 
+    /// TODO: docs
+    #[inline]
+    pub fn delete<R>(&mut self, byte_range: R)
+    where
+        R: RangeBounds<usize>,
+    {
+        todo!()
+    }
+
     pub(super) const fn fanout() -> usize {
         ROPE_FANOUT
     }
@@ -232,15 +241,6 @@ impl Rope {
     #[inline]
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// TODO: docs
-    #[inline]
-    pub fn remove<R>(&mut self, byte_range: R)
-    where
-        R: RangeBounds<usize>,
-    {
-        todo!()
     }
 
     /// TODO: docs
