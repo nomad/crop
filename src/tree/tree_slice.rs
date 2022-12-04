@@ -219,7 +219,6 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                             range.start - *measured..range.end - *measured,
                             leaf.summary(),
                         );
-                        slice.root = node;
                         slice.summary = start_summary.clone();
                         slice.start_slice = start_slice;
                         slice.start_summary = start_summary;
@@ -230,6 +229,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                             range.start - *measured,
                             leaf.summary(),
                         );
+                        *measured += measure;
                         slice.summary = start_summary.clone();
                         slice.start_slice = start_slice;
                         slice.start_summary = start_summary;

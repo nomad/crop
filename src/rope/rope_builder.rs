@@ -7,7 +7,10 @@ pub struct RopeBuilder {}
 impl RopeBuilder {
     /// TODO: docs
     #[inline]
-    pub fn append(mut self, text: &str) -> Self {
+    pub fn append<T>(mut self, text: T) -> Self
+    where
+        T: AsRef<str>,
+    {
         self
     }
 
