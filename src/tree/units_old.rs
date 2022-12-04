@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::tree::tree_slice::SliceSpan;
+use crate::tree::old_tree_slice::SliceSpan;
 use crate::tree::{Inode, Leaf, Metric, Node, Tree, TreeSlice};
 
 /// An iterator over consecutive units of a particular metric.

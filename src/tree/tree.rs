@@ -2,7 +2,6 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use super::node_leaf;
-use super::tree_slice::SliceSpan;
 use super::{Inode, Leaf, Leaves, Metric, Node, TreeSlice, Units};
 
 /// TODO: docs
@@ -34,18 +33,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
 {
     #[inline]
     fn from(tree_slice: TreeSlice<'a, FANOUT, L>) -> Tree<FANOUT, L> {
-        match tree_slice.span {
-            SliceSpan::Empty => todo!(),
-
-            SliceSpan::Single(slice) => Self::new_leaf_with_summary(
-                slice.to_owned(),
-                tree_slice.summary,
-            ),
-
-            SliceSpan::Multi { start, internals, end } => {
-                todo!()
-            },
-        }
+        todo!()
     }
 }
 
@@ -126,16 +114,13 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
     where
         M: Metric<L>,
+        for<'d> &'d L::Slice: Default,
     {
-        assert!(M::zero() <= range.start);
-        assert!(range.start <= range.end);
-        assert!(range.end <= M::measure(self.summary()));
+        debug_assert!(M::zero() <= range.start);
+        debug_assert!(range.start <= range.end);
+        // debug_assert!(range.end <= M::measure(self.summary()));
 
-        if range.start == range.end {
-            TreeSlice::empty()
-        } else {
-            TreeSlice::from_range_in_node(&*self.root, range)
-        }
+        TreeSlice::from_range_in_root(&self.root, range)
     }
 
     /// TODO: docs

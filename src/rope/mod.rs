@@ -3,10 +3,12 @@
 pub(crate) mod iterators;
 mod metrics;
 mod rope;
+mod rope_builder;
 mod rope_slice;
 mod text_chunk;
 mod utils;
 
 pub use rope::Rope;
+pub use rope_builder::RopeBuilder;
 pub use rope_slice::RopeSlice;
 use text_chunk::{TextChunk, TextChunkIter, TextSlice, TextSummary};

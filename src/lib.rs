@@ -13,4 +13,4 @@ pub mod iter {
     pub use crate::rope::iterators::*;
 }
 
-pub use rope::{Rope, RopeSlice};
+pub use rope::{Rope, RopeBuilder, RopeSlice};

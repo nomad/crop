@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::tree::tree_slice::SliceSpan;
+use crate::tree::old_tree_slice::SliceSpan;
 use crate::tree::{Inode, Leaf, Node, Tree, TreeSlice};
 
 /// An iterator over the leaves of trees or tree slices.

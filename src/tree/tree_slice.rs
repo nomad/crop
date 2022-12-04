@@ -3,91 +3,85 @@ use std::sync::Arc;
 
 use super::{Inode, Leaf, Leaves, Metric, Node, Units};
 
-/// TODO: docs
 #[derive(Debug)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
-    pub(super) span: SliceSpan<'a, FANOUT, L>,
-    pub(super) summary: L::Summary,
+    /// TODO: docs
+    root: &'a Arc<Node<FANOUT, L>>,
+
+    /// TODO: docs
+    offset: L::Summary,
+
+    /// TODO: docs
+    summary: L::Summary,
+
+    /// TODO: docs
+    start_slice: &'a L::Slice,
+
+    /// TODO: docs
+    start_summary: L::Summary,
+
+    /// TODO: docs
+    end_slice: &'a L::Slice,
+
+    /// TODO: docs
+    end_summary: L::Summary,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
     #[inline]
     fn clone(&self) -> Self {
-        TreeSlice { span: self.span.clone(), summary: self.summary.clone() }
-    }
-}
-
-#[derive(Debug)]
-pub(super) enum SliceSpan<'a, const N: usize, L: Leaf> {
-    /// The slice is fully contained within a single leaf of the tree.
-    Single(&'a L::Slice),
-
-    /// The slice spans multiple leaves. In this case we store:
-    ///
-    /// - `start`: the leaf slice where this span starts together with its
-    /// summary;
-    ///
-    /// - `internals`: a vector of tree nodes that are fully contained in the
-    /// span. These nodes can have different depths and their order reflects
-    /// the logical order of the slice, i.e. the first internal is the node
-    /// right after `start` and the last is the one before `end`. This vector
-    /// can be empty if the slice spans two consecutive leaves with no other
-    /// node between them;
-    ///
-    /// - `end`: the leaf slice where this span ends together with its summary.
-    Multi {
-        start: (&'a L::Slice, L::Summary),
-        internals: Vec<Arc<Node<N, L>>>,
-        end: (&'a L::Slice, L::Summary),
-    },
-
-    /// The slice is empty.
-    Empty,
-}
-
-impl<'a, const N: usize, L: Leaf> Clone for SliceSpan<'a, N, L> {
-    #[inline]
-    fn clone(&self) -> Self {
-        match self {
-            SliceSpan::Single(slice) => SliceSpan::Single(*slice),
-
-            SliceSpan::Multi { start, internals, end } => SliceSpan::Multi {
-                start: (start.0, start.1.clone()),
-                internals: internals.clone(),
-                end: (end.0, end.1.clone()),
-            },
-
-            SliceSpan::Empty => SliceSpan::Empty,
+        TreeSlice {
+            offset: self.offset.clone(),
+            summary: self.summary.clone(),
+            start_summary: self.start_summary.clone(),
+            end_summary: self.end_summary.clone(),
+            ..*self
         }
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
-    #[inline]
-    pub(super) fn empty() -> Self {
-        Self { span: SliceSpan::Empty, summary: L::Summary::default() }
-    }
+impl<'a, const FANOUT: usize, L: Leaf> Copy for TreeSlice<'a, FANOUT, L> where
+    L::Summary: Copy
+{
+}
 
+impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L>
+where
+    for<'d> &'d L::Slice: Default,
+{
+    /// Note: doesn't do bounds checks.
     #[inline]
-    pub(super) fn from_range_in_node<M>(
-        node: &'a Node<FANOUT, L>,
+    pub(super) fn from_range_in_root<M>(
+        root: &'a Arc<Node<FANOUT, L>>,
         range: Range<M>,
     ) -> Self
     where
         M: Metric<L>,
     {
-        match node {
-            Node::Leaf(leaf) => {
-                let (slice, summary) =
-                    M::slice(leaf.value().borrow(), range, leaf.summary());
+        debug_assert!(M::zero() <= range.start);
+        debug_assert!(range.start <= range.end);
+        // debug_assert!(range.end <= M::measure(self.summary()));
 
-                Self { span: SliceSpan::Single(slice), summary }
-            },
+        let mut tree_slice = Self {
+            root,
+            offset: L::Summary::default(),
+            summary: L::Summary::default(),
+            start_slice: Default::default(),
+            start_summary: L::Summary::default(),
+            end_slice: Default::default(),
+            end_summary: L::Summary::default(),
+        };
 
-            Node::Internal(inode) => {
-                tree_slice_from_range_in_inode(inode, range)
-            },
-        }
+        tree_slice_from_range_in_root_rec(
+            root,
+            range,
+            &mut M::zero(),
+            &mut tree_slice,
+            &mut false,
+            &mut false,
+        );
+
+        tree_slice
     }
 
     /// TODO: docs
@@ -96,50 +90,38 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         Leaves::from(self)
     }
 
-    /// TODO: docs
+    /// Note: doesn't do bounds checks.
     #[inline]
     pub fn slice<M>(&'a self, range: Range<M>) -> TreeSlice<'a, FANOUT, L>
     where
         M: Metric<L>,
     {
-        assert!(M::zero() <= range.start);
-        assert!(range.start <= range.end);
+        debug_assert!(M::zero() <= range.start);
+        debug_assert!(range.start <= range.end);
+        // debug_assert!(range.end <= M::measure(self.summary()));
 
-        // TODO: this doesn't work for the line metric, e.g. we should be able
-        // to slice a string w/ no newlines in the 0..1 range but its measure
-        // is 0.
-        assert!(range.end <= M::measure(self.summary()));
+        let mut tree_slice = Self {
+            root: self.root,
+            offset: L::Summary::default(),
+            summary: L::Summary::default(),
+            start_slice: Default::default(),
+            start_summary: L::Summary::default(),
+            end_slice: Default::default(),
+            end_summary: L::Summary::default(),
+        };
 
-        if range.start == range.end {
-            Self::empty()
-        } else {
-            match &self.span {
-                SliceSpan::Empty => panic!("TODO: explain why"),
+        tree_slice_from_range_in_root_rec(
+            self.root,
+            range,
+            &mut M::measure(&self.offset),
+            &mut tree_slice,
+            &mut false,
+            &mut false,
+        );
 
-                SliceSpan::Single(slice) => {
-                    let (slice, summary) =
-                        M::slice(slice, range, self.summary());
-
-                    Self { span: SliceSpan::Single(slice), summary }
-                },
-
-                SliceSpan::Multi { start, internals, end } => {
-                    let (start_slice, start_summary) = start;
-                    let (end_slice, end_summary) = end;
-                    tree_slice_from_range_in_multi_span(
-                        *start_slice,
-                        start_summary,
-                        internals,
-                        *end_slice,
-                        end_summary,
-                        range,
-                    )
-                },
-            }
-        }
+        tree_slice
     }
 
-    /// TODO: docs
     #[inline]
     pub fn summary(&self) -> &L::Summary {
         &self.summary
@@ -155,283 +137,125 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 }
 
-/// TODO: docs
 #[inline]
-fn tree_slice_from_range_in_inode<const N: usize, L, M>(
-    inode: &Inode<N, L>,
-    range: Range<M>,
-) -> TreeSlice<'_, N, L>
-where
-    L: Leaf,
-    M: Metric<L>,
-{
-    let mut summary = L::Summary::default();
-    let mut span = None;
-    set_slice_span_from_range_in_nodes_rec(
-        inode.children(),
-        range,
-        &mut M::zero(),
-        &mut None,
-        &mut StackVec::new(),
-        &mut span,
-        &mut summary,
-        &mut false,
-    );
-    TreeSlice { span: span.unwrap(), summary }
-}
-
-/// TODO: docs
-#[inline]
-fn tree_slice_from_range_in_multi_span<'a, const N: usize, L, M>(
-    start_slice: &'a L::Slice,
-    start_summary: &L::Summary,
-    internals: &'a [Arc<Node<N, L>>],
-    end_slice: &'a L::Slice,
-    end_summary: &L::Summary,
-    range: Range<M>,
-) -> TreeSlice<'a, N, L>
-where
-    L: Leaf,
-    M: Metric<L>,
-{
-    let mut start = {
-        let start_size = M::measure(start_summary);
-        if start_size > range.start {
-            // The starting slice contains the start of the range.
-            if start_size >= range.end {
-                // The starting slice also contains the end of the range.
-                let (slice, summary) =
-                    M::slice(start_slice, range, start_summary);
-
-                return TreeSlice { span: SliceSpan::Single(slice), summary };
-            } else {
-                let (_, start_slice, start_summary) =
-                    M::split_right(start_slice, range.start, start_summary);
-                Some((start_slice, start_summary))
-            }
-        } else {
-            // The starting slice is not contained in the range.
-            None
-        }
-    };
-
-    let (mut measured, mut summary) = start
-        .as_ref()
-        .map(|(_, summary)| (M::measure(summary), summary.clone()))
-        .unwrap_or((M::zero(), L::Summary::default()));
-
-    let mut span = None;
-
-    let mut new_internals = StackVec::new();
-
-    set_slice_span_from_range_in_nodes_rec(
-        internals,
-        Range { start: range.start, end: range.end },
-        &mut measured,
-        &mut start,
-        &mut new_internals,
-        &mut span,
-        &mut summary,
-        &mut false,
-    );
-
-    if let Some(span) = span {
-        TreeSlice { span, summary }
-    } else {
-        let (start_slice, start_summary) = start.unwrap();
-
-        let (end_slice, end_summary, _) =
-            M::split_left(end_slice, range.end - measured, end_summary);
-
-        summary += &end_summary;
-
-        TreeSlice {
-            span: SliceSpan::Multi {
-                start: (start_slice, start_summary),
-                internals: unsafe { new_internals.into_vec() },
-                end: (end_slice, end_summary),
-            },
-            summary,
-        }
-    }
-}
-
-/// TODO: docs
-#[inline]
-#[allow(clippy::collapsible_else_if, clippy::too_many_arguments)]
-fn set_slice_span_from_range_in_nodes_rec<'a, const N: usize, L, M>(
-    nodes: &'a [Arc<Node<N, L>>],
+fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
+    node: &'a Arc<Node<N, L>>,
     range: Range<M>,
     measured: &mut M,
-    start_slice: &mut Option<(&'a L::Slice, L::Summary)>,
-    internals: &mut StackVec<Arc<Node<N, L>>>,
-    final_span: &mut Option<SliceSpan<'a, N, L>>,
-    final_summary: &mut L::Summary,
-    span_is_some: &mut bool,
+    slice: &mut TreeSlice<'a, N, L>,
+    found_start: &mut bool,
+    done: &mut bool,
 ) where
     L: Leaf,
     M: Metric<L>,
 {
-    for node in nodes {
-        // If the end of the slice has been found and the final span has been
-        // set there's nothing left to do.
-        if *span_is_some {
-            return;
-        }
-
-        match &**node {
-            Node::Internal(inode) => {
-                let measure = M::measure(inode.summary());
-
-                if start_slice.is_none() {
-                    // We're still looking for the leaf where the final span
-                    // starts.
-                    if *measured + measure > range.start {
-                        // This inode contains the starting leaf somewhere in
-                        // its subtree. Run this function again looping over
-                        // the inode's children.
-                        set_slice_span_from_range_in_nodes_rec(
-                            inode.children(),
-                            Range { start: range.start, end: range.end },
-                            measured,
-                            start_slice,
-                            internals,
-                            final_span,
-                            final_summary,
-                            span_is_some,
-                        );
-                    } else {
-                        // This inode comes before the starting leaf.
-                        *measured += measure;
-                    }
-                } else {
-                    // We've found the starting slice and now we're looking for
-                    // the leaf containing the end of the range.
-                    if *measured + measure >= range.end {
-                        // This inode contains the ending leaf somewhere in its
-                        // subtree. Run this function again looping over the
-                        // inode's children.
-                        set_slice_span_from_range_in_nodes_rec(
-                            inode.children(),
-                            Range { start: range.start, end: range.end },
-                            measured,
-                            start_slice,
-                            internals,
-                            final_span,
-                            final_summary,
-                            span_is_some,
-                        );
-                    } else {
-                        // This inode is fully contained in the final span. Add
-                        // the inode to the internals and update the final
-                        // summary.
-                        unsafe { internals.push(Arc::clone(node)) };
-                        *final_summary += inode.summary();
-                        *measured += measure;
-                    }
+    match &**node {
+        Node::Internal(inode) => {
+            for child in inode.children() {
+                // If the slice has been completed there's nothing left to do,
+                // simply unwind the call stack.
+                if *done {
+                    return;
                 }
-            },
 
-            Node::Leaf(leaf) => {
-                let measure = M::measure(leaf.summary());
+                let measure = M::measure(child.summary());
 
-                if start_slice.is_none() {
+                if !*found_start {
                     if *measured + measure > range.start {
-                        // This leaf is the starting one.
-                        if measure >= range.end - *measured {
-                            // The end of the range is also contained in this
-                            // leaf so the final slice only spans this single
-                            // leaf.
-                            let (slice, slice_summary) = M::slice(
-                                leaf.value().borrow(),
-                                range.start - *measured..range.end - *measured,
-                                leaf.summary(),
-                            );
-                            *final_span = Some(SliceSpan::Single(slice));
-                            *final_summary = slice_summary;
-                            *span_is_some = true;
-                            return;
-                        } else {
-                            let (_, start, start_summary) = M::split_right(
-                                leaf.value().borrow(),
-                                range.start - *measured,
-                                leaf.summary(),
-                            );
-                            *measured += M::measure(leaf.summary());
-                            *final_summary = start_summary.clone();
-                            *start_slice = Some((start, start_summary));
+                        // If the child contains the start of the range but not
+                        // the end then `node` is the deepest node that fully
+                        // contains the tree slice.
+                        if !(*measured + measure >= range.end) {
+                            slice.root = node;
                         }
+                        // This child contains the starting slice somewhere in
+                        // its subtree. Run this function again with this child
+                        // as the node.
+                        tree_slice_from_range_in_root_rec(
+                            child,
+                            Range { start: range.start, end: range.end },
+                            measured,
+                            slice,
+                            found_start,
+                            done,
+                        )
                     } else {
+                        // This child comes before the starting leaf.
+                        slice.offset += child.summary();
                         *measured += measure;
                     }
+                } else if *measured + measure >= range.end {
+                    // This child contains the ending leaf somewhere in its
+                    // subtree. Run this function again with this child as the
+                    // node.
+                    tree_slice_from_range_in_root_rec(
+                        child,
+                        Range { start: range.start, end: range.end },
+                        measured,
+                        slice,
+                        found_start,
+                        done,
+                    )
                 } else {
-                    if *measured + measure >= range.end {
-                        // This leaf is the ending one.
-                        let (end_slice, end_summary, _) = M::split_left(
-                            leaf.value().borrow(),
-                            range.end - *measured,
+                    // This is a node fully contained between the starting and
+                    // the ending slices.
+                    slice.summary += child.summary();
+                    *measured += measure;
+                }
+            }
+        },
+
+        Node::Leaf(leaf) => {
+            let measure = M::measure(leaf.summary());
+
+            if !*found_start {
+                if *measured + measure > range.start {
+                    // This leaf contains the starting slice.
+                    if measure >= range.end - *measured {
+                        // The end of the range is also contained in this leaf
+                        // so the final slice only spans this single leaf.
+                        let (start_slice, start_summary) = M::slice(
+                            leaf.slice(),
+                            range.start - *measured..range.end - *measured,
                             leaf.summary(),
                         );
-                        *final_summary += &end_summary;
-                        *final_span = Some(SliceSpan::Multi {
-                            start: start_slice.take().unwrap(),
-                            internals: unsafe { internals.into_vec() },
-                            end: (end_slice, end_summary),
-                        });
-                        *span_is_some = true;
-                        return;
+                        slice.root = node;
+                        slice.summary = start_summary.clone();
+                        slice.start_slice = start_slice;
+                        slice.start_summary = start_summary;
+                        *done = true;
                     } else {
-                        unsafe { internals.push(Arc::clone(node)) };
-                        *final_summary += leaf.summary();
-                        *measured += measure;
+                        let (_, start_slice, start_summary) = M::split_right(
+                            leaf.slice(),
+                            range.start - *measured,
+                            leaf.summary(),
+                        );
+                        slice.summary = start_summary.clone();
+                        slice.start_slice = start_slice;
+                        slice.start_summary = start_summary;
+                        *found_start = true;
                     }
+                } else {
+                    // This leaf comes before the starting leaf.
+                    slice.offset += leaf.summary();
+                    *measured += measure;
                 }
-            },
-        }
-    }
-}
-
-/// TODO: docs
-struct StackVec<T> {
-    ptr: *mut T,
-    len: usize,
-    capacity: usize,
-}
-
-impl<T> Clone for StackVec<T> {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self { ptr: self.ptr, len: self.len, capacity: self.capacity }
-    }
-}
-
-impl<T> Copy for StackVec<T> {}
-
-impl<T> StackVec<T> {
-    #[inline]
-    fn new() -> Self {
-        let mut vec = Vec::new();
-        let stack = Self {
-            ptr: vec.as_mut_ptr(),
-            len: vec.len(),
-            capacity: vec.capacity(),
-        };
-        std::mem::forget(vec);
-        stack
-    }
-
-    #[inline]
-    unsafe fn push(&mut self, value: T) {
-        let mut vec = Vec::from_raw_parts(self.ptr, self.len, self.capacity);
-        vec.push(value);
-        self.ptr = vec.as_mut_ptr();
-        self.len = vec.len();
-        self.capacity = vec.capacity();
-        std::mem::forget(vec);
-    }
-
-    #[inline]
-    unsafe fn into_vec(self) -> Vec<T> {
-        Vec::from_raw_parts(self.ptr, self.len, self.capacity)
+            } else if *measured + measure >= range.end {
+                // This leaf contains the ending slice.
+                let (end_slice, end_summary, _) = M::split_left(
+                    leaf.slice(),
+                    range.end - *measured,
+                    leaf.summary(),
+                );
+                slice.summary += &end_summary;
+                slice.end_slice = end_slice;
+                slice.end_summary = end_summary;
+                *done = true;
+            } else {
+                // This is a leaf between the starting and the ending slices.
+                slice.summary += leaf.summary();
+                *measured += measure;
+            }
+        },
     }
 }

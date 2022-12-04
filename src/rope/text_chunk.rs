@@ -4,10 +4,10 @@ use std::str;
 
 use crate::tree::{Leaf, Summarize};
 
-#[cfg(not(test))]
+#[cfg(all(not(test), not(feature = "integration_tests")))]
 const TEXT_CHUNK_MAX_BYTES: usize = 1024;
 
-#[cfg(test)]
+#[cfg(any(test, feature = "integration_tests"))]
 const TEXT_CHUNK_MAX_BYTES: usize = 4;
 
 #[derive(Default)]
@@ -65,6 +65,13 @@ impl Leaf for TextChunk {
 #[derive(Debug, PartialEq)]
 pub(super) struct TextSlice {
     text: str,
+}
+
+impl Default for &TextSlice {
+    #[inline]
+    fn default() -> Self {
+        "".into()
+    }
 }
 
 impl From<&str> for &TextSlice {

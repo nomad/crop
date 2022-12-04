@@ -7,7 +7,7 @@ use super::{Rope, TextChunk};
 use crate::tree::TreeSlice;
 
 /// TODO: docs
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct RopeSlice<'a> {
     pub(super) tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
 }
@@ -15,8 +15,38 @@ pub struct RopeSlice<'a> {
 impl<'a> RopeSlice<'a> {
     /// TODO: docs
     #[inline]
+    pub fn byte(&self, byte_idx: usize) -> u8 {
+        if byte_idx >= self.byte_len() {
+            panic!(
+                "Trying to index past the end of the RopeSlice: the byte \
+                 length is {} but the byte index is {}",
+                self.byte_len(),
+                byte_idx
+            );
+        }
+
+        todo!()
+    }
+
+    /// TODO: docs
+    #[inline]
     pub fn byte_len(&self) -> usize {
         self.tree_slice.summary().bytes
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn byte_of_line(&self, line_idx: usize) -> usize {
+        if line_idx >= self.line_len() {
+            panic!(
+                "Trying to index past the end of the RopeSlice: the line \
+                 length is {} but the line index is {}",
+                self.line_len(),
+                line_idx
+            );
+        }
+
+        todo!()
     }
 
     /// TODO: docs
@@ -40,26 +70,26 @@ impl<'a> RopeSlice<'a> {
         Self::new(self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)))
     }
 
-    /// TODO: docs
+    /// Returns an iterator over the bytes of this [`RopeSlice`].
     #[inline]
     pub fn bytes(&'a self) -> Bytes<'a> {
         Bytes::from(self)
     }
 
-    /// TODO: docs
+    /// Returns an iterator over the [`char`]s of this [`RopeSlice`].
     #[inline]
     pub fn chars(&'a self) -> Chars<'a> {
         Chars::from(self)
     }
 
-    /// TODO: docs
+    /// Returns an iterator over the chunks of this [`RopeSlice`].
     #[inline]
     pub fn chunks(&'a self) -> Chunks<'a> {
         Chunks::from(self)
     }
 
-    /// TODO: docs
-    #[doc(hidden)]
+    /// Returns an iterator over the extended grapheme clusters of this
+    /// [`RopeSlice`].
     #[cfg(feature = "graphemes")]
     #[inline]
     pub fn graphemes(&'a self) -> crate::iter::Graphemes<'a> {
@@ -68,29 +98,8 @@ impl<'a> RopeSlice<'a> {
 
     /// TODO: docs
     #[inline]
-    pub fn line_len(&self) -> usize {
+    pub fn is_char_boundary(&self, byte_idx: usize) -> bool {
         todo!()
-        // self.tree_slice.summary().line_breaks + 1
-        //     - (self.last_byte_is_newline as usize)
-    }
-
-    /// TODO: docs
-    #[inline]
-    pub fn line_slice<R>(&'a self, line_range: R) -> RopeSlice<'a>
-    where
-        R: RangeBounds<usize>,
-    {
-        let (start, end) =
-            range_bounds_to_start_end(line_range, 0, self.line_len());
-        RopeSlice::new(
-            self.tree_slice.slice(LineMetric(start)..LineMetric(end)),
-        )
-    }
-
-    /// TODO: docs
-    #[inline]
-    pub fn lines(&'a self) -> Lines<'a> {
-        Lines::from(self)
     }
 
     /// Returns `true` if the `RopeSlice`'s byte length is zero.
@@ -109,6 +118,81 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.byte_len() == 0
+    }
+
+    /// TODO: docs
+    #[cfg(feature = "graphemes")]
+    #[inline]
+    pub fn is_grapheme_boundary(&self, byte_idx: usize) -> bool {
+        todo!()
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn line(&'a self, line_idx: usize) -> RopeSlice<'a> {
+        if line_idx >= self.line_len() {
+            panic!(
+                "Trying to index past the end of the RopeSlice: the line \
+                 length is {} but the line index is {}",
+                self.line_len(),
+                line_idx
+            );
+        }
+
+        Self::new(
+            self.tree_slice
+                .slice(LineMetric(line_idx)..LineMetric(line_idx + 1)),
+        )
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn line_len(&self) -> usize {
+        todo!()
+        // self.tree_slice.summary().line_breaks + 1
+        //     - (self.last_byte_is_newline as usize)
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn line_of_byte(&self, byte_idx: usize) -> usize {
+        if byte_idx >= self.byte_len() {
+            panic!(
+                "Trying to index past the end of the RopeSlice: the byte \
+                 length is {} but the byte index is {}",
+                self.byte_len(),
+                byte_idx
+            );
+        }
+
+        todo!()
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn line_slice<R>(&'a self, line_range: R) -> RopeSlice<'a>
+    where
+        R: RangeBounds<usize>,
+    {
+        let (start, end) =
+            range_bounds_to_start_end(line_range, 0, self.line_len());
+
+        if end > self.line_len() {
+            panic!(
+                "Trying to slice past the end of the RopeSlice: the line \
+                 length is {} but the end of the line range is {}",
+                self.line_len(),
+                end
+            );
+        }
+
+        Self::new(self.tree_slice.slice(LineMetric(start)..LineMetric(end)))
+    }
+
+    /// Returns an iterator over the lines of this [`RopeSlice`].
+    #[inline]
+    pub fn lines(&'a self) -> Lines<'a> {
+        Lines::from(self)
     }
 
     #[inline]
