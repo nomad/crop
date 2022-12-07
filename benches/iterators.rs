@@ -32,6 +32,14 @@ fn iter_create(c: &mut Criterion) {
 fn iter_forward(c: &mut Criterion) {
     let mut group = c.benchmark_group("iter_forward");
 
+    group.bench_function("chunks", |bench| {
+        let r = Rope::from(LARGE);
+        let mut iter = r.chunks().cycle();
+        bench.iter(|| {
+            iter.next();
+        })
+    });
+
     group.bench_function("bytes", |bench| {
         let r = Rope::from(LARGE);
         let mut iter = r.bytes().cycle();
