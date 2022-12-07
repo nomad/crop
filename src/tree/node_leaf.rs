@@ -1,5 +1,3 @@
-use super::Summarize;
-
 #[derive(Default)]
 pub(super) struct Leaf<L: super::Leaf> {
     pub(super) value: L,
@@ -27,7 +25,7 @@ impl<L: super::Leaf> Leaf<L> {
     }
 
     #[inline]
-    pub fn slice(&self) -> &L::Slice {
+    pub fn as_slice(&self) -> &L::Slice {
         self.value.borrow()
     }
 

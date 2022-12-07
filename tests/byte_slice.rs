@@ -26,7 +26,7 @@ fn byte_slice() {
 
     let s = r.byte_slice(14..79);
     assert_eq!(65, s.byte_len());
-    assert_eq!(&t[14..79], s);
+    assert_eq!(s, &t[14..79]);
 
     let s = r.byte_slice(0..11);
     assert_eq!(11, s.byte_len());

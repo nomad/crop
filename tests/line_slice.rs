@@ -1,6 +1,12 @@
 use crop::Rope;
 
 #[test]
+fn empty() {
+    let r = Rope::from("foo");
+    assert!(!r.line_slice(0..1).is_empty());
+}
+
+#[test]
 fn line_slice() {
     let r = Rope::from("Hello world");
     assert_eq!(1, r.line_len());

@@ -141,17 +141,28 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::AddAssign;
+    use std::ops::{AddAssign, SubAssign};
 
     use super::*;
     use crate::tree::Summarize;
 
     #[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
-    pub struct Count(usize);
+    pub struct Count {
+        count: usize,
+        leaves: usize,
+    }
 
     impl<'a> AddAssign<&'a Self> for Count {
         fn add_assign(&mut self, rhs: &'a Self) {
-            self.0 += rhs.0;
+            self.count += rhs.count;
+            self.leaves += rhs.leaves;
+        }
+    }
+
+    impl<'a> SubAssign<&'a Self> for Count {
+        fn sub_assign(&mut self, rhs: &'a Self) {
+            self.count -= rhs.count;
+            self.leaves -= rhs.leaves;
         }
     }
 
@@ -159,15 +170,13 @@ mod tests {
         type Summary = Count;
 
         fn summarize(&self) -> Self::Summary {
-            Count(*self)
+            Count { count: *self, leaves: 1 }
         }
     }
 
-    impl Leaf for usize {
-        type Slice = Self;
-    }
+    type LeavesMetric = usize;
 
-    impl Metric<usize> for usize {
+    impl Metric<usize> for LeavesMetric {
         fn zero() -> Self {
             0
         }
@@ -177,13 +186,24 @@ mod tests {
         }
 
         fn measure(count: &Count) -> Self {
-            count.0
+            count.leaves
         }
+    }
+
+    impl Leaf for usize {
+        type BaseMetric = LeavesMetric;
+        type Slice = Self;
     }
 
     #[test]
     fn easy() {
         let tree = Tree::<4, usize>::from_leaves(0..20);
-        assert_eq!(Count(190), *tree.summary());
+        assert_eq!(190, tree.summary().count);
     }
+
+    // #[test]
+    // fn slice() {
+    //     let tree = Tree::<4, usize>::from_leaves(0..20);
+    //     assert_eq!(10, tree.slice(1..5).summary().count);
+    // }
 }

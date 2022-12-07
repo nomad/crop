@@ -105,14 +105,14 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                 },
 
                 Node::Leaf(leaf) => {
-                    return (leaf.slice(), measured);
+                    return (leaf.as_slice(), measured);
                 },
             }
         }
     }
 
     #[inline]
-    pub(super) fn leaves(&self) -> usize {
+    pub(super) fn num_leaves(&self) -> usize {
         match self {
             Node::Internal(inode) => inode.leaves(),
             Node::Leaf(_) => 1,

@@ -70,7 +70,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         let mut inode = Self::default();
 
         for child in children {
-            inode.leaves += child.leaves();
+            inode.leaves += child.num_leaves();
             inode.summary += child.summary();
             inode.children.push(child);
         }

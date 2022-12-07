@@ -1,30 +1,37 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::{Inode, Leaf, Leaves, Metric, Node, Units};
+use super::{Leaf, Leaves, Metric, Node, Units};
 
 #[derive(Debug)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     /// TODO: docs
-    root: &'a Arc<Node<FANOUT, L>>,
+    pub(super) root: &'a Arc<Node<FANOUT, L>>,
 
     /// TODO: docs
-    offset: L::Summary,
+    pub(super) offset: L::Summary,
 
     /// TODO: docs
-    summary: L::Summary,
+    pub(super) after: L::Summary,
 
     /// TODO: docs
-    start_slice: &'a L::Slice,
+    pub(super) summary: L::Summary,
 
     /// TODO: docs
-    start_summary: L::Summary,
+    pub(super) start_slice: &'a L::Slice,
 
     /// TODO: docs
-    end_slice: &'a L::Slice,
+    pub(super) start_summary: L::Summary,
 
     /// TODO: docs
-    end_summary: L::Summary,
+    pub(super) end_slice: &'a L::Slice,
+
+    /// TODO: docs
+    pub(super) end_summary: L::Summary,
+
+    /// The number of leaves included in this [`TreeSlice`] (including
+    /// the start and end slices). Used by the [`Leaves`] iterator.
+    num_leaves: usize,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
@@ -33,6 +40,7 @@ impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
         TreeSlice {
             offset: self.offset.clone(),
             summary: self.summary.clone(),
+            after: self.after.clone(),
             start_summary: self.start_summary.clone(),
             end_summary: self.end_summary.clone(),
             ..*self
@@ -43,6 +51,34 @@ impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
 impl<'a, const FANOUT: usize, L: Leaf> Copy for TreeSlice<'a, FANOUT, L> where
     L::Summary: Copy
 {
+}
+
+impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
+    /// TODO: docs
+    #[inline]
+    pub fn leaves(&'a self) -> Leaves<'a, FANOUT, L> {
+        Leaves::from(self)
+    }
+
+    /// Returns .
+    #[inline]
+    pub fn num_leaves(&'a self) -> usize {
+        self.num_leaves
+    }
+
+    #[inline]
+    pub fn summary(&self) -> &L::Summary {
+        &self.summary
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn units<M>(&'a self) -> Units<'a, FANOUT, L, M>
+    where
+        M: Metric<L>,
+    {
+        Units::from(self)
+    }
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L>
@@ -62,14 +98,18 @@ where
         debug_assert!(range.start <= range.end);
         // debug_assert!(range.end <= M::measure(self.summary()));
 
+        // TODO: consider using `MaybeUninit` instead of adding a `Default`
+        // bound on L::Slice.
         let mut tree_slice = Self {
             root,
             offset: L::Summary::default(),
             summary: L::Summary::default(),
+            after: root.summary().clone(),
             start_slice: Default::default(),
             start_summary: L::Summary::default(),
             end_slice: Default::default(),
             end_summary: L::Summary::default(),
+            num_leaves: 0,
         };
 
         tree_slice_from_range_in_root_rec(
@@ -84,12 +124,6 @@ where
         tree_slice
     }
 
-    /// TODO: docs
-    #[inline]
-    pub fn leaves(&'a self) -> Leaves<'a, FANOUT, L> {
-        Leaves::from(self)
-    }
-
     /// Note: doesn't do bounds checks.
     #[inline]
     pub fn slice<M>(&'a self, range: Range<M>) -> TreeSlice<'a, FANOUT, L>
@@ -100,14 +134,18 @@ where
         debug_assert!(range.start <= range.end);
         // debug_assert!(range.end <= M::measure(self.summary()));
 
+        // TODO: consider using `MaybeUninit` instead of adding a `Default`
+        // bound on L::Slice.
         let mut tree_slice = Self {
             root: self.root,
             offset: L::Summary::default(),
             summary: L::Summary::default(),
+            after: self.summary().clone(),
             start_slice: Default::default(),
             start_summary: L::Summary::default(),
             end_slice: Default::default(),
             end_summary: L::Summary::default(),
+            num_leaves: 0,
         };
 
         tree_slice_from_range_in_root_rec(
@@ -120,20 +158,6 @@ where
         );
 
         tree_slice
-    }
-
-    #[inline]
-    pub fn summary(&self) -> &L::Summary {
-        &self.summary
-    }
-
-    /// TODO: docs
-    #[inline]
-    pub fn units<M>(&'a self) -> Units<'a, FANOUT, L, M>
-    where
-        M: Metric<L>,
-    {
-        Units::from(self)
     }
 }
 
@@ -162,14 +186,14 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
 
                 if !*found_start {
                     if *measured + measure > range.start {
-                        // If the child contains the start of the range but not
-                        // the end then `node` is the deepest node that fully
-                        // contains the tree slice.
-                        if !(*measured + measure >= range.end) {
-                            slice.root = node;
-                        }
                         // This child contains the starting slice somewhere in
-                        // its subtree. Run this function again with this child
+                        // its subtree.
+                        if *measured + measure >= range.end {
+                            // If the child also contains the end of the range
+                            // then this is the new root.
+                            slice.root = child;
+                        }
+                        // Run this function again with this child
                         // as the node.
                         tree_slice_from_range_in_root_rec(
                             child,
@@ -182,6 +206,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                     } else {
                         // This child comes before the starting leaf.
                         slice.offset += child.summary();
+                        slice.after -= child.summary();
                         *measured += measure;
                     }
                 } else if *measured + measure >= range.end {
@@ -200,6 +225,8 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                     // This is a node fully contained between the starting and
                     // the ending slices.
                     slice.summary += child.summary();
+                    slice.after -= child.summary();
+                    slice.num_leaves += child.num_leaves();
                     *measured += measure;
                 }
             }
@@ -210,50 +237,58 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
 
             if !*found_start {
                 if *measured + measure > range.start {
-                    // This leaf contains the starting slice.
                     if measure >= range.end - *measured {
                         // The end of the range is also contained in this leaf
                         // so the final slice only spans this single leaf.
                         let (start_slice, start_summary) = M::slice(
-                            leaf.slice(),
+                            leaf.as_slice(),
                             range.start - *measured..range.end - *measured,
                             leaf.summary(),
                         );
                         slice.summary = start_summary.clone();
                         slice.start_slice = start_slice;
                         slice.start_summary = start_summary;
+                        slice.num_leaves = 1;
                         *done = true;
                     } else {
+                        // This leaf contains the starting slice but not the
+                        // ending one.
                         let (_, start_slice, start_summary) = M::split_right(
-                            leaf.slice(),
+                            leaf.as_slice(),
                             range.start - *measured,
                             leaf.summary(),
                         );
                         *measured += measure;
                         slice.summary = start_summary.clone();
+                        slice.after -= leaf.summary();
                         slice.start_slice = start_slice;
                         slice.start_summary = start_summary;
+                        slice.num_leaves = 1;
                         *found_start = true;
                     }
                 } else {
                     // This leaf comes before the starting leaf.
                     slice.offset += leaf.summary();
+                    slice.after -= leaf.summary();
                     *measured += measure;
                 }
             } else if *measured + measure >= range.end {
                 // This leaf contains the ending slice.
                 let (end_slice, end_summary, _) = M::split_left(
-                    leaf.slice(),
+                    leaf.as_slice(),
                     range.end - *measured,
                     leaf.summary(),
                 );
                 slice.summary += &end_summary;
+                slice.after -= leaf.summary();
                 slice.end_slice = end_slice;
                 slice.end_summary = end_summary;
+                slice.num_leaves += 1;
                 *done = true;
             } else {
                 // This is a leaf between the starting and the ending slices.
                 slice.summary += leaf.summary();
+                slice.num_leaves += 1;
                 *measured += measure;
             }
         },

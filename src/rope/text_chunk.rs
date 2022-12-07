@@ -1,7 +1,8 @@
 use std::fmt::{self, Debug};
-use std::ops::AddAssign;
+use std::ops::{AddAssign, SubAssign};
 use std::str;
 
+use super::metrics::ByteMetric;
 use crate::tree::{Leaf, Summarize};
 
 #[cfg(all(not(test), not(feature = "integration_tests")))]
@@ -59,6 +60,7 @@ impl Summarize for TextChunk {
 }
 
 impl Leaf for TextChunk {
+    type BaseMetric = ByteMetric;
     type Slice = TextSlice;
 }
 
@@ -123,6 +125,14 @@ impl<'a> AddAssign<&'a Self> for TextSummary {
     fn add_assign(&mut self, rhs: &'a Self) {
         self.bytes += rhs.bytes;
         self.line_breaks += rhs.line_breaks;
+    }
+}
+
+impl<'a> SubAssign<&'a Self> for TextSummary {
+    #[inline]
+    fn sub_assign(&mut self, rhs: &'a Self) {
+        self.bytes -= rhs.bytes;
+        self.line_breaks -= rhs.line_breaks;
     }
 }
 
