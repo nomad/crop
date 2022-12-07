@@ -131,7 +131,7 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
         }
         // TODO: explain this
         else if !self.first_been_yielded {
-            let (first, forward_leaves) = babagugu(
+            let (first, forward_leaves) = first_slice_forward(
                 self.root,
                 self.offset,
                 &mut self.forward_path,
@@ -186,7 +186,7 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
         }
         // TODO: explain this
         else if !self.last_been_yielded {
-            let (last, backward_leaves) = gugubaba(
+            let (last, backward_leaves) = first_slice_backward(
                 self.root,
                 self.after,
                 &mut self.backward_path,
@@ -219,7 +219,7 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
                 .as_leaf_unchecked()
         };
 
-        // Increase the current leaf index for the next iteration.
+        // Decrease the current leaf index for the next iteration.
         self.backward_leaf_idx -= 1;
 
         self.yielded += 1;
@@ -229,7 +229,7 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
 }
 
 #[inline]
-fn babagugu<'a, const N: usize, L: Leaf>(
+fn first_slice_forward<'a, const N: usize, L: Leaf>(
     root: &'a Node<N, L>,
     offset: L::BaseMetric,
     path: &mut Vec<(&'a Inode<N, L>, usize)>,
@@ -303,7 +303,7 @@ fn babagugu<'a, const N: usize, L: Leaf>(
 }
 
 #[inline]
-fn gugubaba<'a, const N: usize, L: Leaf>(
+fn first_slice_backward<'a, const N: usize, L: Leaf>(
     root: &'a Node<N, L>,
     offset: L::BaseMetric,
     path: &mut Vec<(&'a Inode<N, L>, usize)>,
