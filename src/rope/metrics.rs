@@ -1,7 +1,7 @@
 use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 
 use super::utils::*;
-use super::{TextChunk, TextSlice, TextSummary};
+use super::{ChunkSlice, ChunkSummary, RopeChunk};
 use crate::tree::{Metric, Summarize};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -39,7 +39,7 @@ impl SubAssign for ByteMetric {
     }
 }
 
-impl Metric<TextChunk> for ByteMetric {
+impl Metric<RopeChunk> for ByteMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
@@ -51,16 +51,16 @@ impl Metric<TextChunk> for ByteMetric {
     }
 
     #[inline]
-    fn measure(summary: &TextSummary) -> Self {
+    fn measure(summary: &ChunkSummary) -> Self {
         Self(summary.bytes)
     }
 
     #[inline]
     fn split_left<'a>(
-        chunk: &'a TextSlice,
+        chunk: &'a ChunkSlice,
         ByteMetric(up_to): Self,
-        summary: &TextSummary,
-    ) -> (&'a TextSlice, TextSummary, Option<(&'a TextSlice, TextSummary)>)
+        summary: &ChunkSummary,
+    ) -> (&'a ChunkSlice, ChunkSummary, Option<(&'a ChunkSlice, ChunkSummary)>)
     {
         if up_to == chunk.len() {
             (chunk, *summary, None)
@@ -73,10 +73,10 @@ impl Metric<TextChunk> for ByteMetric {
 
     #[inline]
     fn split_right<'a>(
-        chunk: &'a TextSlice,
+        chunk: &'a ChunkSlice,
         ByteMetric(from): Self,
-        summary: &TextSummary,
-    ) -> (Option<(&'a TextSlice, TextSummary)>, &'a TextSlice, TextSummary)
+        summary: &ChunkSummary,
+    ) -> (Option<(&'a ChunkSlice, ChunkSummary)>, &'a ChunkSlice, ChunkSummary)
     {
         if from == 0 {
             (None, chunk, *summary)
@@ -89,10 +89,10 @@ impl Metric<TextChunk> for ByteMetric {
 
     #[inline]
     fn slice<'a>(
-        chunk: &'a TextSlice,
+        chunk: &'a ChunkSlice,
         range: Range<Self>,
-        _summary: &TextSummary,
-    ) -> (&'a TextSlice, TextSummary) {
+        _summary: &ChunkSummary,
+    ) -> (&'a ChunkSlice, ChunkSummary) {
         let slice = chunk[range.start.0..range.end.0].into();
         (slice, slice.summarize())
     }
@@ -133,7 +133,7 @@ impl SubAssign for LineMetric {
     }
 }
 
-impl Metric<TextChunk> for LineMetric {
+impl Metric<RopeChunk> for LineMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
@@ -145,50 +145,50 @@ impl Metric<TextChunk> for LineMetric {
     }
 
     #[inline]
-    fn measure(summary: &TextSummary) -> Self {
+    fn measure(summary: &ChunkSummary) -> Self {
         Self(summary.line_breaks)
     }
 
     #[inline]
     fn split_left<'a>(
-        chunk: &'a TextSlice,
+        chunk: &'a ChunkSlice,
         LineMetric(up_to): Self,
-        summary: &TextSummary,
-    ) -> (&'a TextSlice, TextSummary, Option<(&'a TextSlice, TextSummary)>)
+        summary: &ChunkSummary,
+    ) -> (&'a ChunkSlice, ChunkSummary, Option<(&'a ChunkSlice, ChunkSummary)>)
     {
         let (left, right) = split_slice_at_line_break(chunk, up_to, summary);
 
         let (left, left_summary) =
-            left.unwrap_or(("".into(), TextSummary::default()));
+            left.unwrap_or(("".into(), ChunkSummary::default()));
 
         (left, left_summary, right)
     }
 
     #[inline]
     fn split_right<'a>(
-        chunk: &'a TextSlice,
+        chunk: &'a ChunkSlice,
         LineMetric(from): Self,
-        summary: &TextSummary,
-    ) -> (Option<(&'a TextSlice, TextSummary)>, &'a TextSlice, TextSummary)
+        summary: &ChunkSummary,
+    ) -> (Option<(&'a ChunkSlice, ChunkSummary)>, &'a ChunkSlice, ChunkSummary)
     {
         let (left, right) = split_slice_at_line_break(chunk, from, summary);
 
         let (right, right_summary) =
-            right.unwrap_or(("".into(), TextSummary::default()));
+            right.unwrap_or(("".into(), ChunkSummary::default()));
 
         (left, right, right_summary)
     }
 
     #[inline]
     fn slice<'a>(
-        chunk: &'a TextSlice,
+        chunk: &'a ChunkSlice,
         Range { start: LineMetric(start), end: LineMetric(end) }: Range<Self>,
-        _summary: &TextSummary,
-    ) -> (&'a TextSlice, TextSummary) {
+        _summary: &ChunkSummary,
+    ) -> (&'a ChunkSlice, ChunkSummary) {
         let slice = slice_between_line_breaks(chunk, start, end);
         (
             slice,
-            TextSummary { bytes: slice.len(), line_breaks: start - end - 1 },
+            ChunkSummary { bytes: slice.len(), line_breaks: start - end - 1 },
         )
     }
 }
@@ -251,7 +251,7 @@ mod tests {
             LineMetric::split_left(chunk, LineMetric(1), &chunk.summarize());
 
         assert_eq!("", left.deref());
-        assert_eq!(TextSummary::default(), summary);
+        assert_eq!(ChunkSummary::default(), summary);
         assert_eq!(None, right);
     }
 }

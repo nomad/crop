@@ -25,7 +25,7 @@ mod graphemes {
         // Each flag is made by 2 4-byte codepoints, for a total of 16
         // bytes.
         //
-        // Since 8 > TEXT_CHUNK_MAX_BYTES in test mode we should get owned
+        // Since 8 > ROPE_CHUNK_MAX_BYTES in test mode we should get owned
         // strings.
 
         let r = Rope::from("🇷🇸🇮🇴");

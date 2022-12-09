@@ -6,85 +6,85 @@ use super::metrics::ByteMetric;
 use crate::tree::{Leaf, Summarize};
 
 #[cfg(all(not(test), not(feature = "integration_tests")))]
-const TEXT_CHUNK_MAX_BYTES: usize = 1024;
+const ROPE_CHUNK_MAX_BYTES: usize = 1024;
 
 #[cfg(any(test, feature = "integration_tests"))]
-const TEXT_CHUNK_MAX_BYTES: usize = 4;
+const ROPE_CHUNK_MAX_BYTES: usize = 4;
 
 #[derive(Default)]
-pub(super) struct TextChunk {
+pub(super) struct RopeChunk {
     text: String,
 }
 
-impl TextChunk {
+impl RopeChunk {
     pub(super) const fn max_bytes() -> usize {
-        TEXT_CHUNK_MAX_BYTES
+        ROPE_CHUNK_MAX_BYTES
     }
 }
 
-impl From<String> for TextChunk {
+impl From<String> for RopeChunk {
     #[inline]
     fn from(text: String) -> Self {
         debug_assert!(
-            text.len() <= TEXT_CHUNK_MAX_BYTES
-                || !text.is_char_boundary(TEXT_CHUNK_MAX_BYTES)
+            text.len() <= ROPE_CHUNK_MAX_BYTES
+                || !text.is_char_boundary(ROPE_CHUNK_MAX_BYTES)
         );
         Self { text }
     }
 }
 
-impl Debug for TextChunk {
+impl Debug for RopeChunk {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{:?}", self.text)
     }
 }
 
-impl std::borrow::Borrow<TextSlice> for TextChunk {
+impl std::borrow::Borrow<ChunkSlice> for RopeChunk {
     #[inline]
-    fn borrow(&self) -> &TextSlice {
+    fn borrow(&self) -> &ChunkSlice {
         (&*self.text).into()
     }
 }
 
-impl Summarize for TextChunk {
-    type Summary = TextSummary;
+impl Summarize for RopeChunk {
+    type Summary = ChunkSummary;
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        TextSummary {
+        ChunkSummary {
             bytes: self.text.len(),
             line_breaks: str_indices::lines_lf::count_breaks(&self.text),
         }
     }
 }
 
-impl Leaf for TextChunk {
+impl Leaf for RopeChunk {
     type BaseMetric = ByteMetric;
-    type Slice = TextSlice;
+    type Slice = ChunkSlice;
 }
 
 #[derive(Debug, PartialEq)]
-pub(super) struct TextSlice {
+pub(super) struct ChunkSlice {
     text: str,
 }
 
-impl Default for &TextSlice {
+impl Default for &ChunkSlice {
     #[inline]
     fn default() -> Self {
         "".into()
     }
 }
 
-impl From<&str> for &TextSlice {
+impl From<&str> for &ChunkSlice {
     #[inline]
     fn from(text: &str) -> Self {
         // Safety: it's safe.
-        unsafe { &*(text as *const str as *const TextSlice) }
+        unsafe { &*(text as *const str as *const ChunkSlice) }
     }
 }
 
-impl std::ops::Deref for TextSlice {
+impl std::ops::Deref for ChunkSlice {
     type Target = str;
 
     #[inline]
@@ -93,34 +93,34 @@ impl std::ops::Deref for TextSlice {
     }
 }
 
-impl Summarize for TextSlice {
-    type Summary = TextSummary;
+impl Summarize for ChunkSlice {
+    type Summary = ChunkSummary;
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        TextSummary {
+        ChunkSummary {
             bytes: self.text.len(),
             line_breaks: str_indices::lines_lf::count_breaks(&self.text),
         }
     }
 }
 
-impl ToOwned for TextSlice {
-    type Owned = TextChunk;
+impl ToOwned for ChunkSlice {
+    type Owned = RopeChunk;
 
     #[inline]
     fn to_owned(&self) -> Self::Owned {
-        TextChunk::from(self.text.to_owned())
+        RopeChunk::from(self.text.to_owned())
     }
 }
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
-pub(super) struct TextSummary {
+pub(super) struct ChunkSummary {
     pub(super) bytes: usize,
     pub(super) line_breaks: usize,
 }
 
-impl<'a> AddAssign<&'a Self> for TextSummary {
+impl<'a> AddAssign<&'a Self> for ChunkSummary {
     #[inline]
     fn add_assign(&mut self, rhs: &'a Self) {
         self.bytes += rhs.bytes;
@@ -128,7 +128,7 @@ impl<'a> AddAssign<&'a Self> for TextSummary {
     }
 }
 
-impl<'a> SubAssign<&'a Self> for TextSummary {
+impl<'a> SubAssign<&'a Self> for ChunkSummary {
     #[inline]
     fn sub_assign(&mut self, rhs: &'a Self) {
         self.bytes -= rhs.bytes;
@@ -136,27 +136,27 @@ impl<'a> SubAssign<&'a Self> for TextSummary {
     }
 }
 
-pub(super) struct TextChunkIter<'a> {
+pub(super) struct RopeChunkIter<'a> {
     str: &'a str,
 }
 
-impl<'a> TextChunkIter<'a> {
+impl<'a> RopeChunkIter<'a> {
     #[inline]
     pub(super) fn new(str: &'a str) -> Self {
         Self { str }
     }
 }
 
-impl<'a> Iterator for TextChunkIter<'a> {
-    type Item = TextChunk;
+impl<'a> Iterator for RopeChunkIter<'a> {
+    type Item = RopeChunk;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         match self.str.len() {
             0 => None,
 
-            n if n >= TEXT_CHUNK_MAX_BYTES => {
-                let mut bytes = TEXT_CHUNK_MAX_BYTES;
+            n if n >= ROPE_CHUNK_MAX_BYTES => {
+                let mut bytes = ROPE_CHUNK_MAX_BYTES;
 
                 while !self.str.is_char_boundary(bytes) {
                     bytes += 1;
@@ -173,22 +173,22 @@ impl<'a> Iterator for TextChunkIter<'a> {
 
                 let text = self.str[..bytes].to_owned();
                 self.str = &self.str[bytes..];
-                Some(TextChunk { text })
+                Some(RopeChunk { text })
             },
 
             _ => {
                 let text = self.str.to_owned();
                 self.str = "";
-                Some(TextChunk { text })
+                Some(RopeChunk { text })
             },
         }
     }
 }
 
-impl<'a> ExactSizeIterator for TextChunkIter<'a> {
+impl<'a> ExactSizeIterator for RopeChunkIter<'a> {
     #[inline]
     fn len(&self) -> usize {
-        if self.str.len() > TEXT_CHUNK_MAX_BYTES {
+        if self.str.len() > ROPE_CHUNK_MAX_BYTES {
             2
         } else {
             1

@@ -3,11 +3,11 @@ use std::ops::RangeBounds;
 use super::iterators::{Bytes, Chars, Chunks, Lines};
 use super::metrics::{ByteMetric, LineMetric};
 use super::utils::*;
-use super::{TextChunk, TextChunkIter};
+use super::{RopeChunk, RopeChunkIter};
 use crate::tree::Tree;
 use crate::RopeSlice;
 
-#[cfg(all(not(test), not(feature = "integration_tests")))]
+#[cfg(not(any(test, feature = "integration_tests")))]
 const ROPE_FANOUT: usize = 8;
 
 #[cfg(any(test, feature = "integration_tests"))]
@@ -16,7 +16,7 @@ const ROPE_FANOUT: usize = 2;
 /// TODO: docs
 #[derive(Clone, Default)]
 pub struct Rope {
-    root: Tree<ROPE_FANOUT, TextChunk>,
+    root: Tree<ROPE_FANOUT, RopeChunk>,
     last_byte_is_newline: bool,
 }
 
@@ -254,7 +254,7 @@ impl Rope {
     }
 
     #[inline]
-    pub(super) fn root(&self) -> &Tree<ROPE_FANOUT, TextChunk> {
+    pub(super) fn root(&self) -> &Tree<ROPE_FANOUT, RopeChunk> {
         &self.root
     }
 }
@@ -283,11 +283,11 @@ impl From<&str> for Rope {
     fn from(s: &str) -> Self {
         if s.is_empty() {
             // Building a rope from empty string has to be special-cased
-            // because `TextChunkIter` would yield 0 items.
+            // because `RopeChunkIter` would yield 0 items.
             Rope::new()
         } else {
             Rope {
-                root: Tree::from_leaves(TextChunkIter::new(s)),
+                root: Tree::from_leaves(RopeChunkIter::new(s)),
                 last_byte_is_newline: matches!(
                     s.as_bytes().last(),
                     Some(b'\n')
@@ -300,13 +300,14 @@ impl From<&str> for Rope {
 impl From<String> for Rope {
     #[inline]
     fn from(s: String) -> Self {
-        if s.len() <= TextChunk::max_bytes() {
+        if s.len() <= RopeChunk::max_bytes() {
             // If the string fits in one chunk we can avoid the allocation.
-            let last_byte_is_newline =
-                s.as_bytes().last().map(|b| *b == b'\n').unwrap_or_default();
             Rope {
-                root: Tree::from_leaves([TextChunk::from(s)]),
-                last_byte_is_newline,
+                last_byte_is_newline: matches!(
+                    s.as_bytes().last(),
+                    Some(b'\n')
+                ),
+                root: Tree::from_leaves([RopeChunk::from(s)]),
             }
         } else {
             Rope::from(&*s)

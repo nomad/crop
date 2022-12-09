@@ -1,11 +1,11 @@
 use super::metrics::LineMetric;
-use super::{Rope, RopeSlice, TextChunk};
+use super::{Rope, RopeChunk, RopeSlice};
 use crate::tree::{Leaves, Units};
 
 /// TODO: docs
 #[derive(Clone)]
 pub struct Chunks<'a> {
-    leaves: Leaves<'a, { Rope::fanout() }, TextChunk>,
+    leaves: Leaves<'a, { Rope::fanout() }, RopeChunk>,
 }
 
 impl<'a> From<&'a Rope> for Chunks<'a> {
@@ -425,7 +425,7 @@ impl<'a> std::iter::FusedIterator for Chars<'a> {}
 /// TODO: docs
 #[derive(Clone)]
 pub struct Lines<'a> {
-    units: Units<'a, { Rope::fanout() }, TextChunk, LineMetric>,
+    units: Units<'a, { Rope::fanout() }, RopeChunk, LineMetric>,
 }
 
 impl<'a> From<&'a Rope> for Lines<'a> {

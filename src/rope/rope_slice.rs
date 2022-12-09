@@ -3,13 +3,13 @@ use std::ops::RangeBounds;
 use super::iterators::{Bytes, Chars, Chunks, Lines};
 use super::metrics::{ByteMetric, LineMetric};
 use super::utils::*;
-use super::{Rope, TextChunk};
+use super::{Rope, RopeChunk};
 use crate::tree::TreeSlice;
 
 /// TODO: docs
 #[derive(Copy, Clone)]
 pub struct RopeSlice<'a> {
-    pub(super) tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
+    pub(super) tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>,
 }
 
 impl<'a> RopeSlice<'a> {
@@ -197,7 +197,7 @@ impl<'a> RopeSlice<'a> {
 
     #[inline]
     pub(super) fn new(
-        tree_slice: TreeSlice<'a, { Rope::fanout() }, TextChunk>,
+        tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>,
     ) -> Self {
         Self { tree_slice }
     }
@@ -205,7 +205,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub(super) fn tree_slice(
         &'a self,
-    ) -> &'a TreeSlice<'a, { Rope::fanout() }, TextChunk> {
+    ) -> &'a TreeSlice<'a, { Rope::fanout() }, RopeChunk> {
         &self.tree_slice
     }
 }

@@ -2,7 +2,7 @@ use std::fmt::Write;
 use std::ops::{Bound, RangeBounds};
 
 use super::iterators::Chunks;
-use super::{TextSlice, TextSummary};
+use super::{ChunkSlice, ChunkSummary};
 
 /// Checks equality between the chunks yielded by iterating over a [`Chunks`]
 /// and a string slice.
@@ -125,18 +125,20 @@ where
     (start, end)
 }
 
-/// Splits a [TextSlice] at the `line_break`th line break (0-indexed),
-/// returning the left and right slices together with their summary if they are
-/// not empty. The line break itself, be it a `\n` or a `\r\n`, is not part of
-/// any of the 2 returned slices.
+/// Splits a chunk at the `line_break`-th line break (0-indexed), returning the
+/// left and right slices together with their summary if they are not empty.
+/// The line break itself, be it a `\n` or a `\r\n`, is not part of any of the
+/// 2 returned slices.
 #[inline]
 #[allow(clippy::type_complexity)]
 pub(super) fn split_slice_at_line_break<'a>(
-    chunk: &'a TextSlice,
+    chunk: &'a ChunkSlice,
     line_break: usize,
-    summary: &TextSummary,
-) -> (Option<(&'a TextSlice, TextSummary)>, Option<(&'a TextSlice, TextSummary)>)
-{
+    summary: &ChunkSummary,
+) -> (
+    Option<(&'a ChunkSlice, ChunkSummary)>,
+    Option<(&'a ChunkSlice, ChunkSummary)>,
+) {
     // This is the index of the byte *after* the newline, or the byte length of
     // the chunk if the newline is the last byte.
     let lf_plus_one = str_indices::lines_lf::to_byte_idx(chunk, line_break);
@@ -153,7 +155,7 @@ pub(super) fn split_slice_at_line_break<'a>(
     } else {
         Some((
             chunk[..left_bytes].into(),
-            TextSummary { bytes: left_bytes, line_breaks: line_break - 1 },
+            ChunkSummary { bytes: left_bytes, line_breaks: line_break - 1 },
         ))
     };
 
@@ -162,7 +164,7 @@ pub(super) fn split_slice_at_line_break<'a>(
     } else {
         Some((
             chunk[lf_plus_one..].into(),
-            TextSummary {
+            ChunkSummary {
                 bytes: chunk.len() - lf_plus_one,
                 line_breaks: summary.line_breaks - line_break,
             },
@@ -175,10 +177,10 @@ pub(super) fn split_slice_at_line_break<'a>(
 /// TODO: docs
 #[inline]
 pub(super) fn slice_between_line_breaks(
-    chunk: &TextSlice,
+    chunk: &ChunkSlice,
     start: usize,
     end: usize,
-) -> &'_ TextSlice {
+) -> &'_ ChunkSlice {
     debug_assert!(start < end);
 
     let byte_start = str_indices::lines_lf::to_byte_idx(chunk, start);

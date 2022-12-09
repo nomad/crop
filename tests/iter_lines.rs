@@ -14,7 +14,7 @@ fn lines_empty() {
 #[test]
 fn lines_0() {
     // Note: all these ropes should fit in a single leaf node assuming a
-    // `TEXT_CHUNK_MAX_BYTES` of 4 in test mode.
+    // `ROPE_CHUNK_MAX_BYTES` of 4 in test mode.
 
     let r = Rope::from("abc");
     assert_eq!(1, r.lines().count());
