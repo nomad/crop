@@ -135,10 +135,7 @@ pub(super) fn split_slice_at_line_break<'a>(
     chunk: &'a ChunkSlice,
     line_break: usize,
     summary: &ChunkSummary,
-) -> (
-    Option<(&'a ChunkSlice, ChunkSummary)>,
-    Option<(&'a ChunkSlice, ChunkSummary)>,
-) {
+) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
     // This is the index of the byte *after* the newline, or the byte length of
     // the chunk if the newline is the last byte.
     let lf_plus_one = str_indices::lines_lf::to_byte_idx(chunk, line_break);
@@ -150,28 +147,19 @@ pub(super) fn split_slice_at_line_break<'a>(
         - ((chunk.as_bytes()[lf_plus_one.saturating_sub(2)] == b'\r') as
            usize);
 
-    let left = if left_bytes == 0 {
-        None
-    } else {
-        Some((
-            chunk[..left_bytes].into(),
-            ChunkSummary { bytes: left_bytes, line_breaks: line_break - 1 },
-        ))
+    let left = chunk[..left_bytes].into();
+
+    let left_summary =
+        ChunkSummary { bytes: left_bytes, line_breaks: line_break - 1 };
+
+    let right = chunk[lf_plus_one..].into();
+
+    let right_summary = ChunkSummary {
+        bytes: chunk.len() - lf_plus_one,
+        line_breaks: summary.line_breaks - line_break,
     };
 
-    let right = if lf_plus_one == chunk.len() {
-        None
-    } else {
-        Some((
-            chunk[lf_plus_one..].into(),
-            ChunkSummary {
-                bytes: chunk.len() - lf_plus_one,
-                line_breaks: summary.line_breaks - line_break,
-            },
-        ))
-    };
-
-    (left, right)
+    (left, left_summary, right, right_summary)
 }
 
 /// TODO: docs

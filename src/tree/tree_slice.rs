@@ -31,8 +31,33 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
 
     /// The number of leaves included in this [`TreeSlice`] (including
     /// the start and end slices). Used by the [`Leaves`] iterator.
-    num_leaves: usize,
+    pub(super) num_leaves: usize,
 }
+
+// #[derive(Debug)]
+// pub struct TreeSlicer<'a, const FANOUT: usize, L: Leaf> {
+//     span: SliceSpan<'a, FANOUT, L>,
+//     summary: L::Summary,
+// }
+
+// #[derive(Debug)]
+// enum SliceSpan<'a, const N: usize, L: Leaf> {
+//     Single(&'a L::Slice),
+
+//     Multi {
+//         root: &'a Arc<Node<N, L>>,
+
+//         start_slice: &'a L::Slice,
+//         start_summary: L::Summary,
+//         offset_of_start: L::Summary,
+
+//         end_slice: &'a L::Slice,
+//         end_summary: L::Summary,
+//         offset_of_end: L::Summary,
+
+//         num_leaves: usize,
+//     },
+// }
 
 impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
     #[inline]
@@ -253,7 +278,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                     } else {
                         // This leaf contains the starting slice but not the
                         // ending one.
-                        let (_, start_slice, start_summary) = M::split_right(
+                        let (_, _, start_slice, start_summary) = M::split(
                             leaf.as_slice(),
                             range.start - *measured,
                             leaf.summary(),
@@ -274,7 +299,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                 }
             } else if *measured + measure >= range.end {
                 // This leaf contains the ending slice.
-                let (end_slice, end_summary, _) = M::split_left(
+                let (end_slice, end_summary, _, _) = M::split(
                     leaf.as_slice(),
                     range.end - *measured,
                     leaf.summary(),

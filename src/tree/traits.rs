@@ -45,30 +45,14 @@ pub trait Metric<L: Leaf>:
     /// TODO: docs
     #[allow(unused_variables)]
     #[allow(clippy::type_complexity)]
-    fn split_left<'a>(
+    fn split<'a>(
         slice: &'a L::Slice,
-        up_to: Self,
+        at: Self,
         summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary, Option<(&'a L::Slice, L::Summary)>) {
+    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary) {
         unimplemented!(
-            "Trying to split left {slice:?} at {up_to:?}, but {} cannot be \
-             split by {}",
-            std::any::type_name::<L>(),
-            std::any::type_name::<Self>()
-        )
-    }
-
-    /// TODO: docs
-    #[allow(unused_variables)]
-    #[allow(clippy::type_complexity)]
-    fn split_right<'a>(
-        slice: &'a L::Slice,
-        from: Self,
-        summary: &L::Summary,
-    ) -> (Option<(&'a L::Slice, L::Summary)>, &'a L::Slice, L::Summary) {
-        unimplemented!(
-            "Trying to split right {slice:?} at {from:?}, but {} cannot be \
-             split by {}",
+            "Trying to split {slice:?} at {at:?}, but {} cannot be split by
+            {}",
             std::any::type_name::<L>(),
             std::any::type_name::<Self>()
         )
