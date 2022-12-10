@@ -10,6 +10,7 @@ use crate::tree::TreeSlice;
 #[derive(Copy, Clone)]
 pub struct RopeSlice<'a> {
     pub(super) tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>,
+    pub(super) last_byte_is_newline: bool,
 }
 
 impl<'a> RopeSlice<'a> {
@@ -67,7 +68,7 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        Self::new(self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)))
+        Self::from(self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)))
     }
 
     /// Returns an iterator over the bytes of this [`RopeSlice`].
@@ -139,18 +140,20 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        Self::new(
-            self.tree_slice
+        Self {
+            tree_slice: self
+                .tree_slice
                 .slice(LineMetric(line_idx)..LineMetric(line_idx + 1)),
-        )
+
+            last_byte_is_newline: false,
+        }
     }
 
     /// TODO: docs
     #[inline]
     pub fn line_len(&self) -> usize {
-        todo!()
-        // self.tree_slice.summary().line_breaks + 1
-        //     - (self.last_byte_is_newline as usize)
+        self.tree_slice.summary().line_breaks + 1
+            - (self.last_byte_is_newline as usize)
     }
 
     /// TODO: docs
@@ -186,7 +189,7 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        Self::new(self.tree_slice.slice(LineMetric(start)..LineMetric(end)))
+        Self::from(self.tree_slice.slice(LineMetric(start)..LineMetric(end)))
     }
 
     /// Returns an iterator over the lines of this [`RopeSlice`].
@@ -194,26 +197,27 @@ impl<'a> RopeSlice<'a> {
     pub fn lines(&'a self) -> Lines<'a> {
         Lines::from(self)
     }
+}
 
+impl<'a> From<TreeSlice<'a, { Rope::fanout() }, RopeChunk>> for RopeSlice<'a> {
+    // TODO: checking the last byte by taking the last chunk is O(log(N)). Can
+    // we avoid this by checking the last byte directly when slicing? It's
+    // probably a hack to add that functionality directly in the `tree_slice`
+    // module but it might be worth it?
     #[inline]
-    pub(super) fn new(
-        tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>,
-    ) -> Self {
-        Self { tree_slice }
-    }
+    fn from(tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>) -> Self {
+        let last_byte_is_newline = matches!(
+            tree_slice.leaves().next_back().and_then(|c| c.as_bytes().last()),
+            Some(b'\n')
+        );
 
-    #[inline]
-    pub(super) fn tree_slice(
-        &'a self,
-    ) -> &'a TreeSlice<'a, { Rope::fanout() }, RopeChunk> {
-        &self.tree_slice
+        Self { tree_slice, last_byte_is_newline }
     }
 }
 
 impl<'a> std::fmt::Debug for RopeSlice<'a> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        // TODO: escape \r, \n, etc.
         f.write_str("RopeSlice(\"")?;
         debug_chunks(self.chunks(), f)?;
         f.write_str("\")")

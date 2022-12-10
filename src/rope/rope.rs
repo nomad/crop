@@ -78,7 +78,7 @@ impl Rope {
             );
         }
 
-        RopeSlice::new(self.root.slice(ByteMetric(start)..ByteMetric(end)))
+        RopeSlice::from(self.root.slice(ByteMetric(start)..ByteMetric(end)))
     }
 
     /// Returns an iterator over the bytes of this [`Rope`].
@@ -183,7 +183,7 @@ impl Rope {
             );
         }
 
-        RopeSlice::new(
+        RopeSlice::from(
             self.root.slice(LineMetric(line_idx)..LineMetric(line_idx + 1)),
         )
     }
@@ -228,7 +228,7 @@ impl Rope {
             );
         }
 
-        RopeSlice::new(self.root.slice(LineMetric(start)..LineMetric(end)))
+        RopeSlice::from(self.root.slice(LineMetric(start)..LineMetric(end)))
     }
 
     /// Returns an iterator over the lines of this [`Rope`].
@@ -414,7 +414,7 @@ impl<'a> From<RopeSlice<'a>> for Rope {
     fn from(rope_slice: RopeSlice<'a>) -> Rope {
         Rope {
             root: Tree::from(rope_slice.tree_slice),
-            last_byte_is_newline: false, // TODO
+            last_byte_is_newline: rope_slice.last_byte_is_newline,
         }
     }
 }

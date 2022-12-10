@@ -18,7 +18,7 @@ impl<'a> From<&'a Rope> for Chunks<'a> {
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chunks<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
-        Self { leaves: slice.tree_slice().leaves() }
+        Self { leaves: slice.tree_slice.leaves() }
     }
 }
 
@@ -438,7 +438,7 @@ impl<'a> From<&'a Rope> for Lines<'a> {
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
-        Self { units: slice.tree_slice().units::<LineMetric>() }
+        Self { units: slice.tree_slice.units::<LineMetric>() }
     }
 }
 
@@ -447,7 +447,7 @@ impl<'a> Iterator for Lines<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.units.next().map(RopeSlice::new)
+        self.units.next().map(RopeSlice::from)
     }
 }
 
