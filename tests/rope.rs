@@ -2,7 +2,7 @@ use crop::Rope;
 
 mod common;
 
-use common::{LARGE, MEDIUM, SMALL, TINY};
+use common::{CURSED_LIPSUM, LARGE, MEDIUM, SMALL, TINY};
 
 #[test]
 fn byte() {
@@ -13,6 +13,19 @@ fn byte() {
             let s_byte = s.as_bytes()[byte_idx];
             assert_eq!(r_byte, s_byte);
         }
+    }
+}
+
+#[test]
+fn char_boundary() {
+    let s = CURSED_LIPSUM;
+
+    let rope = Rope::from(s);
+    let slice = rope.byte_slice(..);
+
+    for idx in 0..s.len() {
+        assert_eq!(s.is_char_boundary(idx), rope.is_char_boundary(idx));
+        assert_eq!(s.is_char_boundary(idx), slice.is_char_boundary(idx));
     }
 }
 

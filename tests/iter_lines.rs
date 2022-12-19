@@ -28,6 +28,10 @@ fn lines_0() {
     assert_eq!(2, r.lines().count());
     assert_eq!(2, r.byte_slice(..).lines().count());
 
+    let r = Rope::from("\na\nb");
+    assert_eq!(3, r.lines().count());
+    assert_eq!(3, r.byte_slice(..).lines().count());
+
     let r = Rope::from("\n\n\n");
     assert_eq!(3, r.lines().count());
     assert_eq!(3, r.byte_slice(..).lines().count());
@@ -127,12 +131,9 @@ fn lines_cursed() {
         assert_eq!(l1, l2);
     }
 
-    // TODO: uncomment this once we can iterate through lines from the
-    // back.
-    //
-    // for (l1, l2) in r.lines().rev().zip(s.lines().rev()) {
-    //     assert_eq!(l1, l2);
-    // }
+    for (l1, l2) in r.lines().rev().zip(s.lines().rev()) {
+        assert_eq!(l1, l2);
+    }
 }
 
 #[test]
@@ -146,10 +147,10 @@ fn lines_asymmetric_forward_backward() {
     assert_eq!("c", forward.next().unwrap());
     assert_eq!(None, forward.next());
 
-    // let mut backward = r.lines().rev();
-    // assert_eq!("c", backward.next().unwrap());
-    // assert_eq!("a", backward.next().unwrap());
-    // assert_eq!("b", backward.next().unwrap());
-    // assert_eq!("", backward.next().unwrap());
-    // assert_eq!(None, backward.next());
+    let mut backward = r.lines().rev();
+    assert_eq!("c", backward.next().unwrap());
+    assert_eq!("a", backward.next().unwrap());
+    assert_eq!("b", backward.next().unwrap());
+    assert_eq!("", backward.next().unwrap());
+    assert_eq!(None, backward.next());
 }
