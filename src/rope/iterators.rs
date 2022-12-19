@@ -44,7 +44,12 @@ impl<'a> DoubleEndedIterator for Chunks<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for Chunks<'a> {}
+impl<'a> ExactSizeIterator for Chunks<'a> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.leaves.len()
+    }
+}
 
 impl<'a> std::iter::FusedIterator for Chunks<'a> {}
 
@@ -426,19 +431,29 @@ impl<'a> std::iter::FusedIterator for Chars<'a> {}
 #[derive(Clone)]
 pub struct Lines<'a> {
     units: Units<'a, { Rope::fanout() }, RopeChunk, LineMetric>,
+    yielded: usize,
+    total: usize,
 }
 
 impl<'a> From<&'a Rope> for Lines<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        Self { units: rope.tree().units::<LineMetric>() }
+        Self {
+            units: rope.tree().units::<LineMetric>(),
+            yielded: 0,
+            total: rope.line_len(),
+        }
     }
 }
 
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'b>) -> Self {
-        Self { units: slice.tree_slice.units::<LineMetric>() }
+        Self {
+            units: slice.tree_slice.units::<LineMetric>(),
+            yielded: 0,
+            total: slice.line_len(),
+        }
     }
 }
 
@@ -447,11 +462,44 @@ impl<'a> Iterator for Lines<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.units.next().map(RopeSlice::from)
+        if self.yielded == self.total {
+            None
+        } else {
+            let line = self.units.next().map(RopeSlice::from);
+            self.yielded += 1;
+            line
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = self.total - self.yielded;
+        (exact, Some(exact))
     }
 }
 
-#[doc(hidden)]
+impl<'a> DoubleEndedIterator for Lines<'a> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        if self.yielded == self.total {
+            None
+        } else {
+            let line = self.units.next_back().map(RopeSlice::from);
+            self.yielded += 1;
+            line
+        }
+    }
+}
+
+impl<'a> ExactSizeIterator for Lines<'a> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.total - self.yielded
+    }
+}
+
+impl<'a> std::iter::FusedIterator for Lines<'a> {}
+
 #[cfg(feature = "graphemes")]
 pub use graphemes::Graphemes;
 
@@ -650,5 +698,3 @@ mod graphemes {
 
     impl<'a> std::iter::FusedIterator for Graphemes<'a> {}
 }
-
-impl<'a> std::iter::FusedIterator for Lines<'a> {}
