@@ -16,7 +16,7 @@ const ROPE_FANOUT: usize = 2;
 /// TODO: docs
 #[derive(Clone, Default)]
 pub struct Rope {
-    root: Tree<ROPE_FANOUT, RopeChunk>,
+    tree: Tree<{ Self::fanout() }, RopeChunk>,
     last_byte_is_newline: bool,
 }
 
@@ -34,7 +34,7 @@ impl Rope {
         }
 
         let (chunk, ByteMetric(chunk_idx)) =
-            self.root.leaf_at_measure(ByteMetric(byte_idx));
+            self.tree.leaf_at_measure(ByteMetric(byte_idx));
 
         chunk.as_bytes()[byte_idx - chunk_idx]
     }
@@ -42,7 +42,7 @@ impl Rope {
     /// TODO: docs
     #[inline]
     pub fn byte_len(&self) -> usize {
-        self.root.summary().bytes
+        self.tree.summary().bytes
     }
 
     /// TODO: docs
@@ -57,7 +57,10 @@ impl Rope {
             );
         }
 
-        todo!()
+        let ByteMetric(byte_idx) =
+            self.tree.convert_measure(LineMetric(line_idx));
+
+        byte_idx
     }
 
     /// TODO: docs
@@ -78,7 +81,7 @@ impl Rope {
             );
         }
 
-        RopeSlice::from(self.root.slice(ByteMetric(start)..ByteMetric(end)))
+        RopeSlice::from(self.tree.slice(ByteMetric(start)..ByteMetric(end)))
     }
 
     /// Returns an iterator over the bytes of this [`Rope`].
@@ -184,14 +187,14 @@ impl Rope {
         }
 
         RopeSlice::from(
-            self.root.slice(LineMetric(line_idx)..LineMetric(line_idx + 1)),
+            self.tree.slice(LineMetric(line_idx)..LineMetric(line_idx + 1)),
         )
     }
 
     /// TODO: docs
     #[inline]
     pub fn line_len(&self) -> usize {
-        self.root.summary().line_breaks + 1
+        self.tree.summary().line_breaks + 1
             - (self.last_byte_is_newline as usize)
             - (self.is_empty() as usize)
     }
@@ -208,7 +211,10 @@ impl Rope {
             );
         }
 
-        todo!()
+        let LineMetric(line_idx) =
+            self.tree.convert_measure(ByteMetric(byte_idx));
+
+        line_idx
     }
 
     /// TODO: docs
@@ -229,7 +235,7 @@ impl Rope {
             );
         }
 
-        RopeSlice::from(self.root.slice(LineMetric(start)..LineMetric(end)))
+        RopeSlice::from(self.tree.slice(LineMetric(start)..LineMetric(end)))
     }
 
     /// Returns an iterator over the lines of this [`Rope`].
@@ -255,8 +261,8 @@ impl Rope {
     }
 
     #[inline]
-    pub(super) fn root(&self) -> &Tree<ROPE_FANOUT, RopeChunk> {
-        &self.root
+    pub(super) fn tree(&self) -> &Tree<ROPE_FANOUT, RopeChunk> {
+        &self.tree
     }
 }
 
@@ -264,7 +270,7 @@ impl From<RopeSlice<'_>> for Rope {
     #[inline]
     fn from(rope_slice: RopeSlice<'_>) -> Rope {
         Rope {
-            root: Tree::from(rope_slice.tree_slice),
+            tree: Tree::from(rope_slice.tree_slice),
             last_byte_is_newline: rope_slice.last_byte_is_newline,
         }
     }
@@ -298,7 +304,7 @@ impl From<&str> for Rope {
             Rope::new()
         } else {
             Rope {
-                root: Tree::from_leaves(RopeChunkIter::new(s)),
+                tree: Tree::from_leaves(RopeChunkIter::new(s)),
                 last_byte_is_newline: matches!(
                     s.as_bytes().last(),
                     Some(b'\n')
@@ -318,7 +324,7 @@ impl From<String> for Rope {
                     s.as_bytes().last(),
                     Some(b'\n')
                 ),
-                root: Tree::from_leaves([RopeChunk::from(s)]),
+                tree: Tree::from_leaves([RopeChunk::from(s)]),
             }
         } else {
             Rope::from(&*s)

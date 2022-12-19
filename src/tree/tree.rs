@@ -38,6 +38,22 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
 }
 
 impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
+    #[inline]
+    pub fn convert_measure<M1, M2>(&self, from: M1) -> M2
+    where
+        M1: Metric<L>,
+        M2: Metric<L>,
+    {
+        debug_assert!(
+            from < M1::measure(self.summary()),
+            "Trying to get the leaf at {:?}, but this tree is only {:?} long",
+            from,
+            M1::measure(self.summary()),
+        );
+
+        self.root.convert_measure(from)
+    }
+
     /// # Panics
     ///
     /// This function will panic if the iterator is empty.

@@ -67,6 +67,50 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
+    pub fn convert_measure<M1, M2>(&self, from: M1) -> M2
+    where
+        M1: Metric<L>,
+        M2: Metric<L>,
+    {
+        debug_assert!(from < M1::measure(self.summary()));
+
+        let mut m1 = M1::zero();
+        let mut m2 = M2::zero();
+
+        let mut node = self;
+
+        'outer: loop {
+            match node {
+                Node::Internal(inode) => {
+                    for child in inode.children() {
+                        let this = M1::measure(child.summary());
+                        if m1 + this > from {
+                            node = &**child;
+                            continue 'outer;
+                        } else {
+                            m1 += this;
+                            m2 += M2::measure(child.summary());
+                        }
+                    }
+                    unreachable!(
+                        "Didn't I tell you to do bounds checks before \
+                         callign this function?"
+                    );
+                },
+
+                Node::Leaf(leaf) => {
+                    let (_, left_summary, _, _) =
+                        M1::split(leaf.as_slice(), from - m1, leaf.summary());
+
+                    m2 += M2::measure(&left_summary);
+
+                    return m2;
+                },
+            }
+        }
+    }
+
+    #[inline]
     pub(super) fn depth(&self) -> usize {
         match self {
             Node::Internal(inode) => inode.depth(),

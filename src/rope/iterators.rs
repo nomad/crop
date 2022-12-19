@@ -11,7 +11,7 @@ pub struct Chunks<'a> {
 impl<'a> From<&'a Rope> for Chunks<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        Self { leaves: rope.root().leaves() }
+        Self { leaves: rope.tree().leaves() }
     }
 }
 
@@ -431,7 +431,7 @@ pub struct Lines<'a> {
 impl<'a> From<&'a Rope> for Lines<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        Self { units: rope.root().units::<LineMetric>() }
+        Self { units: rope.tree().units::<LineMetric>() }
     }
 }
 

@@ -50,7 +50,10 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        todo!()
+        let ByteMetric(byte_idx) =
+            self.tree_slice.convert_measure(LineMetric(line_idx));
+
+        byte_idx
     }
 
     /// TODO: docs
@@ -172,7 +175,10 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        todo!()
+        let LineMetric(line_idx) =
+            self.tree_slice.convert_measure(ByteMetric(byte_idx));
+
+        line_idx
     }
 
     /// TODO: docs

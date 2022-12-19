@@ -84,6 +84,17 @@ impl<'a, const FANOUT: usize, L: Leaf> Copy for TreeSlice<'a, FANOUT, L> where
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     #[inline]
+    pub fn convert_measure<M1, M2>(&self, from: M1) -> M2
+    where
+        M1: Metric<L>,
+        M2: Metric<L>,
+    {
+        let before = M1::measure(&self.before);
+        let measure = self.root.convert_measure::<M1, M2>(from + before);
+        measure - M2::measure(&self.before)
+    }
+
+    #[inline]
     pub fn leaf_at_measure<M>(&'a self, measure: M) -> (&'a L::Slice, M)
     where
         M: Metric<L>,
