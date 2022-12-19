@@ -146,7 +146,19 @@ impl Rope {
     /// TODO: docs
     #[inline]
     pub fn is_char_boundary(&self, byte_idx: usize) -> bool {
-        todo!()
+        if byte_idx >= self.byte_len() {
+            panic!(
+                "Trying to index past the end of the Rope: the byte length \
+                 is {} but the byte index is {}",
+                self.byte_len(),
+                byte_idx
+            );
+        }
+
+        let (chunk, ByteMetric(chunk_idx)) =
+            self.tree.leaf_at_measure(ByteMetric(byte_idx));
+
+        chunk.is_char_boundary(byte_idx - chunk_idx)
     }
 
     /// Returns `true` if the `Rope`'s byte length is zero.
