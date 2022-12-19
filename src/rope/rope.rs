@@ -259,6 +259,16 @@ impl Rope {
     }
 }
 
+impl From<RopeSlice<'_>> for Rope {
+    #[inline]
+    fn from(rope_slice: RopeSlice<'_>) -> Rope {
+        Rope {
+            root: Tree::from(rope_slice.tree_slice),
+            last_byte_is_newline: rope_slice.last_byte_is_newline,
+        }
+    }
+}
+
 impl std::fmt::Debug for Rope {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -315,9 +325,9 @@ impl From<String> for Rope {
     }
 }
 
-impl<'a> From<std::borrow::Cow<'a, str>> for Rope {
+impl From<std::borrow::Cow<'_, str>> for Rope {
     #[inline]
-    fn from(moo: std::borrow::Cow<'a, str>) -> Self {
+    fn from(moo: std::borrow::Cow<'_, str>) -> Self {
         match moo {
             std::borrow::Cow::Owned(s) => Rope::from(s),
             std::borrow::Cow::Borrowed(s) => Rope::from(s),
@@ -336,9 +346,9 @@ impl std::cmp::PartialEq<Rope> for Rope {
     }
 }
 
-impl<'a> std::cmp::PartialEq<RopeSlice<'a>> for Rope {
+impl std::cmp::PartialEq<RopeSlice<'_>> for Rope {
     #[inline]
-    fn eq(&self, rhs: &RopeSlice<'a>) -> bool {
+    fn eq(&self, rhs: &RopeSlice<'_>) -> bool {
         if self.byte_len() != rhs.byte_len() {
             false
         } else {
@@ -365,14 +375,14 @@ impl std::cmp::PartialEq<Rope> for str {
     }
 }
 
-impl<'a> std::cmp::PartialEq<&'a str> for Rope {
+impl std::cmp::PartialEq<&str> for Rope {
     #[inline]
-    fn eq(&self, rhs: &&'a str) -> bool {
+    fn eq(&self, rhs: &&str) -> bool {
         self == *rhs
     }
 }
 
-impl<'a> std::cmp::PartialEq<Rope> for &'a str {
+impl std::cmp::PartialEq<Rope> for &str {
     #[inline]
     fn eq(&self, rhs: &Rope) -> bool {
         rhs == self
@@ -393,14 +403,14 @@ impl std::cmp::PartialEq<Rope> for String {
     }
 }
 
-impl<'a> std::cmp::PartialEq<std::borrow::Cow<'a, str>> for Rope {
+impl std::cmp::PartialEq<std::borrow::Cow<'_, str>> for Rope {
     #[inline]
-    fn eq(&self, rhs: &std::borrow::Cow<'a, str>) -> bool {
+    fn eq(&self, rhs: &std::borrow::Cow<'_, str>) -> bool {
         self == &**rhs
     }
 }
 
-impl<'a> std::cmp::PartialEq<Rope> for std::borrow::Cow<'a, str> {
+impl std::cmp::PartialEq<Rope> for std::borrow::Cow<'_, str> {
     #[inline]
     fn eq(&self, rhs: &Rope) -> bool {
         rhs == self
@@ -408,13 +418,3 @@ impl<'a> std::cmp::PartialEq<Rope> for std::borrow::Cow<'a, str> {
 }
 
 impl std::cmp::Eq for Rope {}
-
-impl<'a> From<RopeSlice<'a>> for Rope {
-    #[inline]
-    fn from(rope_slice: RopeSlice<'a>) -> Rope {
-        Rope {
-            root: Tree::from(rope_slice.tree_slice),
-            last_byte_is_newline: rope_slice.last_byte_is_newline,
-        }
-    }
-}
