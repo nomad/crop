@@ -193,6 +193,7 @@ impl Rope {
     pub fn line_len(&self) -> usize {
         self.root.summary().line_breaks + 1
             - (self.last_byte_is_newline as usize)
+            - (self.is_empty() as usize)
     }
 
     /// TODO: docs

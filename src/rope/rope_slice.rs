@@ -154,6 +154,7 @@ impl<'a> RopeSlice<'a> {
     pub fn line_len(&self) -> usize {
         self.tree_slice.summary().line_breaks + 1
             - (self.last_byte_is_newline as usize)
+            - (self.is_empty() as usize)
     }
 
     /// TODO: docs
