@@ -26,7 +26,10 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        todo!()
+        let (chunk, ByteMetric(chunk_idx)) =
+            self.tree_slice.leaf_at_measure(ByteMetric(byte_idx));
+
+        chunk.as_bytes()[byte_idx - chunk_idx]
     }
 
     /// TODO: docs

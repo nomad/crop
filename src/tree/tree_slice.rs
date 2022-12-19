@@ -83,6 +83,24 @@ impl<'a, const FANOUT: usize, L: Leaf> Copy for TreeSlice<'a, FANOUT, L> where
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
+    #[inline]
+    pub fn leaf_at_measure<M>(&'a self, measure: M) -> (&'a L::Slice, M)
+    where
+        M: Metric<L>,
+    {
+        debug_assert!(
+            measure < M::measure(self.summary()),
+            "Trying to get the leaf at {:?}, but this tree is only {:?} long",
+            measure,
+            M::measure(self.summary()),
+        );
+
+        let before = M::measure(&self.before);
+        let (slice, mut measure) = self.root.leaf_at_measure(measure + before);
+        measure -= before;
+        (slice, measure)
+    }
+
     /// TODO: docs
     #[inline]
     pub fn leaves(&'a self) -> Leaves<'a, FANOUT, L> {
