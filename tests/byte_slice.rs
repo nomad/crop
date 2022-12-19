@@ -1,3 +1,6 @@
+mod common;
+
+use common::TINY;
 use crop::Rope;
 
 #[test]
@@ -44,4 +47,18 @@ fn slice_grapheme_cluster() {
     assert_eq!("🐕", r.byte_slice(0..4));
     assert_eq!("‍", r.byte_slice(4..7));
     assert_eq!("🦺", r.byte_slice(7..11));
+}
+
+#[test]
+fn slice_slice() {
+    let s = TINY;
+    let r = Rope::from(s);
+
+    let rope_slice = r.byte_slice(129..512);
+    let str_slice = &s[129..512];
+    assert_eq!(rope_slice, str_slice);
+
+    let rope_slice = rope_slice.byte_slice(37..319);
+    let str_slice = &str_slice[37..319];
+    assert_eq!(str_slice, rope_slice);
 }

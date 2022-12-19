@@ -102,7 +102,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
     fn from(slice: &'a TreeSlice<'a, FANOUT, L>) -> Leaves<'a, FANOUT, L> {
         Self {
             root: &*slice.root,
-            offset: L::BaseMetric::measure(&slice.offset),
+            offset: L::BaseMetric::measure(&slice.before),
             after: L::BaseMetric::measure(&slice.after),
             first_slice: Some(slice.start_slice),
             last_slice: Some(slice.end_slice),
@@ -286,13 +286,12 @@ fn first_slice_forward<'a, const N: usize, L: Leaf>(
                     .map(|n| unsafe { n.as_leaf_unchecked() })
                     .enumerate()
                 {
-                    if measured == offset {
+                    measured += L::BaseMetric::measure(leaf.summary());
+                    if measured > offset {
                         return (
                             first_slice.take().unwrap_or(leaf.as_slice()),
                             &inode.children()[idx + 1..],
                         );
-                    } else {
-                        measured += L::BaseMetric::measure(leaf.summary());
                     }
                 }
 
@@ -362,13 +361,12 @@ fn first_slice_backward<'a, const N: usize, L: Leaf>(
                     .enumerate()
                     .rev()
                 {
-                    if measured == offset {
+                    measured += L::BaseMetric::measure(leaf.summary());
+                    if measured > offset {
                         return (
                             last_slice.take().unwrap_or(leaf.as_slice()),
                             &inode.children()[..idx],
                         );
-                    } else {
-                        measured += L::BaseMetric::measure(leaf.summary());
                     }
                 }
 
