@@ -134,20 +134,20 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
-    pub fn is_char_boundary(&self, byte_idx: usize) -> bool {
-        if byte_idx >= self.byte_len() {
+    pub fn is_char_boundary(&self, byte_offset: usize) -> bool {
+        if byte_offset > self.byte_len() {
             panic!(
-                "Trying to index past the end of the Rope: the byte length \
-                 is {} but the byte index is {}",
+                "The given offset is past the end of the Rope: the byte \
+                 length is {} but the byte offset is {}",
                 self.byte_len(),
-                byte_idx
+                byte_offset
             );
         }
 
         let (chunk, ByteMetric(chunk_idx)) =
-            self.tree.leaf_at_measure(ByteMetric(byte_idx));
+            self.tree.leaf_at_measure(ByteMetric(byte_offset));
 
-        chunk.is_char_boundary(byte_idx - chunk_idx)
+        chunk.is_char_boundary(byte_offset - chunk_idx)
     }
 
     /// Returns `true` if the `Rope`'s byte length is zero.
@@ -171,8 +171,17 @@ impl Rope {
     /// TODO: docs
     #[cfg(feature = "graphemes")]
     #[inline]
-    pub fn is_grapheme_boundary(&self, byte_idx: usize) -> bool {
-        todo!()
+    pub fn is_grapheme_boundary(&self, byte_offset: usize) -> bool {
+        if byte_offset > self.byte_len() {
+            panic!(
+                "The given offset is past the end of the Rope: the byte \
+                 length is {} but the byte offset is {}",
+                self.byte_len(),
+                byte_offset
+            );
+        }
+
+        is_grapheme_boundary(self.chunks(), self.byte_len(), byte_offset)
     }
 
     /// TODO: docs

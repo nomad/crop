@@ -102,6 +102,58 @@ pub(super) fn debug_chunks(
 }
 
 /// TODO: docs
+#[cfg(feature = "graphemes")]
+#[inline]
+pub(super) fn is_grapheme_boundary(
+    mut chunks: Chunks<'_>,
+    byte_len: usize,
+    byte_offset: usize,
+) -> bool {
+    use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
+
+    debug_assert!(byte_offset <= byte_len);
+
+    let mut cursor = GraphemeCursor::new(0, byte_len, true);
+    cursor.set_cursor(byte_offset);
+
+    let mut bytes_left = byte_len;
+
+    // TODO: we need something like `Rope{Slice}::chunks_in_range` to make this
+    // fast.
+    //
+    // Iterate from the back until we reach the chunk containing the given byte
+    // index.
+    let chunk = loop {
+        let chunk = chunks.next_back().unwrap();
+        bytes_left -= chunk.len();
+        if bytes_left <= byte_offset {
+            break chunk;
+        }
+    };
+
+    if !chunk.is_char_boundary(byte_offset - bytes_left) {
+        return false;
+    }
+
+    let chunk_start = bytes_left;
+
+    loop {
+        match cursor.is_boundary(chunk, chunk_start) {
+            Ok(is_boundary) => return is_boundary,
+
+            Err(GraphemeIncomplete::PreContext(offset)) => {
+                debug_assert_eq!(offset, bytes_left);
+                let prev = chunks.next_back().unwrap();
+                bytes_left -= prev.len();
+                cursor.provide_context(prev, bytes_left);
+            },
+
+            _ => unreachable!(),
+        }
+    }
+}
+
+/// TODO: docs
 #[inline]
 pub(super) fn range_bounds_to_start_end<B>(
     range: B,

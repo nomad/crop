@@ -46,4 +46,33 @@ mod graphemes {
 
         assert_eq!(None, graphemes.next());
     }
+
+    #[test]
+    fn is_boundary_two_flags() {
+        let r = Rope::from("🇷🇸🇮🇴");
+        assert!(r.is_grapheme_boundary(0));
+        assert!(!r.is_grapheme_boundary(1));
+        assert!(!r.is_grapheme_boundary(2));
+        assert!(!r.is_grapheme_boundary(3));
+        assert!(!r.is_grapheme_boundary(4));
+        assert!(!r.is_grapheme_boundary(5));
+        assert!(!r.is_grapheme_boundary(6));
+        assert!(!r.is_grapheme_boundary(7));
+        assert!(r.is_grapheme_boundary(8));
+        assert!(!r.is_grapheme_boundary(9));
+        assert!(!r.is_grapheme_boundary(10));
+        assert!(!r.is_grapheme_boundary(11));
+        assert!(!r.is_grapheme_boundary(12));
+        assert!(!r.is_grapheme_boundary(13));
+        assert!(!r.is_grapheme_boundary(14));
+        assert!(!r.is_grapheme_boundary(15));
+        assert!(r.is_grapheme_boundary(16));
+    }
+
+    #[test]
+    #[should_panic]
+    fn is_boundary_out_of_bounds() {
+        let r = Rope::from("🇷🇸🇮🇴");
+        assert!(r.is_grapheme_boundary(17));
+    }
 }
