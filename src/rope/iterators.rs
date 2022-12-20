@@ -1,4 +1,5 @@
 use super::metrics::LineMetric;
+use super::utils::*;
 use super::{Rope, RopeChunk, RopeSlice};
 use crate::tree::{Leaves, Units};
 
@@ -465,9 +466,10 @@ impl<'a> Iterator for Lines<'a> {
         if self.yielded == self.total {
             None
         } else {
-            let line = self.units.next().map(RopeSlice::from);
+            let mut line = self.units.next()?;
+            rope_slice_remove_trailing_line_break(&mut line);
             self.yielded += 1;
-            line
+            Some(RopeSlice { tree_slice: line, last_byte_is_newline: false })
         }
     }
 
@@ -484,9 +486,10 @@ impl<'a> DoubleEndedIterator for Lines<'a> {
         if self.yielded == self.total {
             None
         } else {
-            let line = self.units.next_back().map(RopeSlice::from);
+            let mut line = self.units.next_back()?;
+            rope_slice_remove_trailing_line_break(&mut line);
             self.yielded += 1;
-            line
+            Some(RopeSlice { tree_slice: line, last_byte_is_newline: false })
         }
     }
 }

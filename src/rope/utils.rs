@@ -2,7 +2,8 @@ use std::fmt::Write;
 use std::ops::{Bound, RangeBounds};
 
 use super::iterators::Chunks;
-use super::{ChunkSlice, ChunkSummary};
+use super::{ChunkSlice, ChunkSummary, Rope, RopeChunk};
+use crate::tree::TreeSlice;
 
 /// Checks equality between the chunks yielded by iterating over a [`Chunks`]
 /// and a string slice.
@@ -125,10 +126,20 @@ where
     (start, end)
 }
 
+/// TODO: docs
+#[inline]
+pub(super) fn rope_slice_remove_trailing_line_break(
+    slice: &mut TreeSlice<'_, { Rope::fanout() }, RopeChunk>,
+) {
+    debug_assert!(matches!(slice.summary().line_breaks, 0 | 1));
+
+    if slice.summary().line_breaks == 1 {
+        todo!();
+    }
+}
+
 /// Splits a chunk at the `line_break`-th line break (0-indexed), returning the
-/// left and right slices together with their summary if they are not empty.
-/// The line break itself, be it a `\n` or a `\r\n`, is not part of any of the
-/// 2 returned slices.
+/// left and right slices and their respective summaries.
 #[inline]
 #[allow(clippy::type_complexity)]
 pub(super) fn split_slice_at_line_break<'a>(
@@ -138,24 +149,17 @@ pub(super) fn split_slice_at_line_break<'a>(
 ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
     // This is the index of the byte *after* the newline, or the byte length of
     // the chunk if the newline is the last byte.
-    let lf_plus_one = str_indices::lines_lf::to_byte_idx(chunk, line_break);
-
-    let left_bytes = lf_plus_one
-        // We have to stop 1 byte earlier if the line break is a `\n`..
-        - 1
-        // ..and 2 if it's a `\r\n`.
-        - ((chunk.as_bytes()[lf_plus_one.saturating_sub(2)] == b'\r') as
-           usize);
+    let left_bytes = str_indices::lines_lf::to_byte_idx(chunk, line_break);
 
     let left = chunk[..left_bytes].into();
 
     let left_summary =
-        ChunkSummary { bytes: left_bytes, line_breaks: line_break - 1 };
+        ChunkSummary { bytes: left_bytes, line_breaks: line_break };
 
-    let right = chunk[lf_plus_one..].into();
+    let right = chunk[left_bytes..].into();
 
     let right_summary = ChunkSummary {
-        bytes: chunk.len() - lf_plus_one,
+        bytes: chunk.len() - left_bytes,
         line_breaks: summary.line_breaks - line_break,
     };
 

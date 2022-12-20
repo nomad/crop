@@ -187,9 +187,12 @@ impl Rope {
             );
         }
 
-        RopeSlice::from(
-            self.tree.slice(LineMetric(line_idx)..LineMetric(line_idx + 1)),
-        )
+        let mut tree_slice =
+            self.tree.slice(LineMetric(line_idx)..LineMetric(line_idx + 1));
+
+        rope_slice_remove_trailing_line_break(&mut tree_slice);
+
+        RopeSlice { tree_slice, last_byte_is_newline: false }
     }
 
     /// TODO: docs

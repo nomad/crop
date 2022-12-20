@@ -94,6 +94,12 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         measure - M2::measure(&self.before)
     }
 
+    // TODO: why?
+    #[inline]
+    pub fn end_slice(&'a self) -> &'a L::Slice {
+        self.end_slice
+    }
+
     #[inline]
     pub fn leaf_at_measure<M>(&'a self, measure: M) -> (&'a L::Slice, M)
     where
@@ -327,8 +333,13 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
 
                         slice.summary = start_summary.clone();
                         slice.after -= &start_summary;
+
                         slice.start_slice = start_slice;
-                        slice.start_summary = start_summary;
+                        slice.start_summary = start_summary.clone();
+
+                        slice.end_slice = start_slice;
+                        slice.end_summary = start_summary;
+
                         slice.num_leaves = 1;
                         *done = true;
                     } else {

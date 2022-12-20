@@ -158,13 +158,13 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        Self {
-            tree_slice: self
-                .tree_slice
-                .slice(LineMetric(line_idx)..LineMetric(line_idx + 1)),
+        let mut tree_slice = self
+            .tree_slice
+            .slice(LineMetric(line_idx)..LineMetric(line_idx + 1));
 
-            last_byte_is_newline: false,
-        }
+        rope_slice_remove_trailing_line_break(&mut tree_slice);
+
+        Self { tree_slice, last_byte_is_newline: false }
     }
 
     /// TODO: docs
@@ -222,17 +222,11 @@ impl<'a> RopeSlice<'a> {
 }
 
 impl<'a> From<TreeSlice<'a, { Rope::fanout() }, RopeChunk>> for RopeSlice<'a> {
-    // TODO: checking the last byte by taking the last chunk is O(log(N)). Can
-    // we avoid this by checking the last byte directly when slicing? It's
-    // probably a hack to add that functionality directly in the `tree_slice`
-    // module but it might be worth it?
     #[inline]
     fn from(tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>) -> Self {
-        let last_byte_is_newline = matches!(
-            tree_slice.leaves().next_back().and_then(|c| c.as_bytes().last()),
-            Some(b'\n')
-        );
-
+        // TODO: make sure the last slice is never empty.
+        let last_slice = tree_slice.end_slice().as_bytes();
+        let last_byte_is_newline = last_slice[last_slice.len() - 1] == b'\n';
         Self { tree_slice, last_byte_is_newline }
     }
 }

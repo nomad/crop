@@ -59,7 +59,7 @@ impl Metric<RopeChunk> for ByteMetric {
     fn split<'a>(
         chunk: &'a ChunkSlice,
         ByteMetric(up_to): Self,
-        summary: &ChunkSummary,
+        _: &ChunkSummary,
     ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
         let left = chunk[..up_to].into();
         let right = chunk[up_to..].into();
@@ -164,36 +164,36 @@ mod tests {
         let (left, left_summary, right, right_summary) =
             LineMetric::split(chunk, LineMetric(1), &chunk.summarize());
 
-        assert_eq!("this is", left.deref());
-        assert_eq!(0, left_summary.line_breaks);
+        assert_eq!("this is\n", left.deref());
+        assert_eq!(1, left_summary.line_breaks);
 
         assert_eq!("a chunk\n", right.deref());
         assert_eq!(1, right_summary.line_breaks);
 
-        let (left, left_summary, right, right_summary) =
+        let (left, left_summary, right, _) =
             LineMetric::split(chunk, LineMetric(2), &chunk.summarize());
 
-        assert_eq!("this is\na chunk", left.deref());
-        assert_eq!(1, left_summary.line_breaks);
-        // assert_eq!(None, maybe_right);
+        assert_eq!("this is\na chunk\n", left.deref());
+        assert_eq!(2, left_summary.line_breaks);
+        assert_eq!("", right.deref());
     }
 
     #[test]
     fn split_lines_right_1() {
         let chunk = "\nthis is\na chunk".into();
 
-        let (left, left_summary, right, right_summary) =
+        let (left, _, right, right_summary) =
             LineMetric::split(chunk, LineMetric(1), &chunk.summarize());
 
+        assert_eq!("\n", left.deref());
         assert_eq!("this is\na chunk", right.deref());
         assert_eq!(1, right_summary.line_breaks);
-        // assert_eq!(None, maybe_left);
 
         let (left, left_summary, right, right_summary) =
             LineMetric::split(chunk, LineMetric(2), &chunk.summarize());
 
-        assert_eq!("\nthis is", left.deref());
-        assert_eq!(1, left_summary.line_breaks);
+        assert_eq!("\nthis is\n", left.deref());
+        assert_eq!(2, left_summary.line_breaks);
 
         assert_eq!("a chunk", right.deref());
         assert_eq!(0, right_summary.line_breaks);
@@ -203,11 +203,11 @@ mod tests {
     fn split_crlf_left() {
         let chunk = "\r\n".into();
 
-        let (left, summary, _, _) =
+        let (left, left_summary, right, _) =
             LineMetric::split(chunk, LineMetric(1), &chunk.summarize());
 
-        assert_eq!("", left.deref());
-        assert_eq!(ChunkSummary::default(), summary);
-        // assert_eq!(None, right);
+        assert_eq!("\r\n", left.deref());
+        assert_eq!(1, left_summary.line_breaks);
+        assert_eq!("", right.deref());
     }
 }
