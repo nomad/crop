@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::fmt::Debug;
-use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 /// TODO: docs
 pub trait Summarize: Debug {
@@ -42,7 +42,8 @@ pub trait Metric<L: Leaf>:
     /// TODO: docs
     fn measure(summary: &L::Summary) -> Self;
 
-    /// TODO: docs
+    /// Split the leaf slice at the given measure. This method should be
+    /// implemented only if it makes sense to take "part of a leaf".
     #[allow(unused_variables)]
     #[allow(clippy::type_complexity)]
     fn split<'a>(
@@ -53,22 +54,6 @@ pub trait Metric<L: Leaf>:
         unimplemented!(
             "Trying to split {slice:?} at {at:?}, but {} cannot be split by
             {}",
-            std::any::type_name::<L>(),
-            std::any::type_name::<Self>()
-        )
-    }
-
-    /// Slice the leaf in the given range. This method should be implemented
-    /// only if it makes sense to take "part of a leaf".
-    #[allow(unused_variables)]
-    fn slice<'a>(
-        leaf: &'a L::Slice,
-        range: Range<Self>,
-        summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary) {
-        unimplemented!(
-            "Trying to slice {leaf:?} in the {range:?} range, but {} cannot \
-             be sliced by {}",
             std::any::type_name::<L>(),
             std::any::type_name::<Self>()
         )

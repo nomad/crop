@@ -33,9 +33,4 @@ impl<L: super::Leaf> Leaf<L> {
     pub(super) fn summary(&self) -> &L::Summary {
         &self.summary
     }
-
-    #[inline]
-    pub(super) fn value(&self) -> &L {
-        &self.value
-    }
 }

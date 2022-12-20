@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use super::utils::*;
 use super::{ChunkSlice, ChunkSummary, RopeChunk};
@@ -65,16 +65,6 @@ impl Metric<RopeChunk> for ByteMetric {
         let right = chunk[up_to..].into();
         (left, left.summarize(), right, right.summarize())
     }
-
-    #[inline]
-    fn slice<'a>(
-        chunk: &'a ChunkSlice,
-        range: Range<Self>,
-        _summary: &ChunkSummary,
-    ) -> (&'a ChunkSlice, ChunkSummary) {
-        let slice = chunk[range.start.0..range.end.0].into();
-        (slice, slice.summarize())
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -135,19 +125,6 @@ impl Metric<RopeChunk> for LineMetric {
         summary: &ChunkSummary,
     ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
         split_slice_at_line_break(chunk, at, summary)
-    }
-
-    #[inline]
-    fn slice<'a>(
-        chunk: &'a ChunkSlice,
-        Range { start: LineMetric(start), end: LineMetric(end) }: Range<Self>,
-        _summary: &ChunkSummary,
-    ) -> (&'a ChunkSlice, ChunkSummary) {
-        let slice = slice_between_line_breaks(chunk, start, end);
-        (
-            slice,
-            ChunkSummary { bytes: slice.len(), line_breaks: start - end - 1 },
-        )
     }
 }
 
