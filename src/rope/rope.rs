@@ -108,7 +108,7 @@ impl Rope {
     where
         R: RangeBounds<usize>,
     {
-        todo!()
+        self.replace(byte_range, "");
     }
 
     pub(super) const fn fanout() -> usize {
@@ -129,18 +129,7 @@ impl Rope {
     where
         T: AsRef<str>,
     {
-        if byte_idx > self.byte_len() {
-            panic!(
-                "Trying to insert past the end of the Rope: the byte length \
-                 is {} but the byte index is {}",
-                self.byte_len(),
-                byte_idx
-            );
-        }
-
-        let text = text.as_ref();
-
-        todo!()
+        self.replace(byte_idx..byte_idx, text)
     }
 
     /// TODO: docs
@@ -269,6 +258,18 @@ impl Rope {
         R: RangeBounds<usize>,
         T: AsRef<str>,
     {
+        let (start, end) =
+            range_bounds_to_start_end(byte_range, 0, self.byte_len());
+
+        if end > self.byte_len() {
+            panic!(
+                "Trying to edit past the end of the Rope: the byte length is \
+                 {} but the end of the byte range is {}",
+                self.byte_len(),
+                end
+            );
+        }
+
         todo!()
     }
 
