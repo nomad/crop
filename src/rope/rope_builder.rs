@@ -1,8 +1,14 @@
-use crate::Rope;
+use super::utils::*;
+use super::{Rope, RopeChunk};
+use crate::tree::TreeBuilder;
 
 /// TODO: docs
 #[derive(Clone, Default)]
-pub struct RopeBuilder {}
+pub struct RopeBuilder {
+    tree_builder: TreeBuilder<{ Rope::fanout() }, RopeChunk>,
+    buffer: RopeChunk,
+    last_byte_is_newline: bool,
+}
 
 impl RopeBuilder {
     /// TODO: docs
@@ -11,13 +17,35 @@ impl RopeBuilder {
     where
         T: AsRef<str>,
     {
+        let mut text = text.as_ref();
+
+        loop {
+            let (to_add, rest) = rope_chunk_append(&self.buffer, text);
+            self.buffer.push_str(to_add);
+            if rest.is_empty() {
+                self.last_byte_is_newline = last_byte_is_newline(to_add);
+                break;
+            } else {
+                text = rest;
+                self.tree_builder.append(std::mem::take(&mut self.buffer));
+            }
+        }
+
         self
     }
 
     /// TODO: docs
     #[inline]
-    pub fn build(self) -> Rope {
-        todo!()
+    pub fn build(mut self) -> Rope {
+        if !self.buffer.is_empty() {
+            self.last_byte_is_newline = last_byte_is_newline(&self.buffer);
+            self.tree_builder.append(self.buffer);
+        }
+
+        Rope {
+            tree: self.tree_builder.build(),
+            last_byte_is_newline: self.last_byte_is_newline,
+        }
     }
 
     /// TODO: docs

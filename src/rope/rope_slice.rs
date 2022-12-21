@@ -233,10 +233,11 @@ impl<'a> RopeSlice<'a> {
 impl<'a> From<TreeSlice<'a, { Rope::fanout() }, RopeChunk>> for RopeSlice<'a> {
     #[inline]
     fn from(tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>) -> Self {
-        // TODO: make sure the last slice is never empty.
-        let last_slice = tree_slice.end_slice().as_bytes();
-        let last_byte_is_newline = last_slice[last_slice.len() - 1] == b'\n';
-        Self { tree_slice, last_byte_is_newline }
+        Self {
+            // TODO: make sure the last slice is never empty.
+            last_byte_is_newline: last_byte_is_newline(tree_slice.end_slice()),
+            tree_slice,
+        }
     }
 }
 

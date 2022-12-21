@@ -11,25 +11,14 @@ const ROPE_CHUNK_MAX_BYTES: usize = 1024;
 #[cfg(any(test, feature = "integration_tests"))]
 const ROPE_CHUNK_MAX_BYTES: usize = 4;
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub(super) struct RopeChunk {
-    text: String,
+    pub(super) text: String,
 }
 
 impl RopeChunk {
     pub(super) const fn max_bytes() -> usize {
         ROPE_CHUNK_MAX_BYTES
-    }
-}
-
-impl From<String> for RopeChunk {
-    #[inline]
-    fn from(text: String) -> Self {
-        debug_assert!(
-            text.len() <= ROPE_CHUNK_MAX_BYTES
-                || !text.is_char_boundary(ROPE_CHUNK_MAX_BYTES)
-        );
-        Self { text }
     }
 }
 
@@ -44,6 +33,22 @@ impl std::borrow::Borrow<ChunkSlice> for RopeChunk {
     #[inline]
     fn borrow(&self) -> &ChunkSlice {
         (&*self.text).into()
+    }
+}
+
+impl std::ops::Deref for RopeChunk {
+    type Target = String;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.text
+    }
+}
+
+impl std::ops::DerefMut for RopeChunk {
+    #[inline]
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.text
     }
 }
 
@@ -110,7 +115,7 @@ impl ToOwned for ChunkSlice {
 
     #[inline]
     fn to_owned(&self) -> Self::Owned {
-        RopeChunk::from(self.text.to_owned())
+        RopeChunk { text: self.text.to_owned() }
     }
 }
 

@@ -16,8 +16,8 @@ const ROPE_FANOUT: usize = 2;
 /// TODO: docs
 #[derive(Clone, Default)]
 pub struct Rope {
-    tree: Tree<{ Self::fanout() }, RopeChunk>,
-    last_byte_is_newline: bool,
+    pub(super) tree: Tree<{ Self::fanout() }, RopeChunk>,
+    pub(super) last_byte_is_newline: bool,
 }
 
 impl Rope {
@@ -330,10 +330,7 @@ impl From<&str> for Rope {
         } else {
             Rope {
                 tree: Tree::from_leaves(RopeChunkIter::new(s)),
-                last_byte_is_newline: matches!(
-                    s.as_bytes().last(),
-                    Some(b'\n')
-                ),
+                last_byte_is_newline: last_byte_is_newline(s),
             }
         }
     }
@@ -342,14 +339,13 @@ impl From<&str> for Rope {
 impl From<String> for Rope {
     #[inline]
     fn from(s: String) -> Self {
-        if s.len() <= RopeChunk::max_bytes() {
-            // If the string fits in one chunk we can avoid the allocation.
+        if s.is_empty() {
+            Rope::new()
+        } else if rope_chunk_append("", &s).1.is_empty() {
+            // If the string fits in one chunk we can avoid a new allocation.
             Rope {
-                last_byte_is_newline: matches!(
-                    s.as_bytes().last(),
-                    Some(b'\n')
-                ),
-                tree: Tree::from_leaves([RopeChunk::from(s)]),
+                last_byte_is_newline: last_byte_is_newline(&s),
+                tree: Tree::from_leaves([RopeChunk { text: s }]),
             }
         } else {
             Rope::from(&*s)
