@@ -1,13 +1,14 @@
 use std::sync::Arc;
 
-use super::{Leaf, Node};
+use super::{Leaf, Lnode, Node};
 
 /// Invariants: guaranteed to contain at least one child node.
+#[derive(Clone)]
 pub(super) struct Inode<const N: usize, L: Leaf> {
     children: Vec<Arc<Node<N, L>>>,
-    summary: L::Summary,
     depth: usize,
-    leaves: usize,
+    num_leaves: usize,
+    summary: L::Summary,
 }
 
 impl<const N: usize, L: Leaf> std::fmt::Debug for Inode<N, L> {
@@ -16,6 +17,8 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Inode<N, L> {
         if !f.alternate() {
             f.debug_struct("Inode")
                 .field("children", &self.children)
+                .field("depth", &self.depth)
+                .field("num_leaves", &self.num_leaves)
                 .field("summary", &self.summary)
                 .finish()
         } else {
@@ -29,9 +32,9 @@ impl<const N: usize, L: Leaf> Default for Inode<N, L> {
     fn default() -> Self {
         Self {
             children: Vec::with_capacity(N),
-            summary: Default::default(),
             depth: 1,
-            leaves: 0,
+            num_leaves: 0,
+            summary: Default::default(),
         }
     }
 }
@@ -48,29 +51,26 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn leaves(&self) -> usize {
-        self.leaves
+    pub(super) fn num_leaves(&self) -> usize {
+        self.num_leaves
     }
 
     /// # Panics
     ///
     /// This function will panic if the iterator yields more than `N` items.
     #[inline]
-    fn from_children<I>(children: I) -> Self
+    pub(super) fn from_children<I>(children: I) -> Self
     where
         I: IntoIterator<Item = Arc<Node<N, L>>>,
-        I::IntoIter: ExactSizeIterator,
     {
+        // TODO: assert len <= N
+
         let children = children.into_iter();
-
-        let len = children.len();
-
-        assert!(len <= N);
 
         let mut inode = Self::default();
 
         for child in children {
-            inode.leaves += child.num_leaves();
+            inode.num_leaves += child.num_leaves();
             inode.summary += child.summary();
             inode.children.push(child);
         }
@@ -83,11 +83,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn from_leaves<I>(leaves: I) -> Self
     where
-        I: IntoIterator<Item = L>,
+        I: IntoIterator<Item = Lnode<L>>,
     {
         let mut nodes = leaves
             .into_iter()
-            .map(super::node_leaf::Leaf::from_value)
             .map(Node::Leaf)
             .map(Arc::new)
             .collect::<Vec<_>>();

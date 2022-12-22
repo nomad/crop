@@ -1,14 +1,16 @@
-#[derive(Default)]
-pub(super) struct Leaf<L: super::Leaf> {
-    pub(super) value: L,
-    pub(super) summary: L::Summary,
+use super::Leaf;
+
+#[derive(Clone, Default)]
+pub(super) struct Lnode<L: Leaf> {
+    value: L,
+    summary: L::Summary,
 }
 
-impl<L: super::Leaf> std::fmt::Debug for Leaf<L> {
+impl<L: Leaf> std::fmt::Debug for Lnode<L> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if !f.alternate() {
-            f.debug_struct("Leaf")
+            f.debug_struct("Lnode")
                 .field("value", &self.value)
                 .field("summary", &self.summary)
                 .finish()
@@ -18,12 +20,14 @@ impl<L: super::Leaf> std::fmt::Debug for Leaf<L> {
     }
 }
 
-impl<L: super::Leaf> Leaf<L> {
+impl<L: Leaf> From<L> for Lnode<L> {
     #[inline]
-    pub(super) fn from_value(value: L) -> Self {
+    fn from(value: L) -> Self {
         Self { summary: value.summarize(), value }
     }
+}
 
+impl<L: Leaf> Lnode<L> {
     #[inline]
     pub fn as_slice(&self) -> &L::Slice {
         self.value.borrow()

@@ -1,14 +1,15 @@
-use super::{Inode, Leaf, Metric};
+use super::{Inode, Leaf, Lnode, Metric};
 
+#[derive(Clone)]
 pub(super) enum Node<const N: usize, L: Leaf> {
     Internal(Inode<N, L>),
-    Leaf(super::node_leaf::Leaf<L>),
+    Leaf(Lnode<L>),
 }
 
 impl<const N: usize, L: Leaf + Default> Default for Node<N, L> {
     #[inline]
     fn default() -> Self {
-        Node::Leaf(super::node_leaf::Leaf::default())
+        Node::Leaf(Lnode::default())
     }
 }
 
@@ -50,9 +51,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) unsafe fn as_leaf_unchecked(
-        &self,
-    ) -> &super::node_leaf::Leaf<L> {
+    pub(super) unsafe fn as_leaf_unchecked(&self) -> &Lnode<L> {
         debug_assert!(
             self.is_leaf(),
             "A node was expected to be a leaf but it's an internal node. This \
@@ -118,6 +117,29 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    #[inline]
+    pub fn from_leaves<I>(leaves: I) -> Self
+    where
+        I: IntoIterator<Item = Lnode<L>>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        let mut leaves = leaves.into_iter();
+
+        if leaves.len() == 0 {
+            panic!(
+                "Cannot construct a Node<{}, {}> from an empty iterator",
+                N,
+                std::any::type_name::<L>(),
+            )
+        }
+
+        if leaves.len() == 1 {
+            return Self::Leaf(leaves.next().unwrap());
+        }
+
+        Self::Internal(Inode::from_leaves(leaves))
+    }
+
     /// Note: doesn't do bounds checks.
     #[inline]
     pub fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
@@ -158,7 +180,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     #[inline]
     pub(super) fn num_leaves(&self) -> usize {
         match self {
-            Node::Internal(inode) => inode.leaves(),
+            Node::Internal(inode) => inode.num_leaves(),
             Node::Leaf(_) => 1,
         }
     }

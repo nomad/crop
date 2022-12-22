@@ -1,8 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::node_leaf;
-use super::{Inode, Leaf, Leaves, Metric, Node, TreeSlice, Units};
+use super::{Leaf, Leaves, Lnode, Metric, Node, TreeSlice, Units};
 
 /// TODO: docs
 #[derive(Default)]
@@ -63,21 +62,11 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         I: IntoIterator<Item = L>,
         I::IntoIter: ExactSizeIterator,
     {
-        let mut leaves = leaves.into_iter();
-
-        if leaves.len() == 0 {
-            panic!(
-                "Cannot construct a Tree<{}, {}> from an empty iterator",
-                FANOUT,
-                std::any::type_name::<L>(),
-            )
+        Self {
+            root: Arc::new(Node::from_leaves(
+                leaves.into_iter().map(Lnode::from),
+            )),
         }
-
-        if leaves.len() == 1 {
-            return Self::new_leaf(leaves.next().unwrap());
-        }
-
-        Tree { root: Arc::new(Node::Internal(Inode::from_leaves(leaves))) }
     }
 
     /// Returns the leaf at `measure` (0-indexed) together with its `M` offset.
@@ -103,26 +92,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
         Leaves::from(self)
-    }
-
-    #[inline]
-    fn new_leaf(leaf: L) -> Self {
-        Self {
-            root: Arc::new(Node::Leaf(node_leaf::Leaf {
-                summary: leaf.summarize(),
-                value: leaf,
-            })),
-        }
-    }
-
-    #[inline]
-    fn new_leaf_with_summary(leaf: L, summary: L::Summary) -> Self {
-        Self {
-            root: Arc::new(Node::Leaf(node_leaf::Leaf {
-                value: leaf,
-                summary,
-            })),
-        }
     }
 
     /// TODO: docs
