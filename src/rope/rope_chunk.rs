@@ -1,5 +1,5 @@
 use std::fmt::{self, Debug};
-use std::ops::{AddAssign, SubAssign};
+use std::ops::AddAssign;
 use std::str;
 
 use super::metrics::ByteMetric;
@@ -130,14 +130,6 @@ impl<'a> AddAssign<&'a Self> for ChunkSummary {
     fn add_assign(&mut self, rhs: &'a Self) {
         self.bytes += rhs.bytes;
         self.line_breaks += rhs.line_breaks;
-    }
-}
-
-impl<'a> SubAssign<&'a Self> for ChunkSummary {
-    #[inline]
-    fn sub_assign(&mut self, rhs: &'a Self) {
-        self.bytes -= rhs.bytes;
-        self.line_breaks -= rhs.line_breaks;
     }
 }
 

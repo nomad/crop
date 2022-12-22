@@ -157,7 +157,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::{AddAssign, SubAssign};
+    use std::ops::AddAssign;
 
     use super::*;
     use crate::tree::Summarize;
@@ -172,13 +172,6 @@ mod tests {
         fn add_assign(&mut self, rhs: &'a Self) {
             self.count += rhs.count;
             self.leaves += rhs.leaves;
-        }
-    }
-
-    impl<'a> SubAssign<&'a Self> for Count {
-        fn sub_assign(&mut self, rhs: &'a Self) {
-            self.count -= rhs.count;
-            self.leaves -= rhs.leaves;
         }
     }
 

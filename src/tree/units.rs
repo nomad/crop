@@ -196,7 +196,6 @@ where
             let tree_slice = TreeSlice {
                 root,
                 before: L::Summary::default(),
-                after: L::Summary::default(),
                 summary: summary.clone(),
                 start_slice: slice,
                 start_summary: summary,

@@ -11,7 +11,7 @@ pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
     root: &'a Node<FANOUT, L>,
 
     /// TODO: docs
-    offset: L::BaseMetric,
+    before: L::BaseMetric,
 
     /// TODO: docs
     after: L::BaseMetric,
@@ -77,7 +77,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
     fn from(tree: &'a Tree<FANOUT, L>) -> Leaves<'a, FANOUT, L> {
         Self {
             root: &*tree.root,
-            offset: L::BaseMetric::zero(),
+            before: L::BaseMetric::zero(),
             after: L::BaseMetric::zero(),
             first_slice: None,
             last_slice: None,
@@ -100,10 +100,18 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
 {
     #[inline]
     fn from(slice: &'a TreeSlice<'a, FANOUT, L>) -> Leaves<'a, FANOUT, L> {
+        let root = &*slice.root;
+
+        let before = L::BaseMetric::measure(&slice.before);
+
+        let after = L::BaseMetric::measure(root.summary())
+            - L::BaseMetric::measure(slice.summary())
+            - before;
+
         Self {
-            root: &*slice.root,
-            offset: L::BaseMetric::measure(&slice.before),
-            after: L::BaseMetric::measure(&slice.after),
+            root,
+            before,
+            after,
             first_slice: Some(slice.start_slice),
             last_slice: Some(slice.end_slice),
             first_been_yielded: false,
@@ -133,7 +141,7 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
         else if !self.first_been_yielded {
             let (first, forward_leaves) = first_slice_forward(
                 self.root,
-                self.offset,
+                self.before,
                 &mut self.forward_path,
                 &mut self.first_slice,
             );
