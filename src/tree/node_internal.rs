@@ -63,21 +63,22 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     where
         I: IntoIterator<Item = Arc<Node<N, L>>>,
     {
-        // TODO: assert len <= N
+        let children = children.into_iter().collect::<Vec<Arc<Node<N, L>>>>();
 
-        let children = children.into_iter();
+        debug_assert!(!children.is_empty());
+        debug_assert!(children.len() <= N);
 
-        let mut inode = Self::default();
+        let depth = children[0].depth() + 1;
 
-        for child in children {
-            inode.num_leaves += child.num_leaves();
-            inode.summary += child.summary();
-            inode.children.push(child);
+        let mut num_leaves = children[0].num_leaves();
+        let mut summary = children[0].summary().clone();
+
+        for child in &children[1..] {
+            num_leaves += child.num_leaves();
+            summary += child.summary();
         }
 
-        inode.depth = inode.children[0].depth() + 1;
-
-        inode
+        Self { children, depth, num_leaves, summary }
     }
 
     #[inline]

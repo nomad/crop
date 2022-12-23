@@ -14,8 +14,9 @@ graphemes = ["dep:unicode-segmentation"]
 integration_tests = []
 
 [dependencies]
+smallvec = { version = "1.10.0", features = ["const_generics"]}
 str_indices = "0.4.0"
-unicode-segmentation = { version = "1.10", optional = true }
+unicode-segmentation = { version = "1.10.0", optional = true }
 
 [dev-dependencies]
 criterion = "0.4"
