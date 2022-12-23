@@ -11,9 +11,16 @@ const ROPE_CHUNK_MAX_BYTES: usize = 1024;
 #[cfg(any(test, feature = "integration_tests"))]
 const ROPE_CHUNK_MAX_BYTES: usize = 4;
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub(super) struct RopeChunk {
     pub(super) text: String,
+}
+
+impl Default for RopeChunk {
+    #[inline]
+    fn default() -> Self {
+        Self { text: String::with_capacity(Self::max_bytes() + 3) }
+    }
 }
 
 impl RopeChunk {
