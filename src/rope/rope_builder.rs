@@ -23,8 +23,9 @@ impl RopeBuilder {
             let (to_add, rest) = rope_chunk_append(&self.buffer, text);
             self.buffer.push_str(to_add);
             if rest.is_empty() {
-                // TODO: this panics if `to_add` is empty.
-                self.last_byte_is_newline = last_byte_is_newline(to_add);
+                if !to_add.is_empty() {
+                    self.last_byte_is_newline = last_byte_is_newline(to_add);
+                }
                 break;
             } else {
                 text = rest;

@@ -101,6 +101,15 @@ pub(super) fn debug_chunks(
     Ok(())
 }
 
+/// Returns `true` if the last byte in the string slice is a carriage return.
+///
+/// # Panics
+///
+/// This function will panic if the string slice is empty.
+fn ends_in_cr(s: &str) -> bool {
+    s.as_bytes()[s.len() - 1] == b'\r'
+}
+
 /// TODO: docs
 #[cfg(feature = "graphemes")]
 #[inline]
@@ -192,9 +201,37 @@ where
 #[inline]
 pub(super) fn rope_chunk_append<'a>(
     current: &str,
-    mut text: &'a str,
+    text: &'a str,
 ) -> (&'a str, &'a str) {
-    todo!()
+    if current.len() >= RopeChunk::max_bytes() {
+        // If the current text is already longer than `RopeChunk::max_bytes()`
+        // the only edge case to consider is not splitting CRLF pairs.
+        if ends_in_cr(current) && !text.is_empty() && starts_with_lf(text) {
+            return (&text[0..1], &text[1..]);
+        } else {
+            return ("", text);
+        }
+    }
+
+    let mut bytes_to_add = RopeChunk::max_bytes() - current.len();
+
+    if text.len() <= bytes_to_add {
+        return (text, "");
+    }
+
+    while !text.is_char_boundary(bytes_to_add) {
+        bytes_to_add += 1;
+    }
+
+    // Add one more byte if we're splitting a CRLF pair.
+    if ends_in_cr(&text[..bytes_to_add])
+        && !text[bytes_to_add..].is_empty()
+        && starts_with_lf(&text[bytes_to_add..])
+    {
+        bytes_to_add += 1;
+    }
+
+    (&text[..bytes_to_add], &text[bytes_to_add..])
 }
 
 /// TODO: docs
@@ -235,4 +272,13 @@ pub(super) fn split_slice_at_line_break<'a>(
     };
 
     (left, left_summary, right, right_summary)
+}
+
+/// Returns `true` if the first byte in the string slice is a line feed.
+///
+/// # Panics
+///
+/// This function will panic if the string slice is empty.
+fn starts_with_lf(s: &str) -> bool {
+    s.as_bytes()[0] == b'\n'
 }
