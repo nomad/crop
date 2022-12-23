@@ -12,9 +12,9 @@ pub struct TreeBuilder<const FANOUT: usize, L: Leaf> {
     /// every `i` in `0..stack.len()`, `j,k` in  `0..stack[i].len()`, it holds
     /// `stack[i][j].depth() = stack[i][k].depth()`;
     ///
-    /// - all the vectors at every stack level have a length `<=` than `FANOUT`
-    /// (but it could also be zero, i.e. all levels except the first one can be
-    /// empty);
+    /// - all the vectors at every stack level have a length strictly less
+    /// than `FANOUT` (but it could also be zero, i.e. all levels except the
+    /// first one can be empty);
     ///
     /// - the inodes are grouped in order of descending depth, with each stack
     /// level containing inodes of height one less than the previous level.
@@ -23,13 +23,18 @@ pub struct TreeBuilder<const FANOUT: usize, L: Leaf> {
     /// `stack[i]` and `stack[i + 1]` are not empty);
     ///
     /// - every inode at every stack level is completely full, that is...
+    ///
+    /// - the inodes in the last stack level (assuming there are any) always
+    /// have a depth of 1.
+    // TODO: try using a SmallVec<[Inode<L>; FANOUT]>
     stack: Vec<Vec<Inode<FANOUT, L>>>,
 
     /// A bunch of leaves waiting to be grouped into an internal node.
     ///
     /// # Invariants
     ///
-    /// - `leaves.len() <= FANOUT`.
+    /// - `leaves.len() < FANOUT`.
+    // TODO: try using a SmallVec<[Lnode<L>; FANOUT]>
     leaves: Vec<Lnode<L>>,
 }
 
@@ -44,7 +49,69 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
     /// TODO: docs
     #[inline]
     pub fn append(&mut self, leaf: L) {
-        todo!()
+        debug_assert!(self.leaves.len() < FANOUT);
+
+        self.leaves.push(Lnode::from(leaf));
+
+        if self.leaves.len() < FANOUT {
+            return;
+        }
+
+        let mut inode = Inode::from_children(
+            // TODO: try using `drain(..)` instead
+            std::mem::replace(&mut self.leaves, Vec::with_capacity(FANOUT))
+                .into_iter()
+                .map(|l| Arc::new(Node::Leaf(l))),
+        );
+
+        let mut stack_idx = match self.stack.len() {
+            0 => {
+                let mut first_level = Vec::with_capacity(FANOUT);
+                first_level.push(inode);
+                self.stack.push(first_level);
+                return;
+            },
+
+            n => n - 1,
+        };
+
+        loop {
+            let stack_level = &mut self.stack[stack_idx];
+
+            debug_assert!(
+                stack_level.is_empty()
+                    || stack_level[0].depth() == inode.depth()
+            );
+
+            debug_assert!(stack_level.len() < FANOUT);
+
+            stack_level.push(inode);
+
+            if stack_level.len() < FANOUT {
+                return;
+            }
+
+            inode = Inode::from_children(
+                // TODO: try using `drain(..)` instead
+                std::mem::replace(stack_level, Vec::with_capacity(FANOUT))
+                    .into_iter()
+                    .map(|i| Arc::new(Node::Internal(i))),
+            );
+
+            if stack_idx == 0 {
+                stack_level.push(inode);
+                self.stack.push(Vec::with_capacity(FANOUT));
+
+                #[cfg(debug_assertions)]
+                for level in &self.stack[1..] {
+                    debug_assert!(level.is_empty());
+                }
+
+                return;
+            } else {
+                stack_idx -= 1;
+            }
+        }
     }
 
     /// TODO: docs
@@ -53,40 +120,68 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
     where
         L: Default,
     {
-        let mut root = match self.leaves.len() {
-            0 => return Tree::default(),
-
-            1 if self.stack.is_empty() => {
-                let root = Node::Leaf(Lnode::from(
-                    self.leaves.into_iter().next().unwrap(),
-                ));
-
-                return Tree { root: Arc::new(root) };
-            },
-
-            _ => Node::Internal(Inode::from_children(
-                self.leaves.into_iter().map(|l| Arc::new(Node::Leaf(l))),
-            )),
-        };
-
-        while let Some(inodes) = self.stack.pop() {
-            if inodes.len() == FANOUT {
-                todo!();
-            } else {
-                root = Node::Internal(Inode::from_children(
-                    inodes
-                        .into_iter()
-                        .map(Node::Internal)
-                        .chain(std::iter::once(root))
-                        .map(Arc::new),
-                ));
+        if self.stack.is_empty() {
+            if self.leaves.len() == 0 {
+                // No internal nodes on the stack and no leaves, this means
+                // that `append` has never been called and we're building an
+                // empty Tree. This is why we need the `Default` bound on `L`.
+                return Tree::default();
+            } else if self.leaves.len() == 1 {
+                let root =
+                    Lnode::from(self.leaves.into_iter().next().unwrap());
+                return Tree { root: Arc::new(Node::Leaf(root)) };
             }
         }
 
-        Tree { root: Arc::new(root) }
+        let mut root = if !self.leaves.is_empty() {
+            debug_assert!(self.leaves.len() < FANOUT);
+
+            Inode::from_children(
+                self.leaves.into_iter().map(|l| Arc::new(Node::Leaf(l))),
+            )
+        } else {
+            loop {
+                // TODO: explain why we can unwrap
+                let stack_level = self.stack.pop().unwrap();
+
+                match stack_level.len() {
+                    0 => continue,
+
+                    1 if self.stack.is_empty() => {
+                        // TODO: explain this edge case
+                        break stack_level.into_iter().next().unwrap();
+                    },
+
+                    _ => {
+                        break Inode::from_children(
+                            stack_level
+                                .into_iter()
+                                .map(|i| Arc::new(Node::Internal(i))),
+                        )
+                    },
+                }
+            }
+        };
+
+        while let Some(mut stack_level) = self.stack.pop() {
+            debug_assert!(
+                stack_level.is_empty()
+                    || stack_level[0].depth() == root.depth()
+            );
+
+            debug_assert!(stack_level.len() < FANOUT);
+
+            stack_level.push(root);
+
+            root = Inode::from_children(
+                stack_level.into_iter().map(|i| Arc::new(Node::Internal(i))),
+            );
+        }
+
+        Tree { root: Arc::new(Node::Internal(root)) }
     }
 
-    /// TODO: docs
+    #[allow(dead_code)]
     #[inline]
     pub fn new() -> Self {
         Self::default()
