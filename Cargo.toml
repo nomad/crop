@@ -20,9 +20,12 @@ unicode-segmentation = { version = "1.10", optional = true }
 [dev-dependencies]
 criterion = "0.4"
 rand = "0.8"
+ropey = { git = "https://github.com/cessen/ropey", rev = "633143d" }
+xi-rope = { git = "https://github.com/xi-editor/xi-editor", rev = "7cd12f4" }
+
 
 [[bench]]
-name = "create"
+name = "creation"
 harness = false
 
 [[bench]]
