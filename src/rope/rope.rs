@@ -13,6 +13,8 @@ const ROPE_FANOUT: usize = 8;
 #[cfg(any(test, feature = "integration_tests"))]
 const ROPE_FANOUT: usize = 2;
 
+/// A utf-8 text rope.
+///
 /// TODO: docs
 #[derive(Clone, Default)]
 pub struct Rope {
@@ -360,6 +362,15 @@ impl From<std::borrow::Cow<'_, str>> for Rope {
             std::borrow::Cow::Owned(s) => Rope::from(s),
             std::borrow::Cow::Borrowed(s) => Rope::from(s),
         }
+    }
+}
+
+impl std::str::FromStr for Rope {
+    type Err = std::convert::Infallible;
+
+    #[inline]
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self::from(s))
     }
 }
 
