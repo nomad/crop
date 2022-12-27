@@ -162,7 +162,7 @@ criterion_group!(
     xi_rope_from_str,
     crop_builder,
     ropey_builder,
-    xi_rope_builder
+    xi_rope_builder,
 );
 
 criterion_main!(benches);

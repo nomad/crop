@@ -163,13 +163,9 @@ pub(super) fn is_grapheme_boundary(
 }
 
 /// Returns `true` if the last byte of the string slice is a line feed (0x0A).
-///
-/// # Panics
-///
-/// This function will panic if the string slice is empty.
 #[inline]
 pub(super) fn last_byte_is_newline(s: &str) -> bool {
-    s.as_bytes()[s.len() - 1] == b'\n'
+    !s.is_empty() && s.as_bytes()[s.len() - 1] == b'\n'
 }
 
 /// TODO: docs
