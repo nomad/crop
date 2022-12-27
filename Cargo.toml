@@ -29,6 +29,10 @@ name = "creation"
 harness = false
 
 [[bench]]
+name = "insertion"
+harness = false
+
+[[bench]]
 name = "iterators"
 harness = false
 
