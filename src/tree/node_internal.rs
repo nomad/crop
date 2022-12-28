@@ -1,6 +1,7 @@
+use std::ops::Range;
 use std::sync::Arc;
 
-use super::{Leaf, Lnode, Node};
+use super::{Leaf, Lnode, Metric, Node, Tree};
 
 /// Invariants: guaranteed to contain at least one child node.
 #[derive(Clone)]
@@ -48,6 +49,21 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn depth(&self) -> usize {
         self.depth
+    }
+
+    #[inline]
+    pub(super) fn empty() -> Self {
+        Self::default()
+    }
+
+    #[inline]
+    pub(super) const fn max_children() -> usize {
+        N
+    }
+
+    #[inline]
+    pub(super) const fn min_children() -> usize {
+        N / 2
     }
 
     #[inline]
@@ -159,7 +175,7 @@ fn pretty_print_inode<const N: usize, L: Leaf>(
         "{}{}{:?}",
         &shifts[..shifts.len() - last_shift_byte_len],
         ident,
-        &inode.summary
+        inode.summary()
     )?;
 
     for (i, child) in inode.children().iter().enumerate() {

@@ -13,12 +13,20 @@ pub trait Summarize: Debug {
 }
 
 /// TODO: docs
-pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized {
+pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized + Clone {
+    const MIN_LEAF_SIZE: Self::BaseMetric;
+
     type BaseMetric: Metric<Self>;
 
     type Slice: ?Sized
         + Summarize<Summary = <Self as Summarize>::Summary>
         + ToOwned<Owned = Self>;
+
+    /// TODO: docs
+    #[allow(unused_variables)]
+    fn append_slice(&mut self, slice: &Self::Slice) {
+        unimplemented!();
+    }
 }
 
 /// TODO: docs

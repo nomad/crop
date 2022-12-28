@@ -2,8 +2,8 @@ use super::Leaf;
 
 #[derive(Clone, Default)]
 pub(super) struct Lnode<L: Leaf> {
-    value: L,
-    summary: L::Summary,
+    pub(super) value: L,
+    pub(super) summary: L::Summary,
 }
 
 impl<L: Leaf> std::fmt::Debug for Lnode<L> {

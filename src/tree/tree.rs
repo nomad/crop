@@ -32,7 +32,17 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
 {
     #[inline]
     fn from(tree_slice: TreeSlice<'a, FANOUT, L>) -> Tree<FANOUT, L> {
-        todo!()
+        let root = if L::BaseMetric::measure(tree_slice.summary())
+            == L::BaseMetric::measure(tree_slice.root.summary())
+        {
+            // If the TreeSlice and its root have the same base measure we can
+            // simply clone the root.
+            Arc::clone(tree_slice.root)
+        } else {
+            Arc::new(Node::from(tree_slice))
+        };
+
+        Tree { root }
     }
 }
 
@@ -43,8 +53,10 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M1: Metric<L>,
         M2: Metric<L>,
     {
+        // TODO: doesn't work for `LineMetric`
+
         debug_assert!(
-            from < M1::measure(self.summary()),
+            from <= M1::measure(self.summary()),
             "Trying to get the leaf at {:?}, but this tree is only {:?} long",
             from,
             M1::measure(self.summary()),
@@ -78,8 +90,10 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     where
         M: Metric<L>,
     {
+        // TODO: doesn't work for `LineMetric`
+
         debug_assert!(
-            measure < M::measure(self.summary()),
+            measure <= M::measure(self.summary()),
             "Trying to get the leaf at {:?}, but this tree is only {:?} long",
             measure,
             M::measure(self.summary()),
@@ -103,7 +117,10 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     {
         debug_assert!(M::zero() <= range.start);
         debug_assert!(range.start <= range.end);
-        // debug_assert!(range.end <= M::measure(self.summary()));
+
+        // TODO: doesn't work for `LineMetric`
+
+        debug_assert!(range.end <= M::measure(self.summary()));
 
         TreeSlice::from_range_in_root(&self.root, range)
     }
@@ -169,6 +186,8 @@ mod tests {
     }
 
     impl Leaf for usize {
+        const MIN_LEAF_SIZE: LeavesMetric = 1;
+
         type BaseMetric = LeavesMetric;
         type Slice = Self;
     }

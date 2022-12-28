@@ -1,4 +1,6 @@
-use super::{Inode, Leaf, Lnode, Metric};
+use std::sync::Arc;
+
+use super::{Inode, Leaf, Lnode, Metric, Summarize, TreeSlice};
 
 #[derive(Clone)]
 pub(super) enum Node<const N: usize, L: Leaf> {
@@ -31,6 +33,47 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
                 Self::Leaf(leaf) => write!(f, "{:#?}", leaf),
             }
         }
+    }
+}
+
+impl<'a, const N: usize, L: Leaf> From<TreeSlice<'a, N, L>> for Node<N, L> {
+    #[inline]
+    fn from(tree_slice: TreeSlice<'a, N, L>) -> Node<N, L> {
+        let TreeSlice {
+            root,
+            before,
+            summary,
+            start_slice,
+            end_slice,
+            num_leaves,
+            ..
+        } = tree_slice;
+
+        if tree_slice.root.is_leaf() {
+            debug_assert_eq!(num_leaves, 1);
+
+            return Self::Leaf(Lnode {
+                value: start_slice.to_owned(),
+                summary,
+            });
+        }
+
+        let mut node = Node::Internal(Inode::empty());
+
+        stuff_rec(
+            root,
+            &mut node,
+            L::BaseMetric::measure(&before),
+            num_leaves,
+            start_slice,
+            end_slice,
+            &mut L::BaseMetric::zero(),
+            &mut 0,
+            &mut false,
+            &mut false,
+        );
+
+        node
     }
 }
 
@@ -202,4 +245,232 @@ impl<const N: usize, L: Leaf> Node<N, L> {
             Node::Leaf(leaf) => leaf.summary(),
         }
     }
+}
+
+// #[inline]
+// fn merge_distribute_inodes<const N: usize, L: Leaf>(
+//     invalid: &mut Inode<N, L>,
+//     valid: &mut Inode<N, L>,
+// ) {
+//     debug_assert_eq!(invalid.depth(), valid.depth());
+//     debug_assert!(invalid.children().len() < Inode::<N, L>::min_children());
+// }
+
+#[inline]
+fn stuff_rec<const N: usize, L: Leaf>(
+    node: &Arc<Node<N, L>>,
+    adding_to: &mut Node<N, L>,
+    before: L::BaseMetric,
+    leaves_in_slice: usize,
+    start_slice: &L::Slice,
+    end_slice: &L::Slice,
+    measured: &mut L::BaseMetric,
+    visited_leaves: &mut usize,
+    found_start: &mut bool,
+    looking_for_start: &mut bool,
+) {
+    match &**node {
+        Node::Internal(inode) => {
+            for child in inode.children() {
+                if *visited_leaves == leaves_in_slice {
+                    return;
+                }
+
+                if !*found_start {
+                    debug_assert_eq!(*visited_leaves, 0);
+
+                    let measure = L::BaseMetric::measure(inode.summary());
+
+                    if *measured + measure > before {
+                        stuff_rec(
+                            node,
+                            adding_to,
+                            before,
+                            leaves_in_slice,
+                            start_slice,
+                            end_slice,
+                            measured,
+                            visited_leaves,
+                            found_start,
+                            looking_for_start,
+                        );
+                    } else {
+                        // This child comes before the starting leaf.
+                        *measured += measure;
+                    }
+                } else {
+                    debug_assert!(*visited_leaves > 0);
+                    debug_assert!(*visited_leaves < leaves_in_slice);
+
+                    if *visited_leaves + child.num_leaves() >= leaves_in_slice
+                    {
+                        stuff_rec(
+                            node,
+                            adding_to,
+                            before,
+                            leaves_in_slice,
+                            start_slice,
+                            end_slice,
+                            measured,
+                            visited_leaves,
+                            found_start,
+                            looking_for_start,
+                        );
+                    } else {
+                        add_to_node(adding_to, Arc::clone(child));
+                        *visited_leaves += child.num_leaves();
+                    }
+                }
+            }
+        },
+
+        Node::Leaf(leaf) => {
+            if *visited_leaves == leaves_in_slice {
+                return;
+            }
+
+            if !*found_start {
+                debug_assert_eq!(*visited_leaves, 0);
+
+                let measure = L::BaseMetric::measure(leaf.summary());
+
+                if *measured + measure > before {
+                    // This leaf contains the start slice.
+                    //
+                    // TODO: avoid calling `summarize` again.
+                    *found_start = true;
+
+                    *visited_leaves = 1;
+
+                    let start_summary = start_slice.summarize();
+
+                    if L::BaseMetric::measure(&start_summary)
+                        >= L::MIN_LEAF_SIZE
+                    {
+                        *adding_to = Node::Leaf(Lnode {
+                            value: start_slice.to_owned(),
+                            summary: start_summary,
+                        });
+                    } else {
+                        *looking_for_start = true;
+                    }
+                } else {
+                    *measured += measure;
+                }
+            } else if *looking_for_start {
+                // We visited the first leaf but it wasn't big enough to become
+                // a node on its own.
+
+                debug_assert_eq!(*visited_leaves, 1);
+
+                debug_assert!(
+                    L::BaseMetric::measure(&start_slice.summarize())
+                        < L::MIN_LEAF_SIZE
+                );
+
+                let mut start_summary = start_slice.summarize();
+
+                let add_to_first =
+                    L::MIN_LEAF_SIZE - L::BaseMetric::measure(&start_summary);
+
+                // This leaf comes before the start slice.
+                let (
+                    add_to_first,
+                    first_summary,
+                    keep_in_second,
+                    second_summary,
+                ) = L::BaseMetric::split(
+                    leaf.as_slice(),
+                    add_to_first,
+                    leaf.summary(),
+                );
+
+                start_summary += &first_summary;
+
+                let mut first = start_slice.to_owned();
+                first.append_slice(add_to_first);
+
+                start_summary += &first_summary;
+
+                *adding_to =
+                    Node::Leaf(Lnode { value: first, summary: start_summary });
+
+                let second = Arc::new(Node::Leaf(Lnode {
+                    value: keep_in_second.to_owned(),
+                    summary: second_summary,
+                }));
+
+                add_to_node(adding_to, second);
+
+                *looking_for_start = false;
+                *visited_leaves = 2;
+            } else if *visited_leaves + 1 == leaves_in_slice {
+                // This is the penultimate leaf.
+
+                let mut end_summary = end_slice.summarize();
+
+                let end_size = L::BaseMetric::measure(&end_summary);
+
+                if end_size >= L::MIN_LEAF_SIZE {
+                    add_to_node(adding_to, Arc::clone(node));
+
+                    let last = Arc::new(Node::Leaf(Lnode {
+                        value: end_slice.to_owned(),
+                        summary: end_summary,
+                    }));
+
+                    add_to_node(adding_to, last);
+                } else {
+                    let (
+                        keep_in_penultimate,
+                        penultimate_summary,
+                        add_to_last,
+                        last_summary,
+                    ) = L::BaseMetric::split(
+                        leaf.as_slice(),
+                        L::MIN_LEAF_SIZE - end_size,
+                        leaf.summary(),
+                    );
+
+                    add_to_node(
+                        adding_to,
+                        Arc::new(Node::Leaf(Lnode {
+                            value: keep_in_penultimate.to_owned(),
+                            summary: penultimate_summary,
+                        })),
+                    );
+
+                    let mut last = add_to_last.to_owned();
+                    last.append_slice(end_slice);
+
+                    end_summary += &last_summary;
+
+                    add_to_node(
+                        adding_to,
+                        Arc::new(Node::Leaf(Lnode {
+                            value: last,
+                            summary: end_summary,
+                        })),
+                    );
+                }
+
+                *visited_leaves = leaves_in_slice;
+            } else {
+                // This is a leaf fully contained in the tree slice.
+                debug_assert!(*visited_leaves > 0);
+                debug_assert!(*visited_leaves < leaves_in_slice);
+
+                add_to_node(adding_to, Arc::clone(node));
+                *visited_leaves += 1;
+            }
+        },
+    }
+}
+
+#[inline]
+fn add_to_node<const N: usize, L: Leaf>(
+    lhs: &mut Node<N, L>,
+    rhs: Arc<Node<N, L>>,
+) {
+    todo!()
 }

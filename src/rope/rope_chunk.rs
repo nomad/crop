@@ -78,6 +78,7 @@ impl Summarize for RopeChunk {
 }
 
 impl Leaf for RopeChunk {
+    const MIN_LEAF_SIZE: ByteMetric = ByteMetric(RopeChunk::min_bytes());
     type BaseMetric = ByteMetric;
     type Slice = ChunkSlice;
 }
