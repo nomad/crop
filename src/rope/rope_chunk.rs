@@ -81,6 +81,11 @@ impl Leaf for RopeChunk {
     const MIN_LEAF_SIZE: ByteMetric = ByteMetric(RopeChunk::min_bytes());
     type BaseMetric = ByteMetric;
     type Slice = ChunkSlice;
+
+    #[inline]
+    fn append_slice(&mut self, s: &ChunkSlice) {
+        self.push_str(s);
+    }
 }
 
 #[derive(Debug, PartialEq)]

@@ -71,6 +71,22 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.num_leaves
     }
 
+    #[inline]
+    fn is_full(&self) -> bool {
+        self.children.len() == N
+    }
+
+    #[inline]
+    pub(super) fn push(&mut self, child: Arc<Node<N, L>>) {
+        // TODO: uncomment this.
+        // debug_assert!(!self.is_full());
+        // debug_assert_eq!(child.depth() + 1, self.depth());
+
+        self.num_leaves += child.num_leaves();
+        self.summary += child.summary();
+        self.children.push(child);
+    }
+
     /// # Panics
     ///
     /// This function will panic if the iterator yields more than `N` items.

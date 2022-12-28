@@ -283,7 +283,7 @@ fn stuff_rec<const N: usize, L: Leaf>(
 
                     if *measured + measure > before {
                         stuff_rec(
-                            node,
+                            child,
                             adding_to,
                             before,
                             leaves_in_slice,
@@ -305,7 +305,7 @@ fn stuff_rec<const N: usize, L: Leaf>(
                     if *visited_leaves + child.num_leaves() >= leaves_in_slice
                     {
                         stuff_rec(
-                            node,
+                            child,
                             adding_to,
                             before,
                             leaves_in_slice,
@@ -472,5 +472,14 @@ fn add_to_node<const N: usize, L: Leaf>(
     lhs: &mut Node<N, L>,
     rhs: Arc<Node<N, L>>,
 ) {
-    todo!()
+    match lhs {
+        Node::Internal(inode) => inode.push(rhs),
+
+        Node::Leaf(_) => {
+            let mut inode = Inode::default();
+            inode.push(Arc::new(lhs.clone()));
+            inode.push(rhs);
+            *lhs = Node::Internal(inode);
+        },
+    }
 }
