@@ -46,16 +46,40 @@ impl<'a, const N: usize, L: Leaf> From<TreeSlice<'a, N, L>> for Node<N, L> {
             start_slice,
             end_slice,
             num_leaves,
+            start_summary,
+            end_summary,
             ..
         } = tree_slice;
 
-        if tree_slice.root.is_leaf() {
-            debug_assert_eq!(num_leaves, 1);
+        match num_leaves {
+            1 => {
+                debug_assert!(root.is_leaf());
 
-            return Self::Leaf(Lnode {
-                value: start_slice.to_owned(),
-                summary,
-            });
+                return Self::Leaf(Lnode {
+                    value: start_slice.to_owned(),
+                    summary,
+                });
+            },
+
+            2 => {
+                // TODO: rebalance leaves if necessary
+
+                let mut inode = Inode::empty();
+
+                inode.push(Arc::new(Node::Leaf(Lnode {
+                    value: start_slice.to_owned(),
+                    summary: start_summary,
+                })));
+
+                inode.push(Arc::new(Node::Leaf(Lnode {
+                    value: end_slice.to_owned(),
+                    summary: end_summary,
+                })));
+
+                return Node::Internal(inode);
+            },
+
+            _ => {},
         }
 
         let mut node = Node::Internal(Inode::empty());
@@ -279,7 +303,7 @@ fn stuff_rec<const N: usize, L: Leaf>(
                 if !*found_start {
                     debug_assert_eq!(*visited_leaves, 0);
 
-                    let measure = L::BaseMetric::measure(inode.summary());
+                    let measure = L::BaseMetric::measure(child.summary());
 
                     if *measured + measure > before {
                         stuff_rec(
@@ -298,11 +322,28 @@ fn stuff_rec<const N: usize, L: Leaf>(
                         // This child comes before the starting leaf.
                         *measured += measure;
                     }
+                } else if *looking_for_start {
+                    // Always recurse if looking for start bc we need to get to
+                    // a leaf.
+                    debug_assert_eq!(*visited_leaves, 1);
+                    stuff_rec(
+                        child,
+                        adding_to,
+                        before,
+                        leaves_in_slice,
+                        start_slice,
+                        end_slice,
+                        measured,
+                        visited_leaves,
+                        found_start,
+                        looking_for_start,
+                    );
                 } else {
                     debug_assert!(*visited_leaves > 0);
                     debug_assert!(*visited_leaves < leaves_in_slice);
 
-                    if *visited_leaves + child.num_leaves() >= leaves_in_slice
+                    if *visited_leaves + child.num_leaves()
+                        >= leaves_in_slice - 1
                     {
                         stuff_rec(
                             child,
@@ -338,6 +379,7 @@ fn stuff_rec<const N: usize, L: Leaf>(
                     // This leaf contains the start slice.
                     //
                     // TODO: avoid calling `summarize` again.
+
                     *found_start = true;
 
                     *visited_leaves = 1;
@@ -355,11 +397,15 @@ fn stuff_rec<const N: usize, L: Leaf>(
                         *looking_for_start = true;
                     }
                 } else {
+                    // This leaf comes before the start slice.
                     *measured += measure;
                 }
             } else if *looking_for_start {
                 // We visited the first leaf but it wasn't big enough to become
                 // a node on its own.
+
+                // TODO: handle case w/ 3 leaves where this is also the
+                // penultimate slice.
 
                 debug_assert_eq!(*visited_leaves, 1);
 
@@ -385,8 +431,6 @@ fn stuff_rec<const N: usize, L: Leaf>(
                     leaf.summary(),
                 );
 
-                start_summary += &first_summary;
-
                 let mut first = start_slice.to_owned();
                 first.append_slice(add_to_first);
 
@@ -404,7 +448,9 @@ fn stuff_rec<const N: usize, L: Leaf>(
 
                 *looking_for_start = false;
                 *visited_leaves = 2;
-            } else if *visited_leaves + 1 == leaves_in_slice {
+            } else if *visited_leaves + 2 == leaves_in_slice {
+                // TODO: explain why the +2
+
                 // This is the penultimate leaf.
 
                 let mut end_summary = end_slice.summarize();

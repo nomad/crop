@@ -1,7 +1,54 @@
+use std::ops::Range;
+
 mod common;
 
+use common::LARGE;
+use common::MEDIUM;
+use common::SMALL;
 use common::TINY;
 use crop::Rope;
+
+struct SliceRanges {
+    step: usize,
+    start: usize,
+    end: usize,
+    done: bool,
+}
+
+impl SliceRanges {
+    #[inline]
+    fn new(max: usize) -> Self {
+        let mut step = max / 200;
+        if step == 0 {
+            step = 1;
+        }
+
+        Self { step, start: 0, end: max, done: false }
+    }
+}
+
+impl Iterator for SliceRanges {
+    type Item = Range<usize>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.start > self.end {
+            return None;
+        }
+
+        let range = self.start..self.end;
+
+        self.start += self.step;
+        self.end -= self.step;
+
+        if self.start > self.end && !self.done {
+            self.start = self.end;
+            self.done = true;
+        }
+
+        Some(range)
+    }
+}
 
 #[test]
 fn empty_slice() {
@@ -61,4 +108,31 @@ fn slice_slice() {
     let rope_slice = rope_slice.byte_slice(37..319);
     let str_slice = &str_slice[37..319];
     assert_eq!(str_slice, rope_slice);
+}
+
+#[test]
+fn shrinking_byte_slices() {
+    // for s in [TINY] {
+    //     // for s in [TINY, SMALL, MEDIUM, LARGE] {
+    //     let r = Rope::from(s);
+
+    //     let slices = SliceRanges::new(r.byte_len()).map(|range| {
+    //         println!("range: {range:?}");
+    //         r.byte_slice(range)
+    //     });
+
+    //     for slice in slices {
+    //         let r = Rope::from(slice);
+    //         assert_eq!(slice.byte_len(), r.byte_len());
+    //         assert_eq!(slice.line_len(), r.line_len());
+    //     }
+    // }
+
+    let r = Rope::from(TINY);
+
+    let s = r.byte_slice(383..390);
+    let r = Rope::from(s);
+
+    assert_eq!(s.byte_len(), r.byte_len());
+    assert_eq!(s.line_len(), r.line_len());
 }
