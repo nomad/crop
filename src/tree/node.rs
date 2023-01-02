@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{Inode, Leaf, Lnode, Metric, Summarize, TreeSlice};
+use super::{Inode, Leaf, Lnode, Metric, TreeSlice};
 
 #[derive(Clone)]
 pub(super) enum Node<const N: usize, L: Leaf> {
@@ -50,8 +50,6 @@ impl<'a, const N: usize, L: Leaf> From<TreeSlice<'a, N, L>> for Node<N, L> {
             },
 
             2 => {
-                // TODO: rebalance leaves if necessary
-
                 let (first, second) = balance_slices(
                     tree_slice.start_slice,
                     &tree_slice.start_summary,
@@ -74,7 +72,7 @@ impl<'a, const N: usize, L: Leaf> From<TreeSlice<'a, N, L>> for Node<N, L> {
             _ => {
                 let mut node = Node::Internal(Inode::empty());
 
-                stufff_rec(
+                tree_slice_add_nodes_rec(
                     &mut node,
                     tree_slice.root,
                     &tree_slice,
@@ -259,10 +257,14 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 }
 
+/// Recursively traverses the nodes spanned by the TreeSlice adding them to
+/// `out`, rebalancing the first/last leaf slice with the second/penultimate
+/// leaf if necessary.
+///
 /// Does not handle the cases `tree_slice.num_leaves = 1 | 2`, those are
 /// expected to be special cased and handled by the caller.
 #[inline]
-fn stufff_rec<'a, const N: usize, L: Leaf>(
+fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
     out: &mut Node<N, L>,
     node: &Arc<Node<N, L>>,
     tree_slice: &TreeSlice<'a, N, L>,
@@ -274,11 +276,15 @@ fn stufff_rec<'a, const N: usize, L: Leaf>(
         Node::Internal(inode) => {
             for child in inode.children() {
                 match *leaves_visited {
+                    n if n == tree_slice.num_leaves => return,
+
                     0 => {
                         let measure = L::BaseMetric::measure(child.summary());
 
                         if *measured + measure > before {
-                            stufff_rec(
+                            // This child contains the starting leaf, so
+                            // recurse down.
+                            tree_slice_add_nodes_rec(
                                 out,
                                 child,
                                 tree_slice,
@@ -297,9 +303,8 @@ fn stufff_rec<'a, const N: usize, L: Leaf>(
                             >= tree_slice.num_leaves - 1 =>
                     {
                         // This node contains either the second or penultimate
-                        // leaf. In which case we recurse down to get to that
-                        // leaf.
-                        stufff_rec(
+                        // leaf, so we recurse down to get to that leaf.
+                        tree_slice_add_nodes_rec(
                             out,
                             child,
                             tree_slice,
@@ -309,14 +314,9 @@ fn stufff_rec<'a, const N: usize, L: Leaf>(
                         );
                     },
 
-                    n if n == tree_slice.num_leaves => {
-                        return;
-                    },
-
                     _ => {
-                        // Finally, this is a fully contained in the slice
-                        // that's between (and not including) the second and
-                        // penultimate node.
+                        // Finally, this node is fully contained in the
+                        // TreeSlice.
                         add_to_node(out, Arc::clone(child));
                         *leaves_visited += child.num_leaves();
                     },
@@ -326,10 +326,15 @@ fn stufff_rec<'a, const N: usize, L: Leaf>(
 
         Node::Leaf(leaf) => {
             match *leaves_visited {
+                n if n == tree_slice.num_leaves => return,
+
                 0 => {
                     let measure = L::BaseMetric::measure(leaf.summary());
 
                     if *measured + measure > before {
+                        // This is the leaf that the starting slice was sliced
+                        // from. At this point we stop using `measured` to
+                        // index and start using `leaves_visited` instead.
                         *leaves_visited = 1;
                     } else {
                         // This leaf comes before the starting slice.
@@ -338,6 +343,8 @@ fn stufff_rec<'a, const N: usize, L: Leaf>(
                 },
 
                 1 => {
+                    // This is the second leaf.
+
                     let (first, second) = balance_slices(
                         tree_slice.start_slice,
                         &tree_slice.start_summary,
@@ -346,6 +353,9 @@ fn stufff_rec<'a, const N: usize, L: Leaf>(
                     );
 
                     if tree_slice.num_leaves == 3 {
+                        // If the TreeSlice spans exactly 3 leaves this is also
+                        // the penultimate leaf.
+
                         *leaves_visited = 3;
 
                         if let Some(second) = second {
@@ -384,18 +394,16 @@ fn stufff_rec<'a, const N: usize, L: Leaf>(
 
                         add_to_node(out, Arc::new(Node::Leaf(first)));
 
-                        // TODO: explain why we can unwrap
-                        add_to_node(
-                            out,
-                            Arc::new(Node::Leaf(second.unwrap())),
-                        );
+                        if let Some(second) = second {
+                            add_to_node(out, Arc::new(Node::Leaf(second)));
+                        }
                     }
                 },
 
                 n if n + 1 == tree_slice.num_leaves - 1 => {
-                    *leaves_visited = tree_slice.num_leaves;
-
                     // This is the penultimate leaf.
+
+                    *leaves_visited = tree_slice.num_leaves;
 
                     let (penultimate, last) = balance_slices(
                         leaf.as_slice(),
@@ -411,246 +419,11 @@ fn stufff_rec<'a, const N: usize, L: Leaf>(
                     }
                 },
 
-                n if n == tree_slice.num_leaves => return,
-
                 _ => {
-                    // This is a leaf fully contained in the tree slice.
+                    // Finally, this leaf is fully contained in the TreeSlice.
                     add_to_node(out, Arc::clone(node));
                     *leaves_visited += 1;
                 },
-            }
-        },
-    }
-}
-
-#[inline]
-fn stuff_rec<const N: usize, L: Leaf>(
-    node: &Arc<Node<N, L>>,
-    adding_to: &mut Node<N, L>,
-    before: L::BaseMetric,
-    leaves_in_slice: usize,
-    start_slice: &L::Slice,
-    end_slice: &L::Slice,
-    measured: &mut L::BaseMetric,
-    visited_leaves: &mut usize,
-    found_start: &mut bool,
-    looking_for_start: &mut bool,
-) {
-    match &**node {
-        Node::Internal(inode) => {
-            for child in inode.children() {
-                if *visited_leaves == leaves_in_slice {
-                    return;
-                }
-
-                if !*found_start {
-                    debug_assert_eq!(*visited_leaves, 0);
-
-                    let measure = L::BaseMetric::measure(child.summary());
-
-                    if *measured + measure > before {
-                        stuff_rec(
-                            child,
-                            adding_to,
-                            before,
-                            leaves_in_slice,
-                            start_slice,
-                            end_slice,
-                            measured,
-                            visited_leaves,
-                            found_start,
-                            looking_for_start,
-                        );
-                    } else {
-                        // This child comes before the starting leaf.
-                        *measured += measure;
-                    }
-                } else if *looking_for_start {
-                    // Always recurse if looking for start bc we need to get to
-                    // a leaf.
-                    debug_assert_eq!(*visited_leaves, 1);
-                    stuff_rec(
-                        child,
-                        adding_to,
-                        before,
-                        leaves_in_slice,
-                        start_slice,
-                        end_slice,
-                        measured,
-                        visited_leaves,
-                        found_start,
-                        looking_for_start,
-                    );
-                } else {
-                    debug_assert!(*visited_leaves > 0);
-                    debug_assert!(*visited_leaves < leaves_in_slice);
-
-                    if *visited_leaves + child.num_leaves()
-                        >= leaves_in_slice - 1
-                    {
-                        stuff_rec(
-                            child,
-                            adding_to,
-                            before,
-                            leaves_in_slice,
-                            start_slice,
-                            end_slice,
-                            measured,
-                            visited_leaves,
-                            found_start,
-                            looking_for_start,
-                        );
-                    } else {
-                        add_to_node(adding_to, Arc::clone(child));
-                        *visited_leaves += child.num_leaves();
-                    }
-                }
-            }
-        },
-
-        Node::Leaf(leaf) => {
-            if *visited_leaves == leaves_in_slice {
-                return;
-            }
-
-            if !*found_start {
-                debug_assert_eq!(*visited_leaves, 0);
-
-                let measure = L::BaseMetric::measure(leaf.summary());
-
-                if *measured + measure > before {
-                    // This leaf contains the start slice.
-                    //
-                    // TODO: avoid calling `summarize` again.
-
-                    *found_start = true;
-
-                    *visited_leaves = 1;
-
-                    let start_summary = start_slice.summarize();
-
-                    if L::BaseMetric::measure(&start_summary)
-                        >= L::MIN_LEAF_SIZE
-                    {
-                        *adding_to = Node::Leaf(Lnode {
-                            value: start_slice.to_owned(),
-                            summary: start_summary,
-                        });
-                    } else {
-                        *looking_for_start = true;
-                    }
-                } else {
-                    // This leaf comes before the start slice.
-                    *measured += measure;
-                }
-            } else if *looking_for_start {
-                // We visited the first leaf but it wasn't big enough to become
-                // a node on its own.
-
-                // TODO: handle case w/ 3 leaves where this is also the
-                // penultimate slice.
-
-                debug_assert_eq!(*visited_leaves, 1);
-
-                debug_assert!(
-                    L::BaseMetric::measure(&start_slice.summarize())
-                        < L::MIN_LEAF_SIZE
-                );
-
-                let mut start_summary = start_slice.summarize();
-
-                let add_to_first =
-                    L::MIN_LEAF_SIZE - L::BaseMetric::measure(&start_summary);
-
-                // This leaf comes before the start slice.
-                let (
-                    add_to_first,
-                    first_summary,
-                    keep_in_second,
-                    second_summary,
-                ) = L::BaseMetric::split(
-                    leaf.as_slice(),
-                    add_to_first,
-                    leaf.summary(),
-                );
-
-                let mut first = start_slice.to_owned();
-                first.append_slice(add_to_first);
-
-                start_summary += &first_summary;
-
-                *adding_to =
-                    Node::Leaf(Lnode { value: first, summary: start_summary });
-
-                let second = Arc::new(Node::Leaf(Lnode {
-                    value: keep_in_second.to_owned(),
-                    summary: second_summary,
-                }));
-
-                add_to_node(adding_to, second);
-
-                *looking_for_start = false;
-                *visited_leaves = 2;
-            } else if *visited_leaves + 2 == leaves_in_slice {
-                // TODO: explain why the +2
-
-                // This is the penultimate leaf.
-
-                let mut end_summary = end_slice.summarize();
-
-                let end_size = L::BaseMetric::measure(&end_summary);
-
-                if end_size >= L::MIN_LEAF_SIZE {
-                    add_to_node(adding_to, Arc::clone(node));
-
-                    let last = Arc::new(Node::Leaf(Lnode {
-                        value: end_slice.to_owned(),
-                        summary: end_summary,
-                    }));
-
-                    add_to_node(adding_to, last);
-                } else {
-                    let (
-                        keep_in_penultimate,
-                        penultimate_summary,
-                        add_to_last,
-                        last_summary,
-                    ) = L::BaseMetric::split(
-                        leaf.as_slice(),
-                        L::MIN_LEAF_SIZE - end_size,
-                        leaf.summary(),
-                    );
-
-                    add_to_node(
-                        adding_to,
-                        Arc::new(Node::Leaf(Lnode {
-                            value: keep_in_penultimate.to_owned(),
-                            summary: penultimate_summary,
-                        })),
-                    );
-
-                    let mut last = add_to_last.to_owned();
-                    last.append_slice(end_slice);
-
-                    end_summary += &last_summary;
-
-                    add_to_node(
-                        adding_to,
-                        Arc::new(Node::Leaf(Lnode {
-                            value: last,
-                            summary: end_summary,
-                        })),
-                    );
-                }
-
-                *visited_leaves = leaves_in_slice;
-            } else {
-                // This is a leaf fully contained in the tree slice.
-                debug_assert!(*visited_leaves > 0);
-                debug_assert!(*visited_leaves < leaves_in_slice);
-
-                add_to_node(adding_to, Arc::clone(node));
-                *visited_leaves += 1;
             }
         },
     }
