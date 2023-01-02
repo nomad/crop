@@ -293,7 +293,8 @@ fn stufff_rec<'a, const N: usize, L: Leaf>(
                     },
 
                     n if n == 1
-                        || n + child.num_leaves() > tree_slice.num_leaves =>
+                        || n + child.num_leaves()
+                            >= tree_slice.num_leaves - 1 =>
                     {
                         // This node contains either the second or penultimate
                         // leaf. In which case we recurse down to get to that
@@ -409,6 +410,8 @@ fn stufff_rec<'a, const N: usize, L: Leaf>(
                         add_to_node(out, Arc::new(Node::Leaf(last)));
                     }
                 },
+
+                n if n == tree_slice.num_leaves => return,
 
                 _ => {
                     // This is a leaf fully contained in the tree slice.

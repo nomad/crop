@@ -112,27 +112,16 @@ fn slice_slice() {
 
 #[test]
 fn shrinking_byte_slices() {
-    // for s in [TINY] {
-    //     // for s in [TINY, SMALL, MEDIUM, LARGE] {
-    //     let r = Rope::from(s);
+    for s in [TINY, SMALL, MEDIUM, LARGE] {
+        let r = Rope::from(s);
 
-    //     let slices = SliceRanges::new(r.byte_len()).map(|range| {
-    //         println!("range: {range:?}");
-    //         r.byte_slice(range)
-    //     });
+        let slices =
+            SliceRanges::new(r.byte_len()).map(|range| r.byte_slice(range));
 
-    //     for slice in slices {
-    //         let r = Rope::from(slice);
-    //         assert_eq!(slice.byte_len(), r.byte_len());
-    //         assert_eq!(slice.line_len(), r.line_len());
-    //     }
-    // }
-
-    let r = Rope::from(TINY);
-
-    let s = r.byte_slice(383..390);
-    let r = Rope::from(s);
-
-    assert_eq!(s.byte_len(), r.byte_len());
-    assert_eq!(s.line_len(), r.line_len());
+        for slice in slices {
+            let r = Rope::from(slice);
+            assert_eq!(slice.byte_len(), r.byte_len());
+            assert_eq!(slice.line_len(), r.line_len());
+        }
+    }
 }
