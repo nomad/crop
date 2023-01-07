@@ -6,7 +6,7 @@ use super::{Leaf, Lnode, Metric, Node, Tree};
 /// Invariants: guaranteed to contain at least one child node.
 #[derive(Clone)]
 pub(super) struct Inode<const N: usize, L: Leaf> {
-    children: Vec<Arc<Node<N, L>>>,
+    pub(super) children: Vec<Arc<Node<N, L>>>,
     depth: usize,
     num_leaves: usize,
     summary: L::Summary,
@@ -41,6 +41,55 @@ impl<const N: usize, L: Leaf> Default for Inode<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Inode<N, L> {
+    #[cfg(integration_tests)]
+    pub(super) fn assert_invariants(&self) {
+        assert!(
+            self.children().len() >= Self::min_children(),
+            "An internal node of depth {} was supposed to contain at least \
+             {} children but actually contains {}",
+            self.depth(),
+            Self::min_children(),
+            self.children().len()
+        );
+
+        assert!(
+            self.children().len() <= Self::max_children(),
+            "An internal node of depth {} was supposed to contain at most {} \
+             children but actually contains {}",
+            self.depth(),
+            Self::max_children(),
+            self.children().len()
+        );
+
+        let actual_leaves =
+            self.children().iter().map(|c| c.num_leaves()).sum();
+
+        assert_eq!(
+            self.num_leaves,
+            actual_leaves,
+            "An internal node of depth {} thought it contained {} leaves in \
+             its subtree, but actually contains {}",
+            self.depth(),
+            self.num_leaves,
+            actual_leaves
+        );
+
+        for child in self.children() {
+            assert_eq!(
+                self.depth(),
+                child.depth() + 1,
+                "An internal node at depth {} contains a node of depth {}",
+                self.depth(),
+                child.depth()
+            );
+        }
+    }
+
+    #[inline]
+    pub(super) fn append(&mut self, rhs: Arc<Node<N, L>>) {
+        self.push(rhs);
+    }
+
     #[inline]
     pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
         &self.children
@@ -173,6 +222,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &self.summary
     }
 }
+
+// #[inline]
+// fn prepend_at_depth(inode: )
 
 /// Recursively prints a tree-like representation of this node.
 ///

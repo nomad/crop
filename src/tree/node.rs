@@ -59,10 +59,8 @@ impl<'a, const N: usize, L: Leaf> From<TreeSlice<'a, N, L>> for Node<N, L> {
 
                 if let Some(second) = second {
                     let mut inode = Inode::empty();
-
                     inode.push(Arc::new(Node::Leaf(first)));
                     inode.push(Arc::new(Node::Leaf(second)));
-
                     Self::Internal(inode)
                 } else {
                     Self::Leaf(first)
@@ -70,10 +68,14 @@ impl<'a, const N: usize, L: Leaf> From<TreeSlice<'a, N, L>> for Node<N, L> {
             },
 
             _ => {
-                let mut node = Node::Internal(Inode::empty());
+                println!("{tree_slice:#?}");
+                println!("=================");
+                println!("=================");
 
-                tree_slice_add_nodes_rec(
-                    &mut node,
+                let mut inode = Inode::empty();
+
+                build_inode_from_nodes_in_tree_slice_rec(
+                    &mut inode,
                     tree_slice.root,
                     &tree_slice,
                     L::BaseMetric::measure(&tree_slice.before),
@@ -81,13 +83,31 @@ impl<'a, const N: usize, L: Leaf> From<TreeSlice<'a, N, L>> for Node<N, L> {
                     &mut 0,
                 );
 
-                node
+                if inode.children().len() == 1 {
+                    debug_assert_eq!(1, inode.depth());
+                    let leaf = inode.children.into_iter().next().unwrap();
+                    debug_assert!(leaf.is_leaf());
+                    Self::clone(&*leaf)
+                } else {
+                    Self::Internal(inode)
+                }
             },
         }
     }
 }
 
 impl<const N: usize, L: Leaf> Node<N, L> {
+    #[cfg(integration_tests)]
+    pub(super) fn assert_invariants(&self) {
+        if let Node::Internal(inode) = self {
+            inode.assert_invariants();
+
+            for child in inode.children() {
+                child.assert_invariants()
+            }
+        }
+    }
+
     #[inline]
     pub(super) unsafe fn as_internal_unchecked(&self) -> &Inode<N, L> {
         debug_assert!(
@@ -257,15 +277,15 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 }
 
-/// Recursively traverses the nodes spanned by the TreeSlice adding them to
-/// `out`, rebalancing the first/last leaf slice with the second/penultimate
+/// Recursively traverses the nodes spanned by the TreeSlice and appends them
+/// to `out`, rebalancing the first/last leaf slice with the second/penultimate
 /// leaf if necessary.
 ///
 /// Does not handle the cases `tree_slice.num_leaves = 1 | 2`, those are
 /// expected to be special cased and handled by the caller.
 #[inline]
-fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
-    out: &mut Node<N, L>,
+fn build_inode_from_nodes_in_tree_slice_rec<'a, const N: usize, L: Leaf>(
+    out: &mut Inode<N, L>,
     node: &Arc<Node<N, L>>,
     tree_slice: &TreeSlice<'a, N, L>,
     before: L::BaseMetric,
@@ -284,7 +304,7 @@ fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
                         if *measured + measure > before {
                             // This child contains the starting leaf, so
                             // recurse down.
-                            tree_slice_add_nodes_rec(
+                            build_inode_from_nodes_in_tree_slice_rec(
                                 out,
                                 child,
                                 tree_slice,
@@ -304,7 +324,7 @@ fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
                     {
                         // This node contains either the second or penultimate
                         // leaf, so we recurse down to get to that leaf.
-                        tree_slice_add_nodes_rec(
+                        build_inode_from_nodes_in_tree_slice_rec(
                             out,
                             child,
                             tree_slice,
@@ -317,7 +337,7 @@ fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
                     _ => {
                         // Finally, this node is fully contained in the
                         // TreeSlice.
-                        add_to_node(out, Arc::clone(child));
+                        out.append(Arc::clone(child));
                         *leaves_visited += child.num_leaves();
                     },
                 }
@@ -345,6 +365,8 @@ fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
                 1 => {
                     // This is the second leaf.
 
+                    debug_assert_eq!(0, out.children().len());
+
                     let (first, second) = balance_slices(
                         tree_slice.start_slice,
                         &tree_slice.start_summary,
@@ -359,7 +381,7 @@ fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
                         *leaves_visited = 3;
 
                         if let Some(second) = second {
-                            add_to_node(out, Arc::new(Node::Leaf(first)));
+                            out.push(Arc::new(Node::Leaf(first)));
 
                             let (second, third) = balance_slices(
                                 second.as_slice(),
@@ -368,10 +390,10 @@ fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
                                 &tree_slice.end_summary,
                             );
 
-                            add_to_node(out, Arc::new(Node::Leaf(second)));
+                            out.append(Arc::new(Node::Leaf(second)));
 
                             if let Some(third) = third {
-                                add_to_node(out, Arc::new(Node::Leaf(third)));
+                                out.append(Arc::new(Node::Leaf(third)));
                             }
                         } else {
                             let (first, second) = balance_slices(
@@ -381,10 +403,10 @@ fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
                                 &tree_slice.end_summary,
                             );
 
-                            add_to_node(out, Arc::new(Node::Leaf(first)));
+                            out.push(Arc::new(Node::Leaf(first)));
 
                             if let Some(second) = second {
-                                add_to_node(out, Arc::new(Node::Leaf(second)));
+                                out.append(Arc::new(Node::Leaf(second)));
                             }
                         }
                     } else {
@@ -392,10 +414,10 @@ fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
 
                         *leaves_visited = 2;
 
-                        add_to_node(out, Arc::new(Node::Leaf(first)));
+                        out.push(Arc::new(Node::Leaf(first)));
 
                         if let Some(second) = second {
-                            add_to_node(out, Arc::new(Node::Leaf(second)));
+                            out.append(Arc::new(Node::Leaf(second)));
                         }
                     }
                 },
@@ -412,36 +434,19 @@ fn tree_slice_add_nodes_rec<'a, const N: usize, L: Leaf>(
                         &tree_slice.end_summary,
                     );
 
-                    add_to_node(out, Arc::new(Node::Leaf(penultimate)));
+                    out.append(Arc::new(Node::Leaf(penultimate)));
 
                     if let Some(last) = last {
-                        add_to_node(out, Arc::new(Node::Leaf(last)));
+                        out.append(Arc::new(Node::Leaf(last)));
                     }
                 },
 
                 _ => {
                     // Finally, this leaf is fully contained in the TreeSlice.
-                    add_to_node(out, Arc::clone(node));
+                    out.append(Arc::clone(node));
                     *leaves_visited += 1;
                 },
             }
-        },
-    }
-}
-
-#[inline]
-fn add_to_node<const N: usize, L: Leaf>(
-    lhs: &mut Node<N, L>,
-    rhs: Arc<Node<N, L>>,
-) {
-    match lhs {
-        Node::Internal(inode) => inode.push(rhs),
-
-        Node::Leaf(_) => {
-            let mut inode = Inode::default();
-            inode.push(Arc::new(lhs.clone()));
-            inode.push(rhs);
-            *lhs = Node::Internal(inode);
         },
     }
 }

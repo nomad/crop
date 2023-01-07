@@ -5,6 +5,46 @@ use super::iterators::Chunks;
 use super::{ChunkSlice, ChunkSummary, Rope, RopeChunk};
 use crate::tree::TreeSlice;
 
+#[allow(dead_code)]
+pub(super) fn assert_valid_chunk(
+    chunk: &str,
+    next: Option<&str>,
+    is_first: bool,
+) {
+    // Only the first chunk of a single-chunk Rope is allowed to contain less
+    // than the min number of bytes.
+    if chunk.len() < RopeChunk::min_bytes() && !(is_first && next.is_none()) {
+        panic!("");
+    }
+
+    // Chunks are only allowed to exceed the max number of bytes if the max
+    // byte offset lies at a char boundary or between a CRLF pair.
+    if chunk.len() > RopeChunk::max_bytes() {
+        let excess = RopeChunk::max_bytes() - chunk.len();
+
+        if !chunk.is_char_boundary(RopeChunk::max_bytes()) {
+            let mut i = 1;
+            while !chunk.is_char_boundary(RopeChunk::max_bytes() + i) {
+                i += 1;
+            }
+            if i != excess {
+                panic!("");
+            }
+        } else if !(excess == 1 && &chunk[chunk.len() - 2..] == "\r\n") {
+            panic!("");
+        }
+    }
+
+    // CRLF pairs should never be split across chunks.
+    if *chunk.as_bytes().last().unwrap() == b'\r' {
+        if let Some(next) = next {
+            if *next.as_bytes().first().unwrap() == b'\n' {
+                panic!("");
+            }
+        }
+    }
+}
+
 /// Checks equality between the chunks yielded by iterating over a [`Chunks`]
 /// and a string slice.
 ///

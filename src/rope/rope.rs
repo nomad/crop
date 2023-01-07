@@ -24,6 +24,23 @@ pub struct Rope {
 
 impl Rope {
     /// TODO: docs.
+    #[doc(hidden)]
+    #[cfg(integration_tests)]
+    pub fn assert_invariants(&self) {
+        self.tree.assert_invariants();
+
+        let mut chunks = self.chunks().peekable();
+
+        if let Some(first) = chunks.next() {
+            assert_valid_chunk(first, chunks.peek().map(|s| *s), true);
+        }
+
+        while let Some(chunk) = chunks.next() {
+            assert_valid_chunk(chunk, chunks.peek().map(|s| *s), false);
+        }
+    }
+
+    /// TODO: docs.
     #[inline]
     pub fn byte(&self, byte_idx: usize) -> u8 {
         if byte_idx >= self.byte_len() {

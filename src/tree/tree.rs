@@ -47,6 +47,24 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
 }
 
 impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
+    /// Checks that all the internal nodes in the Tree contain between `FANOUT
+    /// / 2` and `FANOUT` children. The root is the only internal node that's
+    /// allowed to have as few as 2 children. Doesn't do any checks on leaf
+    /// nodes.
+    #[doc(hidden)]
+    #[cfg(integration_tests)]
+    pub fn assert_invariants(&self) {
+        if let Node::Internal(root) = &*self.root {
+            assert!(
+                root.children().len() >= 2 && root.children().len() <= FANOUT
+            );
+
+            for child in root.children() {
+                child.assert_invariants()
+            }
+        }
+    }
+
     #[inline]
     pub fn convert_measure<M1, M2>(&self, from: M1) -> M2
     where
