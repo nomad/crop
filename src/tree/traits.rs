@@ -14,8 +14,6 @@ pub trait Summarize: Debug {
 
 /// TODO: docs
 pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized + Clone {
-    const MIN_LEAF_SIZE: Self::BaseMetric;
-
     type BaseMetric: Metric<Self>;
 
     type Slice: ?Sized

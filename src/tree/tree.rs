@@ -204,8 +204,6 @@ mod tests {
     }
 
     impl Leaf for usize {
-        const MIN_LEAF_SIZE: LeavesMetric = 1;
-
         type BaseMetric = LeavesMetric;
         type Slice = Self;
     }
