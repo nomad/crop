@@ -154,6 +154,18 @@ where
             &mut false,
         );
 
+        // There's a final edge case that can happen when the start and end of
+        // the range coincide (so the slice has zero measure) and the start of
+        // the range lies "between" the end of a chunk and the start of the
+        // next one.
+        //
+        // In this case the root is the leaf *preceding* the start of the range
+        // and all other metadata are set correctly, *except* the number of
+        // leaves which never gets modified and is still set as zero.
+        if tree_slice.num_leaves == 0 {
+            tree_slice.num_leaves = 1;
+        }
+
         tree_slice
     }
 

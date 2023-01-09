@@ -39,60 +39,26 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
 impl<'a, const N: usize, L: Leaf> From<TreeSlice<'a, N, L>> for Node<N, L> {
     #[inline]
     fn from(tree_slice: TreeSlice<'a, N, L>) -> Node<N, L> {
-        match tree_slice.num_leaves {
-            1 => {
-                debug_assert!(tree_slice.root.is_leaf());
+        from_treeslice::into_node(tree_slice)
+        // let mut inode = Inode::empty();
 
-                Self::Leaf(Lnode {
-                    value: tree_slice.start_slice.to_owned(),
-                    summary: tree_slice.summary,
-                })
-            },
+        // build_inode_from_nodes_in_tree_slice_rec(
+        //     &mut inode,
+        //     tree_slice.root,
+        //     &tree_slice,
+        //     L::BaseMetric::measure(&tree_slice.before),
+        //     &mut L::BaseMetric::zero(),
+        //     &mut 0,
+        // );
 
-            2 => {
-                let (first, second) = balance_slices(
-                    tree_slice.start_slice,
-                    &tree_slice.start_summary,
-                    tree_slice.end_slice,
-                    &tree_slice.end_summary,
-                );
-
-                if let Some(second) = second {
-                    let mut inode = Inode::empty();
-                    inode.push(Arc::new(Node::Leaf(first)));
-                    inode.push(Arc::new(Node::Leaf(second)));
-                    Self::Internal(inode)
-                } else {
-                    Self::Leaf(first)
-                }
-            },
-
-            _ => {
-                println!("{tree_slice:#?}");
-                println!("=================");
-                println!("=================");
-
-                let mut inode = Inode::empty();
-
-                build_inode_from_nodes_in_tree_slice_rec(
-                    &mut inode,
-                    tree_slice.root,
-                    &tree_slice,
-                    L::BaseMetric::measure(&tree_slice.before),
-                    &mut L::BaseMetric::zero(),
-                    &mut 0,
-                );
-
-                if inode.children().len() == 1 {
-                    debug_assert_eq!(1, inode.depth());
-                    let leaf = inode.children.into_iter().next().unwrap();
-                    debug_assert!(leaf.is_leaf());
-                    Self::clone(&*leaf)
-                } else {
-                    Self::Internal(inode)
-                }
-            },
-        }
+        // if inode.children().len() == 1 {
+        //     debug_assert_eq!(1, inode.depth());
+        //     let leaf = inode.children.into_iter().next().unwrap();
+        //     debug_assert!(leaf.is_leaf());
+        //     Self::clone(&*leaf)
+        // } else {
+        //     Self::Internal(inode)
+        // }
     }
 }
 
@@ -516,4 +482,192 @@ fn balance_slices<L: Leaf>(
     //         }),
     //     ),
     // }
+}
+
+mod from_treeslice {
+    //! Functions used to convert `TreeSlice`s into `Node`s.
+
+    use super::*;
+
+    /// This is the only public function this module exports and it converts a
+    /// `TreeSlice` into a balanced `Node`.
+    #[inline]
+    pub(super) fn into_node<'a, const N: usize, L: Leaf>(
+        tree_slice: TreeSlice<'a, N, L>,
+    ) -> Node<N, L> {
+        match tree_slice.num_leaves {
+            1 => {
+                debug_assert!(tree_slice.root.is_leaf());
+
+                Node::Leaf(Lnode {
+                    value: tree_slice.start_slice.to_owned(),
+                    summary: tree_slice.summary,
+                })
+            },
+
+            2 => {
+                let (first, second) = balance_slices(
+                    tree_slice.start_slice,
+                    &tree_slice.start_summary,
+                    tree_slice.end_slice,
+                    &tree_slice.end_summary,
+                );
+
+                if let Some(second) = second {
+                    let mut inode = Inode::empty();
+                    inode.push(Arc::new(Node::Leaf(first)));
+                    inode.push(Arc::new(Node::Leaf(second)));
+                    Node::Internal(inode)
+                } else {
+                    Node::Leaf(first)
+                }
+            },
+
+            _ => {
+                let inode = slice_before_after(tree_slice);
+
+                Node::Internal(inode)
+            },
+        }
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn slice_before_after<'a, const N: usize, L: Leaf>(
+        tree_slice: TreeSlice<'a, N, L>,
+    ) -> Inode<N, L> {
+        let mut inode = Inode::empty();
+
+        let mut measured = L::BaseMetric::zero();
+
+        let mut found_start = false;
+
+        let start = L::BaseMetric::measure(&tree_slice.before);
+
+        let end = start + L::BaseMetric::measure(tree_slice.summary());
+
+        // Safety: if the TreeSlice's root was a leaf it would only have had a
+        // single leaf, but this function can only be called if the TreeSlice
+        // spans 3+ leaves.
+        let root = unsafe { tree_slice.root.as_internal_unchecked() };
+
+        for node in root.children() {
+            let size = L::BaseMetric::measure(node.summary());
+
+            if !found_start {
+                if measured + size > start {
+                    inode.push(something_start_rec(
+                        &**node,
+                        start - measured,
+                        tree_slice.start_slice,
+                        tree_slice.start_summary.clone(),
+                    ));
+                    found_start = true;
+                }
+                measured += size;
+            } else if measured + size >= end {
+                inode.push(something_end_rec(
+                    &**node,
+                    end - measured,
+                    tree_slice.end_slice,
+                    tree_slice.end_summary.clone(),
+                ));
+                break;
+            } else {
+                inode.push(Arc::clone(node));
+                measured += size;
+            }
+        }
+
+        inode
+    }
+
+    #[inline]
+    fn something_start_rec<'a, const N: usize, L: Leaf>(
+        node: &Node<N, L>,
+        from: L::BaseMetric,
+        start_slice: &'a L::Slice,
+        start_summary: L::Summary,
+    ) -> Arc<Node<N, L>> {
+        match node {
+            Node::Internal(inode) => {
+                let mut measured = L::BaseMetric::zero();
+
+                let mut i = Inode::empty();
+
+                let mut children = inode.children().iter();
+
+                while let Some(child) = children.next() {
+                    let this = L::BaseMetric::measure(child.summary());
+
+                    if measured + this > from {
+                        i.push(something_start_rec(
+                            child,
+                            from - measured,
+                            start_slice,
+                            start_summary,
+                        ));
+
+                        for child in children {
+                            i.push(Arc::clone(child));
+                        }
+
+                        break;
+                    } else {
+                        measured += this;
+                    }
+                }
+
+                Arc::new(Node::Internal(i))
+            },
+
+            Node::Leaf(_) => Arc::new(Node::Leaf(Lnode {
+                value: start_slice.to_owned(),
+                summary: start_summary,
+            })),
+        }
+    }
+
+    #[inline]
+    fn something_end_rec<'a, const N: usize, L: Leaf>(
+        node: &Node<N, L>,
+        up_to: L::BaseMetric,
+        end_slice: &'a L::Slice,
+        end_summary: L::Summary,
+    ) -> Arc<Node<N, L>> {
+        match node {
+            Node::Internal(inode) => {
+                let mut measured = L::BaseMetric::zero();
+
+                let mut i = Inode::empty();
+
+                let mut children = inode.children().iter();
+
+                while let Some(child) = children.next() {
+                    let this = L::BaseMetric::measure(child.summary());
+
+                    if measured + this >= up_to {
+                        i.push(something_end_rec(
+                            child,
+                            up_to - measured,
+                            end_slice,
+                            end_summary,
+                        ));
+
+                        break;
+                    } else {
+                        i.push(Arc::clone(child));
+                        measured += this;
+                    }
+                }
+
+                Arc::new(Node::Internal(i))
+            },
+
+            Node::Leaf(_) => Arc::new(Node::Leaf(Lnode {
+                value: end_slice.to_owned(),
+                summary: end_summary,
+            })),
+        }
+    }
 }
