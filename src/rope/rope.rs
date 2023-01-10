@@ -11,7 +11,7 @@ use crate::RopeSlice;
 const ROPE_FANOUT: usize = 8;
 
 #[cfg(any(test, feature = "integration_tests"))]
-const ROPE_FANOUT: usize = 2;
+const ROPE_FANOUT: usize = 4;
 
 /// A utf-8 text rope.
 ///
@@ -25,7 +25,6 @@ pub struct Rope {
 impl Rope {
     /// TODO: docs.
     #[doc(hidden)]
-    #[cfg(integration_tests)]
     pub fn assert_invariants(&self) {
         self.tree.assert_invariants();
 

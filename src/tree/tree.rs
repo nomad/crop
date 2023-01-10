@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::{Leaf, Leaves, Lnode, Metric, Node, TreeSlice, Units};
+use super::{Inode, Leaf, Leaves, Lnode, Metric, Node, TreeSlice, Units};
 
 /// TODO: docs
 #[derive(Default)]
@@ -35,14 +35,48 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
         let root = if L::BaseMetric::measure(tree_slice.summary())
             == L::BaseMetric::measure(tree_slice.root.summary())
         {
-            // If the TreeSlice and its root have the same base measure we can
-            // simply clone the root.
+            // If the TreeSlice and its root have the same base measure it
+            // means the TreeSlice spanned the whole Tree from which it was
+            // created from and we can simply clone the root.
             Arc::clone(tree_slice.root)
         } else {
-            Arc::new(Node::from(tree_slice))
+            match tree_slice.num_leaves {
+                1 => {
+                    debug_assert!(tree_slice.root.is_leaf());
+
+                    Arc::new(Node::Leaf(Lnode::new(
+                        tree_slice.start_slice.to_owned(),
+                        tree_slice.summary,
+                    )))
+                },
+
+                2 => {
+                    let (first, second) = L::balance_slices(
+                        (tree_slice.start_slice, &tree_slice.start_summary),
+                        (tree_slice.end_slice, &tree_slice.end_summary),
+                    );
+
+                    let first = Arc::new(Node::Leaf(Lnode::from(first)));
+
+                    if let Some(second) = second {
+                        let second = Arc::new(Node::Leaf(Lnode::from(second)));
+                        let root = Inode::from_children([first, second]);
+                        Arc::new(Node::Internal(root))
+                    } else {
+                        first
+                    }
+                },
+
+                _ => from_treeslice::into_tree_root(tree_slice),
+            }
         };
 
-        Tree { root }
+        let tree = Tree { root };
+
+        #[cfg(debug_assertions)]
+        tree.assert_invariants();
+
+        tree
     }
 }
 
@@ -52,7 +86,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     /// allowed to have as few as 2 children. Doesn't do any checks on leaf
     /// nodes.
     #[doc(hidden)]
-    #[cfg(integration_tests)]
     pub fn assert_invariants(&self) {
         if let Node::Internal(root) = &*self.root {
             assert!(
@@ -159,9 +192,409 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     }
 }
 
+mod from_treeslice {
+    //! Functions used to convert `TreeSlice`s into `Tree`s.
+
+    use super::*;
+
+    /// This is the only public function this module exports and it converts a
+    /// `TreeSlice` into the root of an equivalent `Tree`.
+    ///
+    /// Note: the cases `tree_slice.num_leaves = 1 | 2` should be handled
+    /// separately before calling this function.
+    #[inline]
+    pub(super) fn into_tree_root<'a, const N: usize, L: Leaf>(
+        tree_slice: TreeSlice<'a, N, L>,
+    ) -> Arc<Node<N, L>> {
+        let (root, balance_left, balance_right) =
+            remove_before_and_after(tree_slice);
+
+        let mut root = Arc::new(Node::Internal(root));
+
+        {
+            // TODO: use `Arc::get_mut_unchecked` once it's stable.
+            //
+            // Safety (unwrap_unchecked): the `Arc` containing the root was
+            // just created so there are no other copies.
+            //
+            // Safety (as_mut_internal_unchecked): `root` was just enclosed in
+            // a `Node::Internal` variant.
+            let inode = unsafe {
+                Arc::get_mut(&mut root)
+                    .unwrap_unchecked()
+                    .as_mut_internal_unchecked()
+            };
+
+            if balance_left {
+                balance_left_side(inode);
+                pull_up_singular(&mut root);
+            }
+        }
+
+        {
+            // TODO: use `Arc::get_mut_unchecked` once it's stable.
+            //
+            // Safety (unwrap_unchecked): see above.
+            //
+            // Safety (as_mut_internal_unchecked): for the root to become a
+            // leaf node after the previous call to `pull_up_singular` the
+            // TreeSlice would've had to span 2 leaves, and that case case
+            // should have already been handled before calling this function.
+            let inode = unsafe {
+                Arc::get_mut(&mut root)
+                    .unwrap_unchecked()
+                    .as_mut_internal_unchecked()
+            };
+
+            if balance_right {
+                balance_right_side(inode);
+                pull_up_singular(&mut root);
+            }
+        }
+
+        root
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn remove_before_and_after<'a, const N: usize, L: Leaf>(
+        tree_slice: TreeSlice<'a, N, L>,
+    ) -> (Inode<N, L>, bool, bool) {
+        let mut inode = Inode::empty();
+
+        let mut measured = L::BaseMetric::zero();
+
+        let mut found_start = false;
+
+        let start = L::BaseMetric::measure(&tree_slice.before);
+
+        let end = start + L::BaseMetric::measure(tree_slice.summary());
+
+        // Safety: if the TreeSlice's root was a leaf it would only have had a
+        // single leaf, but this function can only be called if the TreeSlice
+        // spans 3+ leaves.
+        let root = unsafe { tree_slice.root.as_internal_unchecked() };
+
+        let mut balance_left = true;
+
+        let mut balance_right = true;
+
+        for node in root.children() {
+            let size = L::BaseMetric::measure(node.summary());
+
+            if !found_start {
+                if measured + size > start {
+                    if start > L::BaseMetric::zero() {
+                        inode.push(something_start_rec(
+                            &**node,
+                            start - measured,
+                            tree_slice.start_slice,
+                            tree_slice.start_summary.clone(),
+                        ));
+                    } else {
+                        inode.push(Arc::clone(node));
+                        balance_left = false;
+                    }
+                    found_start = true;
+                }
+                measured += size;
+            } else if measured + size >= end {
+                if end < L::BaseMetric::measure(tree_slice.root.summary()) {
+                    inode.push(something_end_rec(
+                        &**node,
+                        end - measured,
+                        tree_slice.end_slice,
+                        tree_slice.end_summary.clone(),
+                    ));
+                } else {
+                    inode.push(Arc::clone(node));
+                    balance_right = false;
+                }
+                break;
+            } else {
+                inode.push(Arc::clone(node));
+                measured += size;
+            }
+        }
+
+        (inode, balance_left, balance_right)
+    }
+
+    #[inline]
+    fn something_start_rec<'a, const N: usize, L: Leaf>(
+        node: &Node<N, L>,
+        from: L::BaseMetric,
+        start_slice: &'a L::Slice,
+        start_summary: L::Summary,
+    ) -> Arc<Node<N, L>> {
+        match node {
+            Node::Internal(inode) => {
+                let mut measured = L::BaseMetric::zero();
+
+                let mut i = Inode::empty();
+
+                let mut children = inode.children().iter();
+
+                while let Some(child) = children.next() {
+                    let this = L::BaseMetric::measure(child.summary());
+
+                    if measured + this > from {
+                        i.push(something_start_rec(
+                            child,
+                            from - measured,
+                            start_slice,
+                            start_summary,
+                        ));
+
+                        for child in children {
+                            i.push(Arc::clone(child));
+                        }
+
+                        break;
+                    } else {
+                        measured += this;
+                    }
+                }
+
+                Arc::new(Node::Internal(i))
+            },
+
+            Node::Leaf(_) => Arc::new(Node::Leaf(Lnode::new(
+                start_slice.to_owned(),
+                start_summary,
+            ))),
+        }
+    }
+
+    #[inline]
+    fn something_end_rec<'a, const N: usize, L: Leaf>(
+        node: &Node<N, L>,
+        up_to: L::BaseMetric,
+        end_slice: &'a L::Slice,
+        end_summary: L::Summary,
+    ) -> Arc<Node<N, L>> {
+        match node {
+            Node::Internal(inode) => {
+                let mut measured = L::BaseMetric::zero();
+
+                let mut i = Inode::empty();
+
+                let mut children = inode.children().iter();
+
+                while let Some(child) = children.next() {
+                    let this = L::BaseMetric::measure(child.summary());
+
+                    if measured + this >= up_to {
+                        i.push(something_end_rec(
+                            child,
+                            up_to - measured,
+                            end_slice,
+                            end_summary,
+                        ));
+
+                        break;
+                    } else {
+                        i.push(Arc::clone(child));
+                        measured += this;
+                    }
+                }
+
+                Arc::new(Node::Internal(i))
+            },
+
+            Node::Leaf(_) => Arc::new(Node::Leaf(Lnode::new(
+                end_slice.to_owned(),
+                end_summary,
+            ))),
+        }
+    }
+
+    #[inline]
+    fn balance_left_side<const N: usize, L: Leaf>(
+        inode: &mut Inode<N, L>,
+    ) -> bool {
+        let mut parent_should_rebalance = merge_distribute_first_second(inode);
+
+        if let Node::Internal(first_child) = Arc::make_mut(inode.first_mut()) {
+            let this_should_rebalance = balance_left_side(first_child);
+
+            if this_should_rebalance {
+                // NOTE: It's possible that after rebalancing, this inode was
+                // left with only 1 child. When this is the case all of this
+                // inode's parents will also have a single child, and the root
+                // will be fixed by calling `pull_up_singular`.
+                if inode.children().len() == 1 {
+                    return false;
+                }
+
+                debug_assert!(
+                    inode.children().len() >= Inode::<N, L>::min_children()
+                );
+
+                parent_should_rebalance |=
+                    merge_distribute_first_second(inode);
+            }
+        }
+
+        parent_should_rebalance
+    }
+
+    #[inline]
+    fn balance_right_side<const N: usize, L: Leaf>(
+        inode: &mut Inode<N, L>,
+    ) -> bool {
+        let mut parent_should_rebalance =
+            merge_distribute_penultimate_last(inode);
+
+        if let Node::Internal(last_child) = Arc::make_mut(inode.last_mut()) {
+            let this_should_rebalance = balance_right_side(last_child);
+
+            if this_should_rebalance {
+                // NOTE: see comment in `balance_left_side`.
+                if inode.children().len() == 1 {
+                    return false;
+                }
+
+                debug_assert!(
+                    inode.children().len() >= Inode::<N, L>::min_children()
+                );
+
+                parent_should_rebalance |=
+                    merge_distribute_penultimate_last(inode);
+            }
+        }
+
+        parent_should_rebalance
+    }
+
+    #[inline]
+    fn merge_distribute_first_second<const N: usize, L: Leaf>(
+        inode: &mut Inode<N, L>,
+    ) -> bool {
+        let (first, second) = inode.two_mut(0, 1);
+
+        match Arc::make_mut(first) {
+            Node::Internal(first) => {
+                if first.children().len() >= Inode::<N, L>::min_children() {
+                    return false;
+                }
+
+                // Safety: the first child is an internal node, so the second
+                // child is also an internal node.
+                let sec = unsafe { second.as_internal_unchecked() };
+
+                // If the first and second children can be combined we can
+                // avoid calling `Arc::make_mut` on the second child, we can
+                // instead pop it and append its children to the first node.
+                if first.children().len() + sec.children().len()
+                    <= Inode::<N, L>::max_children()
+                {
+                    first.extend_from_other(sec);
+                    inode.pop(1);
+                    true
+                }
+                // If not, we move the minimum number of nodes needed to make
+                // the first child valid from the second to the first child.
+                // This is guaranteed to leave the second node valid because..
+                else {
+                    let second = unsafe {
+                        Arc::make_mut(second).as_mut_internal_unchecked()
+                    };
+
+                    let to_move =
+                        Inode::<N, L>::min_children() - first.children().len();
+
+                    first.extend(second.drain(0..to_move));
+
+                    false
+                }
+            },
+
+            Node::Leaf(_first) => {
+                // TODO
+                false
+            },
+        }
+    }
+
+    #[inline]
+    fn merge_distribute_penultimate_last<const N: usize, L: Leaf>(
+        inode: &mut Inode<N, L>,
+    ) -> bool {
+        let last_idx = inode.children().len() - 1;
+
+        let (penultimate, last) = inode.two_mut(last_idx - 1, last_idx);
+
+        match Arc::make_mut(last) {
+            Node::Internal(last) => {
+                if last.children().len() >= Inode::<N, L>::min_children() {
+                    return false;
+                }
+
+                // Safety: the last child is an internal node, so the
+                // penultimate child is also an internal node.
+                let pen = unsafe { penultimate.as_internal_unchecked() };
+
+                // If the penultimate and last children can be combined we can
+                // avoid calling `Arc::make_mut` on the penultimate child, we
+                // can instead pop it and append its children to the last node.
+                if last.children().len() + pen.children().len()
+                    <= Inode::<N, L>::max_children()
+                {
+                    last.prepend_from_other(pen);
+                    inode.pop(last_idx - 1);
+                    true
+                }
+                // If not, we move the minimum number of nodes needed to make
+                // the first child valid from the penultimate to the first
+                // child. This is guaranteed to leave the penultimate node
+                // valid because..
+                else {
+                    let penultimate = unsafe {
+                        Arc::make_mut(penultimate).as_mut_internal_unchecked()
+                    };
+
+                    let to_move =
+                        Inode::<N, L>::min_children() - last.children().len();
+
+                    last.prepend(penultimate.drain(
+                        penultimate.children().len() - to_move
+                            ..penultimate.children().len(),
+                    ));
+
+                    false
+                }
+            },
+
+            Node::Leaf(_last) => {
+                // TODO
+                false
+            },
+        }
+    }
+
+    #[inline]
+    fn pull_up_singular<const N: usize, L: Leaf>(root: &mut Arc<Node<N, L>>) {
+        loop {
+            // NOTE: if an internal node has a single child, the `Arc`
+            // enclosing that node should have been created somewhere in this
+            // module, which means its reference count is 1, which means it's
+            // ok to unwrap after calling `get_mut`.
+            if let Node::Internal(i) = Arc::get_mut(root).unwrap() {
+                if i.children().len() == 1 {
+                    let first = i.children.drain(..).next().unwrap();
+                    *root = first;
+                } else {
+                    break;
+                }
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::ops::AddAssign;
+    use std::ops::{AddAssign, SubAssign};
 
     use super::*;
     use crate::tree::Summarize;
@@ -176,6 +609,13 @@ mod tests {
         fn add_assign(&mut self, rhs: &'a Self) {
             self.count += rhs.count;
             self.leaves += rhs.leaves;
+        }
+    }
+
+    impl<'a> SubAssign<&'a Self> for Count {
+        fn sub_assign(&mut self, rhs: &'a Self) {
+            self.count -= rhs.count;
+            self.leaves -= rhs.leaves;
         }
     }
 

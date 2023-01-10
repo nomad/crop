@@ -1,5 +1,5 @@
 use std::fmt::{self, Debug};
-use std::ops::AddAssign;
+use std::ops::{AddAssign, SubAssign};
 use std::str;
 
 use super::metrics::ByteMetric;
@@ -82,8 +82,13 @@ impl Leaf for RopeChunk {
     type Slice = ChunkSlice;
 
     #[inline]
-    fn append_slice(&mut self, s: &ChunkSlice) {
-        self.push_str(s);
+    fn balance_slices<'a>(
+        (first, first_summary): (&'a ChunkSlice, &'a ChunkSummary),
+        (second, second_summary): (&'a ChunkSlice, &'a ChunkSummary),
+    ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
+        let first = first.to_owned().into();
+        let second = second.to_owned().into();
+        ((first, *first_summary), Some((second, *second_summary)))
     }
 }
 
@@ -148,6 +153,14 @@ impl<'a> AddAssign<&'a Self> for ChunkSummary {
     fn add_assign(&mut self, rhs: &'a Self) {
         self.bytes += rhs.bytes;
         self.line_breaks += rhs.line_breaks;
+    }
+}
+
+impl<'a> SubAssign<&'a Self> for ChunkSummary {
+    #[inline]
+    fn sub_assign(&mut self, rhs: &'a Self) {
+        self.bytes -= rhs.bytes;
+        self.line_breaks -= rhs.line_breaks;
     }
 }
 

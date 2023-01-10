@@ -1,7 +1,6 @@
-use std::ops::Range;
 use std::sync::Arc;
 
-use super::{Leaf, Lnode, Metric, Node, Tree};
+use super::{Leaf, Lnode, Node};
 
 /// Invariants: guaranteed to contain at least one child node.
 #[derive(Clone)]
@@ -41,7 +40,6 @@ impl<const N: usize, L: Leaf> Default for Inode<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Inode<N, L> {
-    #[cfg(integration_tests)]
     pub(super) fn assert_invariants(&self) {
         assert!(
             self.children().len() >= Self::min_children(),
@@ -62,7 +60,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         );
 
         let actual_leaves =
-            self.children().iter().map(|c| c.num_leaves()).sum();
+            self.children().iter().map(|c| c.num_leaves()).sum::<usize>();
 
         assert_eq!(
             self.num_leaves,
@@ -86,13 +84,66 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn append(&mut self, rhs: Arc<Node<N, L>>) {
-        self.push(rhs);
+    pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
+        &self.children
     }
 
     #[inline]
-    pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
-        &self.children
+    pub(super) fn two_mut(
+        &mut self,
+        first_idx: usize,
+        second_idx: usize,
+    ) -> (&mut Arc<Node<N, L>>, &mut Arc<Node<N, L>>) {
+        debug_assert!(first_idx < second_idx);
+        debug_assert!(second_idx < self.children.len());
+
+        let split_at = first_idx + 1;
+        let (first, second) = self.children.split_at_mut(split_at);
+        (&mut first[first_idx], &mut second[second_idx - split_at])
+    }
+
+    #[inline]
+    pub(super) fn drain(
+        &mut self,
+        index_range: std::ops::Range<usize>,
+    ) -> std::vec::Drain<'_, Arc<Node<N, L>>> {
+        for index in index_range.clone() {
+            let node = &*self.children[index];
+            self.num_leaves -= node.num_leaves();
+            self.summary -= node.summary();
+        }
+
+        self.children.drain(index_range)
+    }
+
+    #[inline]
+    pub(super) fn insert(&mut self, idx: usize, child: Arc<Node<N, L>>) {
+        debug_assert!(!self.is_full());
+        debug_assert_eq!(child.depth() + 1, self.depth());
+
+        self.num_leaves += child.num_leaves();
+        self.summary += child.summary();
+        self.children.insert(idx, child);
+    }
+
+    #[inline]
+    pub(super) fn prepend<I>(&mut self, nodes: I)
+    where
+        I: IntoIterator<Item = Arc<Node<N, L>>>,
+    {
+        for (idx, node) in nodes.into_iter().enumerate() {
+            self.insert(idx, node);
+        }
+    }
+
+    #[inline]
+    pub(super) fn extend<I>(&mut self, nodes: I)
+    where
+        I: IntoIterator<Item = Arc<Node<N, L>>>,
+    {
+        for node in nodes.into_iter() {
+            self.push(node);
+        }
     }
 
     #[inline]
@@ -103,6 +154,47 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn empty() -> Self {
         Self::default()
+    }
+
+    #[inline]
+    pub(super) fn extend_from_other(&mut self, other: &Self) {
+        debug_assert_eq!(self.depth(), other.depth());
+        self.num_leaves += other.num_leaves;
+        self.summary += other.summary();
+        self.children.extend(other.children().iter().map(Arc::clone));
+    }
+
+    #[inline]
+    pub(super) fn prepend_from_other(&mut self, other: &Self) {
+        debug_assert_eq!(self.depth(), other.depth());
+        self.num_leaves += other.num_leaves();
+        self.summary += other.summary();
+
+        for (idx, child) in other.children().iter().map(Arc::clone).enumerate()
+        {
+            self.children.insert(idx, child);
+        }
+    }
+
+    #[inline]
+    pub(super) fn pop(&mut self, index: usize) -> Arc<Node<N, L>> {
+        let node = &*self.children[index];
+        self.num_leaves -= node.num_leaves();
+        self.summary -= node.summary();
+        self.children.remove(index)
+    }
+
+    /// Returns a mutable reference to the first child of this internal node.
+    #[inline]
+    pub(super) fn first_mut(&mut self) -> &mut Arc<Node<N, L>> {
+        &mut self.children[0]
+    }
+
+    /// Returns a mutable reference to the last child of this internal node.
+    #[inline]
+    pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
+        let last_idx = self.children.len() - 1;
+        &mut self.children[last_idx]
     }
 
     #[inline]
@@ -120,16 +212,34 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.num_leaves
     }
 
+    /// Returns a mutable reference to the second to last child of this
+    /// internal node.
+    #[inline]
+    pub(super) fn penultimate_mut(&mut self) -> &mut Arc<Node<N, L>> {
+        let penultimate_idx = self.children.len() - 2;
+        &mut self.children[penultimate_idx]
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.children.len() == 0
+    }
+
     #[inline]
     fn is_full(&self) -> bool {
         self.children.len() == N
     }
 
+    /// Adds a node to the children, updating self's summary with the summary
+    /// coming from the new node.
     #[inline]
     pub(super) fn push(&mut self, child: Arc<Node<N, L>>) {
-        // TODO: uncomment this.
-        // debug_assert!(!self.is_full());
-        // debug_assert_eq!(child.depth() + 1, self.depth());
+        if self.is_empty() {
+            self.depth = child.depth() + 1;
+        }
+
+        debug_assert!(!self.is_full());
+        debug_assert_eq!(child.depth() + 1, self.depth());
 
         self.num_leaves += child.num_leaves();
         self.summary += child.summary();
@@ -201,30 +311,17 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         Self::from_children(nodes)
     }
 
-    //fn is_full(&self) -> bool {
-    //    self.children.len() == N
-    //}
-
-    ///// Adds a node to the children, updating self's summary with the summary
-    ///// coming from the new node.
-    /////
-    ///// # Panics
-    /////
-    ///// This function will panic if the node is already full.
-    //fn push_node(&mut self, node: Node<N, Leaf>) {
-    //    assert!(!self.is_full());
-    //    self.summary += node.summary();
-    //    self.children.push(Arc::new(node));
-    //}
+    /// Returns a mutable reference to the second child of this internal node.
+    #[inline]
+    pub(super) fn second_mut(&mut self) -> &mut Arc<Node<N, L>> {
+        &mut self.children[1]
+    }
 
     #[inline]
     pub(super) fn summary(&self) -> &L::Summary {
         &self.summary
     }
 }
-
-// #[inline]
-// fn prepend_at_depth(inode: )
 
 /// Recursively prints a tree-like representation of this node.
 ///

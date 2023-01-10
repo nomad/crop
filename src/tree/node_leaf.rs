@@ -6,6 +6,13 @@ pub(super) struct Lnode<L: Leaf> {
     pub(super) summary: L::Summary,
 }
 
+impl<L: Leaf> From<(L, L::Summary)> for Lnode<L> {
+    #[inline]
+    fn from((value, summary): (L, L::Summary)) -> Self {
+        Self { value, summary }
+    }
+}
+
 impl<L: Leaf> std::fmt::Debug for Lnode<L> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -29,8 +36,13 @@ impl<L: Leaf> From<L> for Lnode<L> {
 
 impl<L: Leaf> Lnode<L> {
     #[inline]
-    pub fn as_slice(&self) -> &L::Slice {
+    pub(super) fn as_slice(&self) -> &L::Slice {
         self.value.borrow()
+    }
+
+    #[inline]
+    pub(super) fn new(value: L, summary: L::Summary) -> Self {
+        Self { value, summary }
     }
 
     #[inline]

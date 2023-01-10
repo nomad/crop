@@ -7,7 +7,8 @@ pub trait Summarize: Debug {
     type Summary: Debug
         + Default
         + Clone
-        + for<'a> AddAssign<&'a Self::Summary>;
+        + for<'a> AddAssign<&'a Self::Summary>
+        + for<'a> SubAssign<&'a Self::Summary>;
 
     fn summarize(&self) -> Self::Summary;
 }
@@ -22,7 +23,10 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized + Clone {
 
     /// TODO: docs
     #[allow(unused_variables)]
-    fn append_slice(&mut self, slice: &Self::Slice) {
+    fn balance_slices<'a>(
+        first: (&'a Self::Slice, &'a Self::Summary),
+        second: (&'a Self::Slice, &'a Self::Summary),
+    ) -> ((Self, Self::Summary), Option<(Self, Self::Summary)>) {
         unimplemented!();
     }
 }

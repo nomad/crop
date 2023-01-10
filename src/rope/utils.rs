@@ -14,7 +14,7 @@ pub(super) fn assert_valid_chunk(
     // Only the first chunk of a single-chunk Rope is allowed to contain less
     // than the min number of bytes.
     if chunk.len() < RopeChunk::min_bytes() && !(is_first && next.is_none()) {
-        panic!("");
+        panic!("AA: {chunk}");
     }
 
     // Chunks are only allowed to exceed the max number of bytes if the max
