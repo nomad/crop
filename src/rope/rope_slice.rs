@@ -263,7 +263,9 @@ impl std::fmt::Display for RopeSlice<'_> {
 impl<'a, 'b> std::cmp::PartialEq<RopeSlice<'b>> for RopeSlice<'a> {
     #[inline]
     fn eq(&self, rhs: &RopeSlice<'b>) -> bool {
-        if self.byte_len() != rhs.byte_len() {
+        if !(self.byte_len() == rhs.byte_len()
+            && self.line_len() == rhs.line_len())
+        {
             false
         } else {
             chunks_eq_chunks(self.chunks(), rhs.chunks())

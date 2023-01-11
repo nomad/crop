@@ -23,6 +23,12 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized + Clone {
 
     /// TODO: docs
     #[allow(unused_variables)]
+    fn is_leaf_big_enough<'a>(leaf: &Self, summary: &Self::Summary) -> bool {
+        unimplemented!();
+    }
+
+    /// TODO: docs
+    #[allow(unused_variables)]
     fn balance_slices<'a>(
         first: (&'a Self::Slice, &'a Self::Summary),
         second: (&'a Self::Slice, &'a Self::Summary),

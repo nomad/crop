@@ -3,6 +3,7 @@ use std::ops::{AddAssign, SubAssign};
 use std::str;
 
 use super::metrics::ByteMetric;
+use super::utils::*;
 use crate::tree::{Leaf, Summarize};
 
 #[cfg(all(not(test), not(feature = "integration_tests")))]
@@ -79,16 +80,62 @@ impl Summarize for RopeChunk {
 
 impl Leaf for RopeChunk {
     type BaseMetric = ByteMetric;
+
     type Slice = ChunkSlice;
 
     #[inline]
+    fn is_leaf_big_enough(_: &RopeChunk, summary: &ChunkSummary) -> bool {
+        summary.bytes >= RopeChunk::min_bytes()
+    }
+
+    #[inline]
     fn balance_slices<'a>(
-        (first, first_summary): (&'a ChunkSlice, &'a ChunkSummary),
-        (second, second_summary): (&'a ChunkSlice, &'a ChunkSummary),
+        (left, left_summary): (&'a ChunkSlice, &'a ChunkSummary),
+        (right, right_summary): (&'a ChunkSlice, &'a ChunkSummary),
     ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
-        let first = first.to_owned().into();
-        let second = second.to_owned().into();
-        ((first, *first_summary), Some((second, *second_summary)))
+        // return (
+        //     (left.to_owned(), left_summary.clone()),
+        //     Some((right.to_owned(), right_summary.clone())),
+        // );
+
+        // If both slices can fit in a single chunk we join them.
+        if left.len() + right.len() <= Self::max_bytes() {
+            let mut left = left.to_owned();
+            left.push_str(right);
+
+            let mut left_summary = left_summary.clone();
+            left_summary += right_summary;
+
+            ((left, left_summary), None)
+        }
+        // If the left side is lacking we take text from the right side.
+        else if left.len() < Self::min_bytes() {
+            debug_assert!(right.len() > Self::min_bytes());
+
+            let (left, right) = balance_left_with_right(
+                left,
+                left_summary,
+                right,
+                right_summary,
+            );
+
+            (left, Some(right))
+        }
+        // Viceversa, if the right side is lacking we take text from the left
+        // side.
+        else {
+            debug_assert!(left.len() > Self::min_bytes());
+            debug_assert!(right.len() < Self::min_bytes());
+
+            let (left, right) = balance_right_with_left(
+                left,
+                left_summary,
+                right,
+                right_summary,
+            );
+
+            (left, Some(right))
+        }
     }
 }
 

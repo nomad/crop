@@ -212,17 +212,29 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.num_leaves
     }
 
-    /// Returns a mutable reference to the second to last child of this
-    /// internal node.
-    #[inline]
-    pub(super) fn penultimate_mut(&mut self) -> &mut Arc<Node<N, L>> {
-        let penultimate_idx = self.children.len() - 2;
-        &mut self.children[penultimate_idx]
-    }
-
     #[inline]
     fn is_empty(&self) -> bool {
         self.children.len() == 0
+    }
+
+    #[inline]
+    pub(super) fn swap(
+        &mut self,
+        index: usize,
+        child: Arc<Node<N, L>>,
+    ) -> Arc<Node<N, L>> {
+        debug_assert!(index < self.children.len());
+        debug_assert_eq!(self.depth(), child.depth() + 1);
+
+        self.num_leaves += child.num_leaves();
+        self.summary += child.summary();
+
+        let old = std::mem::replace(&mut self.children[index], child);
+
+        self.num_leaves -= old.num_leaves();
+        self.summary -= old.summary();
+
+        old
     }
 
     #[inline]
@@ -309,12 +321,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
 
         Self::from_children(nodes)
-    }
-
-    /// Returns a mutable reference to the second child of this internal node.
-    #[inline]
-    pub(super) fn second_mut(&mut self) -> &mut Arc<Node<N, L>> {
-        &mut self.children[1]
     }
 
     #[inline]

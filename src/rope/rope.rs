@@ -393,7 +393,9 @@ impl std::str::FromStr for Rope {
 impl std::cmp::PartialEq<Rope> for Rope {
     #[inline]
     fn eq(&self, rhs: &Rope) -> bool {
-        if self.byte_len() != rhs.byte_len() {
+        if !(self.byte_len() == rhs.byte_len()
+            && self.line_len() == rhs.line_len())
+        {
             false
         } else {
             chunks_eq_chunks(self.chunks(), rhs.chunks())
@@ -404,7 +406,9 @@ impl std::cmp::PartialEq<Rope> for Rope {
 impl std::cmp::PartialEq<RopeSlice<'_>> for Rope {
     #[inline]
     fn eq(&self, rhs: &RopeSlice<'_>) -> bool {
-        if self.byte_len() != rhs.byte_len() {
+        if !(self.byte_len() == rhs.byte_len()
+            && self.line_len() == rhs.line_len())
+        {
             false
         } else {
             chunks_eq_chunks(self.chunks(), rhs.chunks())

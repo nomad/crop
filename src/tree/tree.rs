@@ -73,8 +73,8 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
 
         let tree = Tree { root };
 
-        #[cfg(debug_assertions)]
-        tree.assert_invariants();
+        // #[cfg(debug_assertions)]
+        // tree.assert_invariants();
 
         tree
     }
@@ -427,12 +427,19 @@ mod from_treeslice {
                     return false;
                 }
 
-                debug_assert!(
-                    inode.children().len() >= Inode::<N, L>::min_children()
-                );
+                // NOTE: if the first call to `merge_distribute_first_second`
+                // returned `true` it means the first and second children of
+                // this inode were rebalanced, leaving the first child with at
+                // least `Inode::min_children + 1` children, so calling
+                // `balance_left_side` on the first child could not have
+                // returrned `true`.
+                //
+                // Since it did, it must mean `parent_should_rebalance` was
+                // false, which means we can use a simple `=` assignment
+                // instead of `|=`.
+                debug_assert!(!parent_should_rebalance);
 
-                parent_should_rebalance |=
-                    merge_distribute_first_second(inode);
+                parent_should_rebalance = merge_distribute_first_second(inode);
             }
         }
 
@@ -455,11 +462,10 @@ mod from_treeslice {
                     return false;
                 }
 
-                debug_assert!(
-                    inode.children().len() >= Inode::<N, L>::min_children()
-                );
+                // NOTE: see other comment in `balance_left_side`.
+                debug_assert!(!parent_should_rebalance);
 
-                parent_should_rebalance |=
+                parent_should_rebalance =
                     merge_distribute_penultimate_last(inode);
             }
         }
@@ -491,7 +497,6 @@ mod from_treeslice {
                 {
                     first.extend_from_other(sec);
                     inode.pop(1);
-                    true
                 }
                 // If not, we move the minimum number of nodes needed to make
                 // the first child valid from the second to the first child.
@@ -506,15 +511,38 @@ mod from_treeslice {
 
                     first.extend(second.drain(0..to_move));
 
-                    false
+                    return false;
                 }
             },
 
-            Node::Leaf(_first) => {
-                // TODO
-                false
+            Node::Leaf(first) => {
+                if first.is_big_enough() {
+                    return false;
+                }
+
+                // Safety: the first child is a leaf node, so the second child
+                // is also a leaf node.
+                let sec = unsafe { second.as_leaf_unchecked() };
+
+                let (frt, sec) = L::balance_slices(
+                    (first.as_slice(), first.summary()),
+                    (sec.as_slice(), sec.summary()),
+                );
+
+                *first = Lnode::from(frt);
+
+                if let Some(sec) = sec {
+                    inode.swap(1, Arc::new(Node::Leaf(Lnode::from(sec))));
+                    return false;
+                } else {
+                    inode.pop(1);
+                }
             },
         }
+
+        // The parent should only rebalance if after removing the second child
+        // this inode has less than the minimum number of children.
+        inode.children().len() < Inode::<N, L>::min_children()
     }
 
     #[inline]
@@ -543,7 +571,6 @@ mod from_treeslice {
                 {
                     last.prepend_from_other(pen);
                     inode.pop(last_idx - 1);
-                    true
                 }
                 // If not, we move the minimum number of nodes needed to make
                 // the first child valid from the penultimate to the first
@@ -562,15 +589,43 @@ mod from_treeslice {
                             ..penultimate.children().len(),
                     ));
 
-                    false
+                    return false;
                 }
             },
 
-            Node::Leaf(_last) => {
-                // TODO
-                false
+            Node::Leaf(last) => {
+                if last.is_big_enough() {
+                    return false;
+                }
+
+                // Safety: the first child is a leaf node, so the second child
+                // is also a leaf node.
+                let pen = unsafe { penultimate.as_leaf_unchecked() };
+
+                // TODO: refactor all this, this is garbage.
+
+                let (left, right) = L::balance_slices(
+                    (pen.as_slice(), pen.summary()),
+                    (last.as_slice(), last.summary()),
+                );
+
+                if let Some(right) = right {
+                    *last = Lnode::from(right);
+                    inode.swap(
+                        last_idx - 1,
+                        Arc::new(Node::Leaf(Lnode::from(left))),
+                    );
+                    return false;
+                } else {
+                    *last = Lnode::from(left);
+                    inode.pop(last_idx - 1);
+                }
             },
         }
+
+        // The parent should only rebalance if after removing the penultimate
+        // child this inode has less than the minimum number of children.
+        inode.children().len() < Inode::<N, L>::min_children()
     }
 
     #[inline]

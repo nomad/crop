@@ -3,7 +3,7 @@ use std::ops::{Bound, RangeBounds};
 
 use super::iterators::Chunks;
 use super::{ChunkSlice, ChunkSummary, Rope, RopeChunk};
-use crate::tree::TreeSlice;
+use crate::tree::{Summarize, TreeSlice};
 
 #[allow(dead_code)]
 pub(super) fn assert_valid_chunk(
@@ -36,13 +36,82 @@ pub(super) fn assert_valid_chunk(
     }
 
     // CRLF pairs should never be split across chunks.
-    if *chunk.as_bytes().last().unwrap() == b'\r' {
+    if let Some(&b'\r') = chunk.as_bytes().last() {
         if let Some(next) = next {
             if *next.as_bytes().first().unwrap() == b'\n' {
                 panic!("");
             }
         }
     }
+}
+
+/// TODO: docs
+#[inline]
+pub(super) fn balance_left_with_right(
+    left: &ChunkSlice,
+    left_summary: &ChunkSummary,
+    right: &ChunkSlice,
+    right_summary: &ChunkSummary,
+) -> ((RopeChunk, ChunkSummary), (RopeChunk, ChunkSummary)) {
+    debug_assert!(left.len() < RopeChunk::min_bytes());
+    debug_assert!(right.len() > RopeChunk::min_bytes());
+    debug_assert!(left.len() + right.len() > RopeChunk::max_bytes());
+
+    // TODO: make sure not to split at a char boundary or at a CRLF pair.
+
+    let bytes_to_left = RopeChunk::min_bytes() - left.len();
+
+    let add_to_left: &ChunkSlice = (&right[..bytes_to_left]).into();
+
+    let add_to_left_summary = add_to_left.summarize();
+
+    let mut left = left.to_owned();
+    left.push_str(add_to_left);
+
+    let mut left_summary = left_summary.clone();
+    left_summary += &add_to_left_summary;
+
+    let right: &ChunkSlice = (&right[bytes_to_left..]).into();
+
+    let mut right_summary = right_summary.clone();
+    right_summary -= &add_to_left_summary;
+
+    ((left, left_summary), (right.to_owned(), right_summary))
+}
+
+/// TODO: docs
+#[inline]
+pub(super) fn balance_right_with_left(
+    left: &ChunkSlice,
+    left_summary: &ChunkSummary,
+    old_right: &ChunkSlice,
+    right_summary: &ChunkSummary,
+) -> ((RopeChunk, ChunkSummary), (RopeChunk, ChunkSummary)) {
+    debug_assert!(left.len() > RopeChunk::min_bytes());
+    debug_assert!(old_right.len() < RopeChunk::min_bytes());
+    debug_assert!(left.len() + old_right.len() > RopeChunk::max_bytes());
+
+    // TODO: make sure not to split at a char boundary or at a CRLF pair.
+
+    let bytes_keep_left =
+        left.len() - (RopeChunk::min_bytes() - old_right.len());
+
+    let add_to_right: &ChunkSlice = (&left[bytes_keep_left..]).into();
+
+    let add_to_right_summary = add_to_right.summarize();
+
+    let left: &ChunkSlice = (&left[..bytes_keep_left]).into();
+
+    let mut left_summary = left_summary.clone();
+    left_summary -= &add_to_right_summary;
+
+    let mut right = add_to_right.to_owned();
+    right.push_str(old_right);
+
+    let mut right_summary = right_summary.clone();
+    right_summary += &add_to_right_summary;
+
+    ((left.to_owned(), left_summary), (right, right_summary))
 }
 
 /// Checks equality between the chunks yielded by iterating over a [`Chunks`]
