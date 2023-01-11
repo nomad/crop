@@ -217,6 +217,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.children.len() == 0
     }
 
+    /// Note: does **not** update the inode's summary or its leaf count.
     #[inline]
     pub(super) fn swap(
         &mut self,
@@ -225,16 +226,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     ) -> Arc<Node<N, L>> {
         debug_assert!(index < self.children.len());
         debug_assert_eq!(self.depth(), child.depth() + 1);
-
-        self.num_leaves += child.num_leaves();
-        self.summary += child.summary();
-
-        let old = std::mem::replace(&mut self.children[index], child);
-
-        self.num_leaves -= old.num_leaves();
-        self.summary -= old.summary();
-
-        old
+        std::mem::replace(&mut self.children[index], child)
     }
 
     #[inline]

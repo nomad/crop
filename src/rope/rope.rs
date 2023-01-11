@@ -283,12 +283,12 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
-    pub fn replace<R, T>(&mut self, byte_range: R, text: T)
+    pub fn replace<R, T>(&mut self, byte_range: R, _text: T)
     where
         R: RangeBounds<usize>,
         T: AsRef<str>,
     {
-        let (start, end) =
+        let (_start, end) =
             range_bounds_to_start_end(byte_range, 0, self.byte_len());
 
         if end > self.byte_len() {

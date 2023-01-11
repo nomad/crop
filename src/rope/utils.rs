@@ -151,8 +151,8 @@ pub(super) fn chunks_eq_chunks(
             if left_chunk != &right_chunk[..left_chunk.len()] {
                 return false;
             } else {
+                right_chunk = &right_chunk[left_chunk.len()..];
                 left_chunk = &[];
-                right_chunk = &right_chunk[..left_chunk.len()];
             }
         } else if &left_chunk[..right_chunk.len()] != right_chunk {
             return false;
