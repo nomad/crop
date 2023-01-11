@@ -479,31 +479,25 @@ mod from_treeslice {
     ) -> bool {
         let (first, second) = inode.two_mut(0, 1);
 
-        match Arc::make_mut(first) {
-            Node::Internal(first) => {
+        match (Arc::make_mut(first), &**second) {
+            (Node::Internal(first), Node::Internal(second)) => {
                 if first.children().len() >= Inode::<N, L>::min_children() {
                     return false;
                 }
 
-                // Safety: the first child is an internal node, so the second
-                // child is also an internal node.
-                let sec = unsafe { second.as_internal_unchecked() };
-
                 // If the first and second children can be combined we can
                 // avoid calling `Arc::make_mut` on the second child, we can
                 // instead pop it and append its children to the first node.
-                if first.children().len() + sec.children().len()
+                if first.children().len() + second.children().len()
                     <= Inode::<N, L>::max_children()
                 {
-                    first.extend_from_other(sec);
+                    first.extend_from_other(second);
                     inode.pop(1);
                 }
                 // If not, we move the minimum number of nodes needed to make
                 // the first child valid from the second to the first child.
                 // This is guaranteed to leave the second node valid because..
                 else {
-                    let second = unsafe { second.as_internal_unchecked() };
-
                     let to_move =
                         Inode::<N, L>::min_children() - first.children().len();
 
@@ -523,29 +517,29 @@ mod from_treeslice {
                 }
             },
 
-            Node::Leaf(first) => {
+            (Node::Leaf(first), Node::Leaf(second)) => {
                 if first.is_big_enough() {
                     return false;
                 }
 
-                // Safety: the first child is a leaf node, so the second child
-                // is also a leaf node.
-                let sec = unsafe { second.as_leaf_unchecked() };
-
-                let (frt, sec) = L::balance_slices(
+                let (left, right) = L::balance_slices(
                     (first.as_slice(), first.summary()),
-                    (sec.as_slice(), sec.summary()),
+                    (second.as_slice(), second.summary()),
                 );
 
-                *first = Lnode::from(frt);
+                *first = Lnode::from(left);
 
-                if let Some(sec) = sec {
-                    inode.swap(1, Arc::new(Node::Leaf(Lnode::from(sec))));
+                if let Some(second) = right {
+                    inode.swap(1, Arc::new(Node::Leaf(Lnode::from(second))));
                     return false;
                 } else {
                     inode.pop(1);
                 }
             },
+
+            // Safety: the first and second children are siblings so they must
+            // be of the same kind.
+            _ => unsafe { std::hint::unreachable_unchecked() },
         }
 
         // The parent should only rebalance if after removing the second child
@@ -561,23 +555,19 @@ mod from_treeslice {
 
         let (penultimate, last) = inode.two_mut(last_idx - 1, last_idx);
 
-        match Arc::make_mut(last) {
-            Node::Internal(last) => {
+        match (&**penultimate, Arc::make_mut(last)) {
+            (Node::Internal(penultimate), Node::Internal(last)) => {
                 if last.children().len() >= Inode::<N, L>::min_children() {
                     return false;
                 }
 
-                // Safety: the last child is an internal node, so the
-                // penultimate child is also an internal node.
-                let pen = unsafe { penultimate.as_internal_unchecked() };
-
                 // If the penultimate and last children can be combined we can
                 // avoid calling `Arc::make_mut` on the penultimate child, we
                 // can instead pop it and append its children to the last node.
-                if last.children().len() + pen.children().len()
+                if penultimate.children().len() + last.children().len()
                     <= Inode::<N, L>::max_children()
                 {
-                    last.prepend_from_other(pen);
+                    last.prepend_from_other(penultimate);
                     inode.pop(last_idx - 1);
                 }
                 // If not, we move the minimum number of nodes needed to make
@@ -585,9 +575,6 @@ mod from_treeslice {
                 // child. This is guaranteed to leave the penultimate node
                 // valid because..
                 else {
-                    let penultimate =
-                        unsafe { penultimate.as_internal_unchecked() };
-
                     let to_move =
                         Inode::<N, L>::min_children() - last.children().len();
 
@@ -608,34 +595,34 @@ mod from_treeslice {
                 }
             },
 
-            Node::Leaf(last) => {
+            (Node::Leaf(penultimate), Node::Leaf(last)) => {
                 if last.is_big_enough() {
                     return false;
                 }
 
-                // Safety: the first child is a leaf node, so the second child
-                // is also a leaf node.
-                let pen = unsafe { penultimate.as_leaf_unchecked() };
-
-                // TODO: refactor all this, this is garbage.
-
                 let (left, right) = L::balance_slices(
-                    (pen.as_slice(), pen.summary()),
+                    (penultimate.as_slice(), penultimate.summary()),
                     (last.as_slice(), last.summary()),
                 );
 
                 if let Some(right) = right {
                     *last = Lnode::from(right);
+
                     inode.swap(
                         last_idx - 1,
                         Arc::new(Node::Leaf(Lnode::from(left))),
                     );
+
                     return false;
                 } else {
                     *last = Lnode::from(left);
                     inode.pop(last_idx - 1);
                 }
             },
+
+            // Safety: the first and second children are siblings so they must
+            // be of the same kind.
+            _ => unsafe { std::hint::unreachable_unchecked() },
         }
 
         // The parent should only rebalance if after removing the penultimate
