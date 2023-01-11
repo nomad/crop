@@ -502,14 +502,22 @@ mod from_treeslice {
                 // the first child valid from the second to the first child.
                 // This is guaranteed to leave the second node valid because..
                 else {
-                    let second = unsafe {
-                        Arc::make_mut(second).as_mut_internal_unchecked()
-                    };
+                    let second = unsafe { second.as_internal_unchecked() };
 
                     let to_move =
                         Inode::<N, L>::min_children() - first.children().len();
 
-                    first.extend(second.drain(0..to_move));
+                    let (move_to_first, keep_in_second) =
+                        second.children().split_at(to_move);
+
+                    first.extend(move_to_first.iter().map(Arc::clone));
+
+                    let new_second =
+                        Arc::new(Node::Internal(Inode::from_children(
+                            keep_in_second.iter().map(Arc::clone),
+                        )));
+
+                    inode.swap(1, new_second);
 
                     return false;
                 }
@@ -577,17 +585,24 @@ mod from_treeslice {
                 // child. This is guaranteed to leave the penultimate node
                 // valid because..
                 else {
-                    let penultimate = unsafe {
-                        Arc::make_mut(penultimate).as_mut_internal_unchecked()
-                    };
+                    let penultimate =
+                        unsafe { penultimate.as_internal_unchecked() };
 
                     let to_move =
                         Inode::<N, L>::min_children() - last.children().len();
 
-                    last.prepend(penultimate.drain(
-                        penultimate.children().len() - to_move
-                            ..penultimate.children().len(),
-                    ));
+                    let (keep_in_penultimate, move_to_last) = penultimate
+                        .children()
+                        .split_at(penultimate.children().len() - to_move);
+
+                    let new_penultimate =
+                        Arc::new(Node::Internal(Inode::from_children(
+                            keep_in_penultimate.iter().map(Arc::clone),
+                        )));
+
+                    last.prepend(move_to_last.iter().map(Arc::clone));
+
+                    inode.swap(last_idx - 1, new_penultimate);
 
                     return false;
                 }

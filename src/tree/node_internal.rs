@@ -103,20 +103,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn drain(
-        &mut self,
-        index_range: std::ops::Range<usize>,
-    ) -> std::vec::Drain<'_, Arc<Node<N, L>>> {
-        for index in index_range.clone() {
-            let node = &*self.children[index];
-            self.num_leaves -= node.num_leaves();
-            self.summary -= node.summary();
-        }
-
-        self.children.drain(index_range)
-    }
-
-    #[inline]
     pub(super) fn insert(&mut self, idx: usize, child: Arc<Node<N, L>>) {
         debug_assert!(!self.is_full());
         debug_assert_eq!(child.depth() + 1, self.depth());
