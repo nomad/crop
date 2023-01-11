@@ -11,9 +11,16 @@ pub(super) fn assert_valid_chunk(
     next: Option<&str>,
     is_first: bool,
 ) {
+    // TODO: explain the reason for the `-3`.
+    let min_bytes = if RopeChunk::min_bytes() >= 4 {
+        RopeChunk::min_bytes() - 3
+    } else {
+        1
+    };
+
     // Only the first chunk of a single-chunk Rope is allowed to contain less
     // than the min number of bytes.
-    if chunk.len() < RopeChunk::min_bytes() && !(is_first && next.is_none()) {
+    if chunk.len() < min_bytes && !(is_first && next.is_none()) {
         panic!("AA: {chunk}");
     }
 
@@ -45,6 +52,16 @@ pub(super) fn assert_valid_chunk(
     }
 }
 
+#[inline]
+fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
+    byte_offset > 0
+        && byte_offset < s.len()
+        && ({
+            let s = s.as_bytes();
+            s[byte_offset - 1] == b'\r' && s[byte_offset] == b'\n'
+        })
+}
+
 /// TODO: docs
 #[inline]
 pub(super) fn balance_left_with_right(
@@ -57,9 +74,21 @@ pub(super) fn balance_left_with_right(
     debug_assert!(right.len() > RopeChunk::min_bytes());
     debug_assert!(left.len() + right.len() > RopeChunk::max_bytes());
 
-    // TODO: make sure not to split at a char boundary or at a CRLF pair.
+    let mut bytes_to_left = RopeChunk::min_bytes() - left.len();
 
-    let bytes_to_left = RopeChunk::min_bytes() - left.len();
+    // If we're splitting a code point we take less bytes from the right slice.
+    // This will result in the final left chunk having less than
+    // `RopeChunk::min_bytes()` bytes.
+    if !right.is_char_boundary(bytes_to_left) {
+        bytes_to_left -= 1;
+        while !right.is_char_boundary(bytes_to_left) {
+            bytes_to_left -= 1;
+        }
+    }
+    // Similarly, if we're splitting a CRLF pair we take 1 less byte.
+    else if is_splitting_crlf_pair(right, bytes_to_left) {
+        bytes_to_left -= 1;
+    }
 
     let add_to_left: &ChunkSlice = (&right[..bytes_to_left]).into();
 
@@ -68,12 +97,12 @@ pub(super) fn balance_left_with_right(
     let mut left = left.to_owned();
     left.push_str(add_to_left);
 
-    let mut left_summary = left_summary.clone();
+    let mut left_summary = *left_summary;
     left_summary += &add_to_left_summary;
 
     let right: &ChunkSlice = (&right[bytes_to_left..]).into();
 
-    let mut right_summary = right_summary.clone();
+    let mut right_summary = *right_summary;
     right_summary -= &add_to_left_summary;
 
     ((left, left_summary), (right.to_owned(), right_summary))
@@ -91,10 +120,22 @@ pub(super) fn balance_right_with_left(
     debug_assert!(old_right.len() < RopeChunk::min_bytes());
     debug_assert!(left.len() + old_right.len() > RopeChunk::max_bytes());
 
-    // TODO: make sure not to split at a char boundary or at a CRLF pair.
-
-    let bytes_keep_left =
+    let mut bytes_keep_left =
         left.len() - (RopeChunk::min_bytes() - old_right.len());
+
+    // If we're splitting a code point we take less bytes from the left slice.
+    // This will result in the final right chunk having less than
+    // `RopeChunk::min_bytes()` bytes.
+    if !left.is_char_boundary(bytes_keep_left) {
+        bytes_keep_left += 1;
+        while !left.is_char_boundary(bytes_keep_left) {
+            bytes_keep_left += 1;
+        }
+    }
+    // Similarly, if we're splitting a CRLF pair we take 1 less byte.
+    else if is_splitting_crlf_pair(left, bytes_keep_left) {
+        bytes_keep_left += 1;
+    }
 
     let add_to_right: &ChunkSlice = (&left[bytes_keep_left..]).into();
 
@@ -102,13 +143,13 @@ pub(super) fn balance_right_with_left(
 
     let left: &ChunkSlice = (&left[..bytes_keep_left]).into();
 
-    let mut left_summary = left_summary.clone();
+    let mut left_summary = *left_summary;
     left_summary -= &add_to_right_summary;
 
     let mut right = add_to_right.to_owned();
     right.push_str(old_right);
 
-    let mut right_summary = right_summary.clone();
+    let mut right_summary = *right_summary;
     right_summary += &add_to_right_summary;
 
     ((left.to_owned(), left_summary), (right, right_summary))

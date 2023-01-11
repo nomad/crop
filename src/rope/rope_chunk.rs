@@ -98,7 +98,7 @@ impl Leaf for RopeChunk {
             let mut left = left.to_owned();
             left.push_str(right);
 
-            let mut left_summary = left_summary.clone();
+            let mut left_summary = *left_summary;
             left_summary += right_summary;
 
             ((left, left_summary), None)
