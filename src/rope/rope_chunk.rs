@@ -135,6 +135,7 @@ impl Leaf for RopeChunk {
 }
 
 #[derive(Debug, PartialEq)]
+#[repr(transparent)]
 pub(super) struct ChunkSlice {
     text: str,
 }
@@ -149,7 +150,7 @@ impl Default for &ChunkSlice {
 impl From<&str> for &ChunkSlice {
     #[inline]
     fn from(text: &str) -> Self {
-        // Safety: it's safe.
+        // Safety: a `ChunkSlice` has the same layout of a `str`.
         unsafe { &*(text as *const str as *const ChunkSlice) }
     }
 }
