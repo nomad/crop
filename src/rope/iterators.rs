@@ -322,13 +322,13 @@ impl<'a> std::iter::FusedIterator for Chars<'a> {}
 
 /// TODO: docs
 #[derive(Clone)]
-pub struct Lines<'a> {
+pub struct LinesRaw<'a> {
     units: Units<'a, { Rope::fanout() }, RopeChunk, LineMetric>,
     yielded: usize,
     total: usize,
 }
 
-impl<'a> From<&'a Rope> for Lines<'a> {
+impl<'a> From<&'a Rope> for LinesRaw<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
         Self {
@@ -339,30 +339,25 @@ impl<'a> From<&'a Rope> for Lines<'a> {
     }
 }
 
-impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
+impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for LinesRaw<'a> {
     #[inline]
-    fn from(slice: &'a RopeSlice<'b>) -> Self {
+    fn from(rope_slice: &'a RopeSlice<'b>) -> Self {
         Self {
-            units: slice.tree_slice.units::<LineMetric>(),
+            units: rope_slice.tree_slice.units::<LineMetric>(),
             yielded: 0,
-            total: slice.line_len(),
+            total: rope_slice.line_len(),
         }
     }
 }
 
-impl<'a> Iterator for Lines<'a> {
+impl<'a> Iterator for LinesRaw<'a> {
     type Item = RopeSlice<'a>;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.yielded == self.total {
-            None
-        } else {
-            let mut line = self.units.next()?;
-            rope_slice_remove_trailing_line_break(&mut line);
-            self.yielded += 1;
-            Some(RopeSlice { tree_slice: line, last_byte_is_newline: false })
-        }
+        let tree_slice = self.units.next()?;
+        self.yielded += 1;
+        Some(RopeSlice::from(tree_slice))
     }
 
     #[inline]
@@ -372,24 +367,74 @@ impl<'a> Iterator for Lines<'a> {
     }
 }
 
+impl<'a> DoubleEndedIterator for LinesRaw<'a> {
+    #[inline]
+    fn next_back(&mut self) -> Option<Self::Item> {
+        let tree_slice = self.units.next_back()?;
+        self.yielded += 1;
+        Some(RopeSlice::from(tree_slice))
+    }
+}
+
+impl<'a> ExactSizeIterator for LinesRaw<'a> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.total - self.yielded
+    }
+}
+
+impl<'a> std::iter::FusedIterator for LinesRaw<'a> {}
+
+/// TODO: docs
+#[derive(Clone)]
+pub struct Lines<'a> {
+    lines_raw: LinesRaw<'a>,
+}
+
+impl<'a> From<&'a Rope> for Lines<'a> {
+    #[inline]
+    fn from(rope: &'a Rope) -> Self {
+        Self { lines_raw: rope.lines_raw() }
+    }
+}
+
+impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
+    #[inline]
+    fn from(rope_slice: &'a RopeSlice<'b>) -> Self {
+        Self { lines_raw: rope_slice.lines_raw() }
+    }
+}
+
+impl<'a> Iterator for Lines<'a> {
+    type Item = RopeSlice<'a>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let mut tree_slice = self.lines_raw.next()?.tree_slice;
+        tree_slice_remove_trailing_line_break(&mut tree_slice);
+        Some(RopeSlice { tree_slice, last_byte_is_newline: false })
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = self.lines_raw.len();
+        (exact, Some(exact))
+    }
+}
+
 impl<'a> DoubleEndedIterator for Lines<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.yielded == self.total {
-            None
-        } else {
-            let mut line = self.units.next_back()?;
-            rope_slice_remove_trailing_line_break(&mut line);
-            self.yielded += 1;
-            Some(RopeSlice { tree_slice: line, last_byte_is_newline: false })
-        }
+        let mut tree_slice = self.lines_raw.next_back()?.tree_slice;
+        tree_slice_remove_trailing_line_break(&mut tree_slice);
+        Some(RopeSlice { tree_slice, last_byte_is_newline: false })
     }
 }
 
 impl<'a> ExactSizeIterator for Lines<'a> {
     #[inline]
     fn len(&self) -> usize {
-        self.total - self.yielded
+        self.lines_raw.len()
     }
 }
 

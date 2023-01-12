@@ -154,3 +154,24 @@ fn lines_asymmetric_forward_backward() {
     assert_eq!("", backward.next().unwrap());
     assert_eq!(None, backward.next());
 }
+
+#[test]
+fn lines_redo_slicing() {
+    let r = Rope::from(
+        "Hey \r\nthis contains\nmixed line breaks, emojis -> \r\n🐕‍🦺 and \
+         other -> こんにちは chars.\r\nCan we iterate\nover this?\n\r\n\n??",
+    );
+
+    let mut lines = r.lines();
+
+    assert_eq!("Hey ", lines.next().unwrap());
+    assert_eq!("this contains", lines.next().unwrap());
+    assert_eq!("mixed line breaks, emojis -> ", lines.next().unwrap());
+    assert_eq!("🐕‍🦺 and other -> こんにちは chars.", lines.next().unwrap());
+    assert_eq!("Can we iterate", lines.next().unwrap());
+    assert_eq!("over this?", lines.next().unwrap());
+    assert_eq!("", lines.next().unwrap());
+    assert_eq!("", lines.next().unwrap());
+    assert_eq!("??", lines.next().unwrap());
+    assert_eq!(None, lines.next());
+}

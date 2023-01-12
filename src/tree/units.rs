@@ -59,6 +59,8 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
 {
     #[inline]
     fn from(tree: &'a Tree<FANOUT, L>) -> Units<'a, FANOUT, L, M> {
+        println!("{tree:#?}");
+
         Self {
             root: &tree.root,
             forward: DirectionState::new(&tree.root, None),

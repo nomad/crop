@@ -1,6 +1,6 @@
 use std::ops::RangeBounds;
 
-use super::iterators::{Bytes, Chars, Chunks, Lines};
+use super::iterators::{Bytes, Chars, Chunks, Lines, LinesRaw};
 use super::metrics::{ByteMetric, LineMetric};
 use super::utils::*;
 use super::{RopeChunk, RopeChunkIter};
@@ -11,7 +11,7 @@ use crate::RopeSlice;
 const ROPE_FANOUT: usize = 8;
 
 #[cfg(any(test, feature = "integration_tests"))]
-const ROPE_FANOUT: usize = 4;
+const ROPE_FANOUT: usize = 2;
 
 /// A utf-8 text rope.
 ///
@@ -217,7 +217,7 @@ impl Rope {
         let mut tree_slice =
             self.tree.slice(LineMetric(line_idx)..LineMetric(line_idx + 1));
 
-        rope_slice_remove_trailing_line_break(&mut tree_slice);
+        tree_slice_remove_trailing_line_break(&mut tree_slice);
 
         RopeSlice { tree_slice, last_byte_is_newline: false }
     }
@@ -273,6 +273,12 @@ impl Rope {
     #[inline]
     pub fn lines(&self) -> Lines<'_> {
         Lines::from(self)
+    }
+
+    /// TODO: docs.
+    #[inline]
+    pub fn lines_raw(&self) -> LinesRaw<'_> {
+        LinesRaw::from(self)
     }
 
     /// Returns a new empty [`Rope`].

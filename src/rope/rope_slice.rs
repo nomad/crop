@@ -1,6 +1,6 @@
 use std::ops::RangeBounds;
 
-use super::iterators::{Bytes, Chars, Chunks, Lines};
+use super::iterators::{Bytes, Chars, Chunks, Lines, LinesRaw};
 use super::metrics::{ByteMetric, LineMetric};
 use super::utils::*;
 use super::{Rope, RopeChunk};
@@ -171,7 +171,7 @@ impl<'a> RopeSlice<'a> {
             .tree_slice
             .slice(LineMetric(line_idx)..LineMetric(line_idx + 1));
 
-        rope_slice_remove_trailing_line_break(&mut tree_slice);
+        tree_slice_remove_trailing_line_break(&mut tree_slice);
 
         Self { tree_slice, last_byte_is_newline: false }
     }
@@ -227,6 +227,12 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn lines(&'a self) -> Lines<'a> {
         Lines::from(self)
+    }
+
+    /// TODO: docs.
+    #[inline]
+    pub fn lines_raw(&self) -> LinesRaw<'_> {
+        LinesRaw::from(self)
     }
 }
 
