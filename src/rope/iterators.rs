@@ -12,14 +12,22 @@ pub struct Chunks<'a> {
 impl<'a> From<&'a Rope> for Chunks<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        Self { leaves: rope.tree().leaves() }
+        let mut leaves = rope.tree().leaves();
+        if rope.byte_len() == 0 {
+            let _ = leaves.next();
+        }
+        Self { leaves }
     }
 }
 
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chunks<'a> {
     #[inline]
-    fn from(slice: &'a RopeSlice<'b>) -> Self {
-        Self { leaves: slice.tree_slice.leaves() }
+    fn from(rope_slice: &'a RopeSlice<'b>) -> Self {
+        let mut leaves = rope_slice.tree_slice.leaves();
+        if rope_slice.byte_len() == 0 {
+            let _ = leaves.next();
+        }
+        Self { leaves }
     }
 }
 
