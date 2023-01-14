@@ -62,10 +62,14 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         measure - M2::measure(&self.before)
     }
 
-    // TODO: why?
     #[inline]
     pub fn end_slice(&'a self) -> &'a L::Slice {
         self.end_slice
+    }
+
+    #[inline]
+    pub fn end_summary(&'a self) -> &'a L::Summary {
+        &self.end_summary
     }
 
     #[inline]
@@ -96,6 +100,21 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     #[inline]
     pub fn num_leaves(&'a self) -> usize {
         self.num_leaves
+    }
+
+    #[inline]
+    pub(super) fn root(&self) -> &Arc<Node<FANOUT, L>> {
+        &self.root
+    }
+
+    #[inline]
+    pub fn start_slice(&'a self) -> &'a L::Slice {
+        self.start_slice
+    }
+
+    #[inline]
+    pub fn start_summary(&'a self) -> &'a L::Summary {
+        &self.start_summary
     }
 
     #[inline]

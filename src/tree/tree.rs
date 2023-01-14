@@ -159,6 +159,11 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         Leaves::from(self)
     }
 
+    #[inline]
+    pub(super) fn root(&self) -> &Arc<Node<FANOUT, L>> {
+        &self.root
+    }
+
     /// TODO: docs
     #[inline]
     pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
@@ -187,6 +192,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     pub fn units<M>(&self) -> Units<'_, FANOUT, L, M>
     where
         M: Metric<L>,
+        for<'d> &'d L::Slice: Default,
     {
         Units::from(self)
     }
