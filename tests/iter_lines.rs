@@ -202,3 +202,32 @@ fn lines_raw() {
     // assert_eq!("??", lines.next().unwrap());
     // assert_eq!(None, lines.next());
 }
+
+#[test]
+fn lines_rau() {
+    for s in [TINY, SMALL, MEDIUM, LARGE] {
+        let rope = Rope::from(s);
+
+        let mut iter = rope.lines_raw().zip(s.lines());
+
+        for _ in 0..rope.line_len() - 1 {
+            let (rope_line, s_line) = iter.next().unwrap();
+
+            assert_eq!(
+                s_line,
+                rope_line.byte_slice(..rope_line.byte_len() - 1)
+            );
+        }
+    }
+}
+
+#[test]
+fn lines_ooo() {
+    let r = Rope::from("Hope!\neeaa\nbb\na");
+
+    let mut lines = r.lines_raw();
+
+    assert_eq!("Hope!\n", lines.next().unwrap());
+    assert_eq!("eeaa\n", lines.next().unwrap());
+    assert_eq!("bb\n", lines.next().unwrap());
+}

@@ -37,7 +37,7 @@ where
 {
     #[inline]
     fn from(tree: &'a Tree<FANOUT, L>) -> Units<'a, FANOUT, L, M> {
-        println!("{tree:#?}");
+        // println!("{tree:#?}");
 
         Self {
             forward: UnitsForward::new(
@@ -301,6 +301,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
     #[inline]
     fn next_leaf_with_unit(
         &mut self,
+        before: &mut L::Summary,
         summary: &mut L::Summary,
         leaf_count: &mut usize,
     ) -> &'a Lnode<L> {
@@ -313,6 +314,10 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         let inode = unsafe { node.as_internal_unchecked() };
 
         debug_assert!(*visited < inode.children().len() - 1);
+
+        for child in &inode.children()[..*visited] {
+            *before += child.summary();
+        }
 
         *visited += 1;
 
@@ -443,7 +448,11 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
             }
         };
 
-        let leaf = self.next_leaf_with_unit(&mut summary, &mut num_leaves);
+        let leaf = self.next_leaf_with_unit(
+            &mut before,
+            &mut summary,
+            &mut num_leaves,
+        );
 
         debug_assert!(M::measure(leaf.summary()) > M::zero());
 
@@ -505,11 +514,9 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
                 > L::BaseMetric::zero()
         );
 
-        self.yielded += M::one();
-
         self.i += 1;
 
-        let print = 3;
+        let print = 2;
 
         // if self.i == print {
         //     println!("=======================");
@@ -535,17 +542,18 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
             self.yield_rest()
         };
 
+        self.yielded += M::one();
+
         // if self.i == print {
-        if true {
-            println!("");
-            println!("");
-            println!("=======================");
-            println!("ITERATION {}", self.i);
-            println!("RETURNING {tree_slice:#?}");
-            println!("");
-            println!("");
-            println!("");
-        }
+        //     println!("");
+        //     println!("");
+        //     println!("=======================");
+        //     println!("ITERATION {}", self.i);
+        //     println!("RETURNING {tree_slice:#?}");
+        //     println!("");
+        //     println!("");
+        //     println!("");
+        // }
 
         tree_slice
     }
