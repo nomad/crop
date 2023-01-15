@@ -175,3 +175,30 @@ fn lines_redo_slicing() {
     assert_eq!("??", lines.next().unwrap());
     assert_eq!(None, lines.next());
 }
+
+#[test]
+fn lines_raw() {
+    let r = Rope::from(
+        "Hey \r\nthis contains\nmixed line breaks, emojis -> \r\n🐕‍🦺 and \
+         other -> こんにちは chars.\r\nCan we iterate\nover this?\n\r\n\n??",
+    );
+
+    let mut lines = r.lines_raw();
+
+    assert_eq!("Hey \r\n", lines.next().unwrap());
+    assert_eq!("this contains\n", lines.next().unwrap());
+    assert_eq!("mixed line breaks, emojis -> \r\n", lines.next().unwrap());
+    assert_eq!(
+        "🐕‍🦺 and other -> こんにちは chars.\r\n",
+        lines.next().unwrap()
+    );
+    assert_eq!("Can we iterate\n", lines.next().unwrap());
+    assert_eq!("over this?\n", lines.next().unwrap());
+    assert_eq!("\r\n", lines.next().unwrap());
+    assert_eq!("\n", lines.next().unwrap());
+
+    // TODO: handle last iteration
+    //
+    // assert_eq!("??", lines.next().unwrap());
+    // assert_eq!(None, lines.next());
+}

@@ -170,10 +170,23 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.children.remove(index)
     }
 
+    /// Returns a reference to the first child of this internal node.
+    #[inline]
+    pub(super) fn first(&self) -> &Arc<Node<N, L>> {
+        &self.children[0]
+    }
+
     /// Returns a mutable reference to the first child of this internal node.
     #[inline]
     pub(super) fn first_mut(&mut self) -> &mut Arc<Node<N, L>> {
         &mut self.children[0]
+    }
+
+    /// Returns a reference to the last child of this internal node.
+    #[inline]
+    pub(super) fn last(&self) -> &Arc<Node<N, L>> {
+        let last_idx = self.children.len() - 1;
+        &self.children[last_idx]
     }
 
     /// Returns a mutable reference to the last child of this internal node.
