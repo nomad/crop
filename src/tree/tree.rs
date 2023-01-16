@@ -272,7 +272,7 @@ mod from_treeslice {
 
         let mut found_start = false;
 
-        let start = L::BaseMetric::measure(&tree_slice.before);
+        let start = tree_slice.before;
 
         let end = start + L::BaseMetric::measure(tree_slice.summary());
 

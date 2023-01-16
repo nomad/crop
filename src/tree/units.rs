@@ -294,7 +294,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
 
         let root = self.leaf_node;
 
-        let yielded = self.yielded_in_leaf.clone();
+        let yielded = L::BaseMetric::measure(&self.yielded_in_leaf);
 
         let (start_slice, start_summary, rest_slice, rest_summary) =
             M::split(self.start_slice, M::one(), &self.start_summary);
@@ -430,7 +430,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
 
         TreeSlice {
             root,
-            before: yielded,
+            before: L::BaseMetric::measure(&yielded),
             summary,
             end_slice,
             end_summary,
@@ -449,7 +449,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         let start_slice = self.start_slice;
         let start_summary = self.start_summary.clone();
 
-        let mut yielded = self.yielded_in_leaf.clone();
+        let mut yielded = L::BaseMetric::measure(&self.yielded_in_leaf);
 
         let mut summary = start_summary.clone();
 
@@ -497,7 +497,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
             let inode = unsafe { node.as_internal_unchecked() };
 
             for child in &inode.children()[..visited] {
-                yielded += child.summary();
+                yielded += L::BaseMetric::measure(child.summary());
             }
 
             for child in &inode.children()[visited + 1..] {
@@ -512,7 +512,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         let inode = unsafe { root.as_internal_unchecked() };
 
         for child in &inode.children()[..*visited] {
-            yielded += child.summary();
+            yielded += L::BaseMetric::measure(child.summary());
         }
 
         for child in &inode.children()[*visited + 1..] {

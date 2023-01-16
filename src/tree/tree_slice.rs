@@ -10,7 +10,7 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
 
     /// The summary between the left-most leaf of the root and the start of the
     /// slice.
-    pub(super) before: L::Summary,
+    pub(super) before: L::BaseMetric,
 
     /// The total summary of this slice.
     pub(super) summary: L::Summary,
@@ -57,9 +57,11 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         M1: Metric<L>,
         M2: Metric<L>,
     {
-        let before = M1::measure(&self.before);
-        let measure = self.root.convert_measure::<M1, M2>(from + before);
-        measure - M2::measure(&self.before)
+        // let before = M1::measure(&self.before);
+        // let measure = self.root.convert_measure::<M1, M2>(from + before);
+        // measure - M2::measure(&self.before)
+
+        todo!();
     }
 
     #[inline]
@@ -84,10 +86,12 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
             M::measure(self.summary()),
         );
 
-        let before = M::measure(&self.before);
-        let (slice, mut measure) = self.root.leaf_at_measure(measure + before);
-        measure -= before;
-        (slice, measure)
+        // let before = M::measure(&self.before);
+        // let (slice, mut measure) = self.root.leaf_at_measure(measure + before);
+        // measure -= before;
+        // (slice, measure)
+
+        todo!();
     }
 
     /// TODO: docs
@@ -155,7 +159,7 @@ where
         // bound on L::Slice.
         let mut tree_slice = Self {
             root,
-            before: L::Summary::default(),
+            before: L::BaseMetric::zero(),
             summary: L::Summary::default(),
             start_slice: Default::default(),
             start_summary: L::Summary::default(),
@@ -198,11 +202,13 @@ where
         debug_assert!(range.start <= range.end);
         // debug_assert!(range.end <= M::measure(self.summary()));
 
-        let before = M::measure(&self.before);
-        range.start += before;
-        range.end += before;
+        todo!();
 
-        Self::from_range_in_root(self.root, range)
+        // let before = M::measure(&self.before);
+        // range.start += before;
+        // range.end += before;
+
+        // Self::from_range_in_root(self.root, range)
     }
 }
 
@@ -277,7 +283,8 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                         )
                     } else {
                         // This child comes before the starting leaf.
-                        slice.before += child.summary();
+                        slice.before +=
+                            L::BaseMetric::measure(child.summary());
                         *measured += measure;
                     }
                 } else if *measured + measure >= range.end {
@@ -318,7 +325,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                                 leaf.summary(),
                             );
 
-                        slice.before += &left_summary;
+                        slice.before += L::BaseMetric::measure(&left_summary);
 
                         let (start_slice, start_summary, _, _) = M::split(
                             right_slice,
@@ -346,7 +353,8 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                                 leaf.summary(),
                             );
                         *measured += measure;
-                        slice.before += &before_summary;
+                        slice.before +=
+                            L::BaseMetric::measure(&before_summary);
                         slice.summary = start_summary.clone();
                         slice.start_slice = start_slice;
                         slice.start_summary = start_summary;
@@ -355,7 +363,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                     }
                 } else {
                     // This leaf comes before the starting leaf.
-                    slice.before += leaf.summary();
+                    slice.before += L::BaseMetric::measure(leaf.summary());
                     *measured += measure;
                 }
             } else if *measured + measure >= range.end {

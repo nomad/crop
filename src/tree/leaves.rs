@@ -102,7 +102,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
     fn from(slice: &'a TreeSlice<'a, FANOUT, L>) -> Leaves<'a, FANOUT, L> {
         let root = &*slice.root;
 
-        let before = L::BaseMetric::measure(&slice.before);
+        let before = slice.before;
 
         let after = L::BaseMetric::measure(root.summary())
             - L::BaseMetric::measure(slice.summary())
