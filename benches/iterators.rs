@@ -66,7 +66,7 @@ fn iter_forward(c: &mut Criterion) {
 
     group.bench_function("lines_large", |bench| {
         let r = Rope::from(LARGE);
-        let mut iter = r.lines().cycle();
+        let mut iter = r.lines_raw().cycle();
         bench.iter(|| {
             iter.next();
         })

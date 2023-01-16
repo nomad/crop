@@ -37,8 +37,6 @@ where
 {
     #[inline]
     fn from(tree: &'a Tree<FANOUT, L>) -> Units<'a, FANOUT, L, M> {
-        // println!("{tree:#?}");
-
         Self {
             forward: UnitsForward::new(
                 tree.root(),
@@ -272,7 +270,11 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
             *visited += 1;
 
             if *visited == inode.children().len() {
-                (last, _, _) = self.pop()?;
+                if self.stack.len() == 1 {
+                    return None;
+                } else {
+                    (last, _, _) = self.pop().unwrap();
+                }
             } else {
                 *yielded += last.summary();
                 break &inode.children()[*visited];
@@ -494,13 +496,106 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         let start_slice = self.start_slice;
         let start_summary = self.start_summary.clone();
 
-        let (mut popped, _, mut before) = self.pop().unwrap();
+        let (leaf, _, mut yielded) = self.pop().unwrap();
 
         let mut summary = start_summary.clone();
 
         let mut num_leaves = 1;
 
-        todo!();
+        // 1: find the root in the stack.
+
+        let root_idx = {
+            let mut root_idx = self.stack.len();
+
+            for (idx, &(node, visited, _)) in self.stack.iter().enumerate() {
+                // Safety: all nodes in the stack except for the last one
+                // are guaranteed to be internal nodes, and the last node has
+                // been popped at the start of this function.
+                let inode = unsafe { node.as_internal_unchecked() };
+
+                if visited < inode.children().len() - 1 {
+                    root_idx = idx;
+                    break;
+                }
+            }
+
+            root_idx
+        };
+
+        if root_idx == self.stack.len() {
+            return TreeSlice {
+                root: leaf,
+                before: yielded,
+                summary,
+                end_slice: start_slice,
+                end_summary: start_summary.clone(),
+                start_slice,
+                start_summary,
+                num_leaves,
+            };
+        }
+
+        // 2: increase `yielded`, `summary`, `num_leaves`.
+
+        for _ in root_idx..(self.stack.len() - 1) {
+            let (node, visited, _) = self.pop().unwrap();
+
+            // Safety: same as above.
+            let inode = unsafe { node.as_internal_unchecked() };
+
+            for child in &inode.children()[..visited] {
+                yielded += child.summary();
+            }
+
+            for child in &inode.children()[visited + 1..] {
+                summary += child.summary();
+                num_leaves += child.num_leaves();
+            }
+        }
+
+        let (root, visited, _) = self.last_mut();
+
+        // Safety: same as above.
+        let inode = unsafe { root.as_internal_unchecked() };
+
+        for child in &inode.children()[..*visited] {
+            yielded += child.summary();
+        }
+
+        for child in &inode.children()[*visited + 1..] {
+            debug_assert_eq!(M::measure(child.summary()), M::zero());
+
+            summary += child.summary();
+            num_leaves += child.num_leaves();
+        }
+
+        // 3: get to the last leaf.
+
+        let last_leaf = {
+            let mut last = inode.last();
+
+            loop {
+                match &**last {
+                    Node::Internal(inode) => {
+                        last = inode.last();
+                    },
+                    Node::Leaf(leaf) => {
+                        break leaf;
+                    },
+                }
+            }
+        };
+
+        TreeSlice {
+            root,
+            before: yielded,
+            summary,
+            start_slice,
+            start_summary,
+            num_leaves,
+            end_slice: last_leaf.as_slice(),
+            end_summary: last_leaf.summary.clone(),
+        }
     }
 
     #[inline]
@@ -516,16 +611,16 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
 
         self.i += 1;
 
-        let print = 2;
+        let print: isize = -1;
 
-        // if self.i == print {
-        //     println!("=======================");
-        //     println!("=======================");
-        //     println!("=======================");
-        //     println!("=======================");
-        //     println!("STATE AT START");
-        //     println!("{:#?}", self);
-        // }
+        if self.i as isize == print {
+            println!("=======================");
+            println!("=======================");
+            println!("=======================");
+            println!("=======================");
+            println!("STATE AT START");
+            println!("{:#?}", self);
+        }
 
         // TreeSlice spans leaf root.
         let tree_slice = if M::measure(&self.start_summary) > M::zero() {
@@ -544,16 +639,16 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
 
         self.yielded += M::one();
 
-        // if self.i == print {
-        //     println!("");
-        //     println!("");
-        //     println!("=======================");
-        //     println!("ITERATION {}", self.i);
-        //     println!("RETURNING {tree_slice:#?}");
-        //     println!("");
-        //     println!("");
-        //     println!("");
-        // }
+        if self.i as isize == print {
+            println!("");
+            println!("");
+            println!("=======================");
+            println!("ITERATION {}", self.i);
+            println!("RETURNING {tree_slice:#?}");
+            println!("");
+            println!("");
+            println!("");
+        }
 
         tree_slice
     }
