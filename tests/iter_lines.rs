@@ -209,10 +209,9 @@ fn lines_rau() {
             rope.lines_raw().zip(s.lines()).enumerate()
         {
             if i != rope.line_len() - 1 || s.ends_with("\n") {
-                assert_eq!(
-                    s_line,
-                    rope_line.byte_slice(..rope_line.byte_len() - 1)
-                );
+                let mut line = s_line.to_owned();
+                line.push_str("\n");
+                assert_eq!(line, rope_line);
             } else {
                 assert_eq!(s_line, rope_line);
             }
