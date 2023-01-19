@@ -125,15 +125,6 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     pub fn summary(&self) -> &L::Summary {
         &self.summary
     }
-
-    /// TODO: docs
-    #[inline]
-    pub fn units<M>(&'a self) -> Units<'a, FANOUT, L, M>
-    where
-        M: Metric<L>,
-    {
-        Units::from(self)
-    }
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L>
@@ -209,6 +200,15 @@ where
         // range.end += before;
 
         // Self::from_range_in_root(self.root, range)
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub fn units<M>(&'a self) -> Units<'a, FANOUT, L, M>
+    where
+        M: Metric<L>,
+    {
+        Units::from(self)
     }
 }
 

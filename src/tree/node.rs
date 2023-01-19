@@ -168,6 +168,14 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         Self::Internal(Inode::from_leaves(leaves))
     }
 
+    pub fn measure<M: Metric<L>>(&self) -> M {
+        M::measure(self.summary())
+    }
+
+    pub fn base_measure(&self) -> L::BaseMetric {
+        self.measure::<L::BaseMetric>()
+    }
+
     /// Note: doesn't do bounds checks.
     #[inline]
     pub fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
@@ -194,7 +202,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                     }
                     unreachable!(
                         "Didn't I tell you to do bounds checks before \
-                         callign this function?"
+                         calling this function?"
                     );
                 },
 

@@ -1,4 +1,5 @@
 use crop::Rope;
+use rand::Rng;
 
 mod common;
 
@@ -214,6 +215,49 @@ fn lines_rau() {
                 assert_eq!(line, rope_line);
             } else {
                 assert_eq!(s_line, rope_line);
+            }
+        }
+    }
+}
+
+#[allow(unused_mut)]
+#[allow(unused_variables)]
+#[test]
+fn raw_lines_over_rope_slices() {
+    for s in [TINY, SMALL, MEDIUM, LARGE] {
+        let r = Rope::from(s);
+
+        for _ in 0..100 {
+            let start = rand::thread_rng().gen_range(0..=r.byte_len());
+            let end = rand::thread_rng().gen_range(start..=r.byte_len());
+
+            println!("Byte range: {start}..{end}");
+
+            let slice = r.byte_slice(start..end);
+
+            let mut checked = 0;
+
+            for (i, (rope_line, mut s_line)) in
+                slice.lines_raw().zip(s[start..end].lines()).enumerate()
+            {
+                // TODO: use this once we have `Rope{Slice}::ends_with`.
+                //
+                // if rope_line.ends_with("\n") {
+                //     s_line = &s[checked..s_line.len() + 1];
+                // }
+                //
+                //  assert_eq!(s_line, rope_line);
+                //  checked += rope_line.byte_len();
+
+                println!("i: {i}");
+
+                if i != slice.line_len() - 1 || s[start..end].ends_with("\n") {
+                    let mut line = s_line.to_owned();
+                    line.push_str("\n");
+                    assert_eq!(line, rope_line);
+                } else {
+                    assert_eq!(s_line, rope_line);
+                }
             }
         }
     }
