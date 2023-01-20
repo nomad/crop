@@ -153,6 +153,16 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         self.root.leaf_at_measure(measure)
     }
 
+    #[inline]
+    pub fn base_measure(&self) -> L::BaseMetric {
+        self.measure::<L::BaseMetric>()
+    }
+
+    #[inline]
+    pub fn measure<M: Metric<L>>(&self) -> M {
+        M::measure(self.summary())
+    }
+
     /// Returns an iterator over the leaves of this tree.
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {

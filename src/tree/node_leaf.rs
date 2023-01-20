@@ -1,4 +1,4 @@
-use super::Leaf;
+use super::{Leaf, Metric};
 
 #[derive(Clone, Default)]
 pub(super) struct Lnode<L: Leaf> {
@@ -38,6 +38,16 @@ impl<L: Leaf> Lnode<L> {
     #[inline]
     pub(super) fn as_slice(&self) -> &L::Slice {
         self.value.borrow()
+    }
+
+    #[inline]
+    pub fn base_measure(&self) -> L::BaseMetric {
+        self.measure::<L::BaseMetric>()
+    }
+
+    #[inline]
+    pub fn measure<M: Metric<L>>(&self) -> M {
+        M::measure(self.summary())
     }
 
     #[inline]

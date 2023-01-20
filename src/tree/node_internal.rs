@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use super::{Leaf, Lnode, Node};
+use super::{Leaf, Lnode, Metric, Node};
 
 /// Invariants: guaranteed to contain at least one child node.
 #[derive(Clone)]
@@ -194,6 +194,16 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
         let last_idx = self.children.len() - 1;
         &mut self.children[last_idx]
+    }
+
+    #[inline]
+    pub fn base_measure(&self) -> L::BaseMetric {
+        self.measure::<L::BaseMetric>()
+    }
+
+    #[inline]
+    pub fn measure<M: Metric<L>>(&self) -> M {
+        M::measure(self.summary())
     }
 
     #[inline]

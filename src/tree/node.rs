@@ -168,10 +168,15 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         Self::Internal(Inode::from_leaves(leaves))
     }
 
+    #[inline]
     pub fn measure<M: Metric<L>>(&self) -> M {
-        M::measure(self.summary())
+        match self {
+            Node::Internal(inode) => inode.measure(),
+            Node::Leaf(leaf) => leaf.measure(),
+        }
     }
 
+    #[inline]
     pub fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }

@@ -41,7 +41,7 @@ where
             forward: UnitsForward::new(tree.root(), None),
             backward: UnitsBackward::new(tree.root(), None),
             yielded: L::BaseMetric::zero(),
-            total: L::BaseMetric::measure(tree.summary()),
+            total: tree.base_measure(),
         }
     }
 }
@@ -55,9 +55,9 @@ where
     fn from(
         tree_slice: &'a TreeSlice<'a, FANOUT, L>,
     ) -> Units<'a, FANOUT, L, M> {
-        let base_total = L::BaseMetric::measure(tree_slice.summary());
+        let base_total = tree_slice.base_measure();
 
-        let units_total = M::measure(tree_slice.summary());
+        let units_total = tree_slice.measure::<M>();
 
         let first_slice = (tree_slice.start_slice, &tree_slice.start_summary);
 
@@ -89,7 +89,7 @@ where
             forward,
             backward,
             yielded: L::BaseMetric::zero(),
-            total: L::BaseMetric::measure(tree_slice.summary()),
+            total: base_total,
         }
     }
 }
@@ -105,7 +105,7 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
             None
         } else {
             let tree_slice = self.forward.next()?;
-            self.yielded += L::BaseMetric::measure(tree_slice.summary());
+            self.yielded += tree_slice.base_measure();
             Some(tree_slice)
         }
     }
@@ -120,7 +120,7 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> DoubleEndedIterator
             None
         } else {
             let tree_slice = self.backward.next();
-            self.yielded += L::BaseMetric::measure(tree_slice.summary());
+            self.yielded += tree_slice.base_measure();
             Some(tree_slice)
         }
     }
@@ -214,8 +214,8 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
 
                 None => (
                     L::BaseMetric::zero(),
-                    L::BaseMetric::measure(root.summary()),
-                    M::measure(root.summary()),
+                    root.base_measure(),
+                    root.measure::<M>(),
                     None,
                     None,
                 ),
@@ -254,8 +254,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
             match &**node {
                 Node::Internal(inode) => {
                     for (idx, child) in inode.children().iter().enumerate() {
-                        let child_measure =
-                            L::BaseMetric::measure(child.summary());
+                        let child_measure = child.base_measure();
 
                         if measured + child_measure > self.base_offset {
                             self.stack.push((node, idx));
@@ -345,7 +344,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
                     self.leaf_node = node;
 
                     let (slice, summary) = if self.base_yielded
-                        + L::BaseMetric::measure(leaf.summary())
+                        + leaf.base_measure()
                         <= self.base_total
                     {
                         (leaf.as_slice(), leaf.summary().clone())
@@ -430,14 +429,14 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
                 yielded += child.summary();
             }
 
-            if M::measure(inode.summary()) > M::measure(&yielded) {
+            if inode.measure::<M>() > M::measure(&yielded) {
                 // This is the root and it needs to be pushed back onto the
                 // stack.
 
                 child_idx += 1;
 
                 for child in &inode.children()[child_idx..] {
-                    if M::measure(child.summary()) > M::zero() {
+                    if child.measure::<M>() > M::zero() {
                         self.stack.push((node, child_idx));
                         break 'outer;
                     } else {
@@ -468,7 +467,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
             match &**node {
                 Node::Internal(inode) => {
                     for (idx, child) in inode.children().iter().enumerate() {
-                        if M::measure(child.summary()) != M::zero() {
+                        if child.measure::<M>() != M::zero() {
                             self.stack.push((node, idx));
                             node = child;
                             continue 'outer;
@@ -484,7 +483,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
 
                     let (slice, summary) = if self.base_yielded
                         + L::BaseMetric::measure(&summary)
-                        + L::BaseMetric::measure(leaf.summary())
+                        + leaf.base_measure()
                         <= self.base_total
                     {
                         (leaf.as_slice(), leaf.summary())
@@ -819,8 +818,8 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
 
                 None => (
                     L::BaseMetric::zero(),
-                    L::BaseMetric::measure(root.summary()),
-                    M::measure(root.summary()),
+                    root.base_measure(),
+                    root.measure::<M>(),
                     None,
                     None,
                 ),

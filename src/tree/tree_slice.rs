@@ -65,6 +65,16 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     #[inline]
+    pub fn base_measure(&self) -> L::BaseMetric {
+        self.measure::<L::BaseMetric>()
+    }
+
+    #[inline]
+    pub fn measure<M: Metric<L>>(&self) -> M {
+        M::measure(self.summary())
+    }
+
+    #[inline]
     pub fn end_slice(&'a self) -> &'a L::Slice {
         self.end_slice
     }
