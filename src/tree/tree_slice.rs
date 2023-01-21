@@ -223,7 +223,12 @@ where
 }
 
 #[inline]
-fn deepest_node_containing_range<'a, const N: usize, L: Leaf, M: Metric<L>>(
+pub(super) fn deepest_node_containing_range<
+    'a,
+    const N: usize,
+    L: Leaf,
+    M: Metric<L>,
+>(
     mut node: &'a Arc<Node<N, L>>,
     mut range: Range<M>,
 ) -> (&'a Arc<Node<N, L>>, Range<M>) {

@@ -262,3 +262,79 @@ fn raw_lines_over_rope_slices() {
         }
     }
 }
+
+#[test]
+fn lines_backward() {
+    let r = Rope::from(
+        "Heyy \r\nthis contains\nmixed line breaks, emojis -> \r\n🐕‍🦺 and \
+         other -> こんにちは chars.\r\nCan we iterate\nover this?\n\r\n\n??",
+    );
+
+    // let mut lines = r.lines_raw().rev();
+
+    // assert_eq!("??", lines.next().unwrap());
+    // assert_eq!("\n", lines.next().unwrap());
+    // assert_eq!("\r\n", lines.next().unwrap());
+    // assert_eq!("over this?\n", lines.next().unwrap());
+    // assert_eq!("Can we iterate\n", lines.next().unwrap());
+    // assert_eq!(
+    //     "🐕‍🦺 and other -> こんにちは chars.\r\n",
+    //     lines.next().unwrap()
+    // );
+    // assert_eq!("mixed line breaks, emojis -> \r\n", lines.next().unwrap());
+    // assert_eq!("this contains\n", lines.next().unwrap());
+    // assert_eq!("Hey \r\n", lines.next().unwrap());
+    // assert_eq!(None, lines.next());
+
+    let s = r.byte_slice(..52);
+    let mut lines = s.lines_raw().rev();
+
+    assert_eq!("mixed line breaks, emojis -> \r\n", lines.next().unwrap());
+    assert_eq!("this contains\n", lines.next().unwrap());
+    assert_eq!("Heyy \r\n", lines.next().unwrap());
+    assert_eq!(None, lines.next());
+}
+
+#[allow(unused_mut)]
+#[allow(unused_variables)]
+#[test]
+fn aaa_lines_over_rope_slices() {
+    for s in [TINY, SMALL, MEDIUM, LARGE] {
+        let r = Rope::from(s);
+
+        for _ in 0..100 {
+            let start = rand::thread_rng().gen_range(0..=r.byte_len());
+            let end = rand::thread_rng().gen_range(start..=r.byte_len());
+
+            let slice = r.byte_slice(start..end);
+
+            let mut checked = 0;
+
+            let mut i = slice.line_len();
+
+            let mut s_lines = s[start..end].lines().rev();
+            let mut rope_lines = slice.lines_raw().rev();
+
+            while i > 0 {
+                i -= 1;
+
+                let s_line = s_lines.next().unwrap();
+                let rope_line = rope_lines.next().unwrap();
+
+                if i != slice.line_len() - 1 || s[start..end].ends_with("\n") {
+                    let mut line = s_line.to_owned();
+                    line.push_str("\n");
+                    if line != rope_line {
+                        println!("Byte range: {start}..{end}");
+                        panic!();
+                    }
+                } else {
+                    if s_line != rope_line {
+                        println!("Byte range: {start}..{end}");
+                        panic!();
+                    }
+                }
+            }
+        }
+    }
+}
