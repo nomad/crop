@@ -73,5 +73,25 @@ fn iter_forward(c: &mut Criterion) {
     });
 }
 
-criterion_group!(benches, iter_create, iter_forward);
+fn iter_backward(c: &mut Criterion) {
+    let mut group = c.benchmark_group("iter_backward");
+
+    group.bench_function("lines_tiny", |bench| {
+        let r = Rope::from(TINY);
+        let mut iter = r.lines_raw().rev().cycle();
+        bench.iter(|| {
+            iter.next();
+        })
+    });
+
+    group.bench_function("lines_large", |bench| {
+        let r = Rope::from(LARGE);
+        let mut iter = r.lines_raw().rev().cycle();
+        bench.iter(|| {
+            iter.next();
+        })
+    });
+}
+
+criterion_group!(benches, iter_create, iter_forward, iter_backward);
 criterion_main!(benches);

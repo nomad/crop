@@ -266,32 +266,24 @@ fn raw_lines_over_rope_slices() {
 #[test]
 fn lines_backward() {
     let r = Rope::from(
-        "Heyy \r\nthis contains\nmixed line breaks, emojis -> \r\n🐕‍🦺 and \
+        "Hey \r\nthis contains\nmixed line breaks, emojis -> \r\n🐕‍🦺 and \
          other -> こんにちは chars.\r\nCan we iterate\nover this?\n\r\n\n??",
     );
 
-    // let mut lines = r.lines_raw().rev();
+    let mut lines = r.lines_raw().rev();
 
-    // assert_eq!("??", lines.next().unwrap());
-    // assert_eq!("\n", lines.next().unwrap());
-    // assert_eq!("\r\n", lines.next().unwrap());
-    // assert_eq!("over this?\n", lines.next().unwrap());
-    // assert_eq!("Can we iterate\n", lines.next().unwrap());
-    // assert_eq!(
-    //     "🐕‍🦺 and other -> こんにちは chars.\r\n",
-    //     lines.next().unwrap()
-    // );
-    // assert_eq!("mixed line breaks, emojis -> \r\n", lines.next().unwrap());
-    // assert_eq!("this contains\n", lines.next().unwrap());
-    // assert_eq!("Hey \r\n", lines.next().unwrap());
-    // assert_eq!(None, lines.next());
-
-    let s = r.byte_slice(..52);
-    let mut lines = s.lines_raw().rev();
-
+    assert_eq!("??", lines.next().unwrap());
+    assert_eq!("\n", lines.next().unwrap());
+    assert_eq!("\r\n", lines.next().unwrap());
+    assert_eq!("over this?\n", lines.next().unwrap());
+    assert_eq!("Can we iterate\n", lines.next().unwrap());
+    assert_eq!(
+        "🐕‍🦺 and other -> こんにちは chars.\r\n",
+        lines.next().unwrap()
+    );
     assert_eq!("mixed line breaks, emojis -> \r\n", lines.next().unwrap());
     assert_eq!("this contains\n", lines.next().unwrap());
-    assert_eq!("Heyy \r\n", lines.next().unwrap());
+    assert_eq!("Hey \r\n", lines.next().unwrap());
     assert_eq!(None, lines.next());
 }
 
