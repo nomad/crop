@@ -317,13 +317,15 @@ fn aaa_lines_over_rope_slices() {
                     let mut line = s_line.to_owned();
                     line.push_str("\n");
                     if line != rope_line {
+                        println!("i {i}");
                         println!("Byte range: {start}..{end}");
-                        panic!();
+                        panic!("{line:?} vs {rope_line:?}");
                     }
                 } else {
                     if s_line != rope_line {
+                        println!("i {i}");
                         println!("Byte range: {start}..{end}");
-                        panic!();
+                        panic!("{s_line:?} vs {rope_line:?}");
                     }
                 }
             }
