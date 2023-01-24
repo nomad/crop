@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use super::tree_slice;
-use crate::tree::{Inode, Leaf, Lnode, Metric, Node, Tree, TreeSlice};
+use crate::tree::{Leaf, Lnode, Metric, Node, Tree, TreeSlice};
 
 /// An iterator over consecutive units of a particular metric.
 #[derive(Clone)]
@@ -165,7 +165,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
     #[inline]
     fn new(
         root: &'a Arc<Node<N, L>>,
-        opt: Option<(
+        opts: Option<(
             L::BaseMetric,
             L::BaseMetric,
             M,
@@ -177,7 +177,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         for<'d> &'d L::Slice: Default,
     {
         let (base_offset, base_total, units_total, first_slice, last_slice) =
-            match opt {
+            match opts {
                 Some((base_offset, base_total, units_total, start, end)) => (
                     base_offset,
                     base_total,
@@ -212,7 +212,11 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         }
     }
 
-    /// TODO: docs
+    /// Initializes `Self` by populating the stack with the path from the root
+    /// down to the internal node containing the leaf node at `base_offset`,
+    /// which is set to `leaf_node`.
+    ///
+    /// Also sets `yielded_in_leaf`, `end_slice` and `end_summary`.
     #[inline]
     fn initialize(&mut self) {
         debug_assert!(!self.is_initialized);
@@ -266,44 +270,24 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         }
     }
 
-    /// Returns the last node in the stack together with a mutable reference to
-    /// its current child index.
-    #[inline]
-    fn last_mut(&mut self) -> (&'a Arc<Node<N, L>>, &mut usize) {
-        debug_assert!(!self.stack.is_empty());
-        let last_idx = self.stack.len() - 1;
-        let &mut (root, ref mut child_idx) = &mut self.stack[last_idx];
-        (root, child_idx)
-    }
-
-    /// Like [`last_mut`](Self::last_mut), except the node is returned as an
-    /// internal node.
-    #[inline]
-    fn last_as_internal_mut(&mut self) -> (&'a Inode<N, L>, &mut usize) {
-        let (last, child_idx) = self.last_mut();
-        // Safety: every node in the stack is an internal node.
-        (unsafe { last.as_internal_unchecked() }, child_idx)
-    }
-
     /// TODO: docs
     #[inline]
     fn next_leaf(&mut self) -> (&'a L::Slice, L::Summary) {
         debug_assert!(self.base_yielded < self.base_total);
 
         let mut node = loop {
-            let (inode, child_idx) = self.last_as_internal_mut();
+            let &mut (node, ref mut child_idx) =
+                self.stack.last_mut().unwrap();
+
+            // Safety: every node in the stack is an internal node.
+            let inode = unsafe { node.as_internal_unchecked() };
 
             *child_idx += 1;
 
             if *child_idx < inode.children().len() {
                 break &inode.children()[*child_idx];
-            } else if self.stack.len() > 1 {
-                self.stack.pop();
             } else {
-                // If we get here it means there's not a next leaf, but
-                // `base_yielded + consider_extra_yielded < base_total`, so
-                // there must be a next leaf.
-                unreachable!();
+                self.stack.pop();
             }
         };
 
@@ -324,7 +308,6 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
                     {
                         (leaf.as_slice(), leaf.summary().clone())
                     } else {
-                        // TODO: explain why we can unwrap here
                         let (slice, summary) = self.last_slice.take().unwrap();
                         (slice, summary.clone())
                     };
@@ -341,33 +324,107 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         debug_assert!(M::measure(&self.start_summary) > M::zero());
         debug_assert!(self.units_yielded < self.units_total);
 
-        let yielded = L::BaseMetric::measure(&self.yielded_in_leaf);
-
-        let (start_slice, start_summary, rest_slice, rest_summary) =
+        let (left_slice, left_summary, right_slice, right_summary) =
             M::split(self.start_slice, M::one(), &self.start_summary);
 
-        self.yielded_in_leaf += &start_summary;
-        self.start_slice = rest_slice;
-        self.start_summary = rest_summary;
+        let offset = L::BaseMetric::measure(&self.yielded_in_leaf);
 
-        self.base_yielded += L::BaseMetric::measure(&start_summary);
+        self.yielded_in_leaf += &left_summary;
+        self.start_slice = right_slice;
+        self.start_summary = right_summary;
+
+        self.base_yielded += L::BaseMetric::measure(&left_summary);
         self.units_yielded += M::one();
 
         TreeSlice {
             root: self.leaf_node,
-            before: yielded,
-            summary: start_summary.clone(),
-            end_slice: start_slice,
-            end_summary: start_summary.clone(),
-            start_slice,
-            start_summary,
+            before: offset,
+            summary: left_summary.clone(),
+            end_slice: left_slice,
+            end_summary: left_summary.clone(),
+            start_slice: left_slice,
+            start_summary: left_summary,
             num_leaves: 1,
         }
     }
 
     /// TODO: docs
     #[inline]
-    fn next_unit_in_stack(&mut self) -> TreeSlice<'a, N, L> {
+    fn next_leaf_with_measure(
+        &mut self,
+    ) -> (&'a Lnode<L>, &'a Arc<Node<N, L>>, L::BaseMetric, L::Summary, usize)
+    {
+        debug_assert!(self.units_yielded < self.units_total);
+
+        let mut before = L::BaseMetric::zero();
+        let mut summary = L::Summary::default();
+        let mut leaf_count = 0;
+
+        // Step 1: pop nodes off the stack until we find a node with some
+        // `M`-units that we haven't yielded yet.
+
+        'outer: loop {
+            let (node, child_idx) = self.stack.pop().unwrap();
+
+            // Safety: every node in the stack is an internal node.
+            let inode = unsafe { node.as_internal_unchecked() };
+
+            for child in &inode.children()[..child_idx] {
+                before += child.base_measure();
+            }
+
+            for (idx, child) in
+                inode.children()[child_idx + 1..].iter().enumerate()
+            {
+                if child.measure::<M>() > M::zero() {
+                    self.stack.push((node, child_idx + 1 + idx));
+                    break 'outer;
+                } else {
+                    summary += child.summary();
+                    leaf_count += child.num_leaves();
+                }
+            }
+        }
+
+        let &(inode, child_idx) = self.stack.last().unwrap();
+
+        // Step 2: push nodes on the stack until we get to the first leaf node
+        // with a positive `M`-measure. Once we get there we're done.
+
+        // Safety: every node in the stack is an internal node.
+        let mut node =
+            unsafe { &inode.as_internal_unchecked().children()[child_idx] };
+
+        'outer: loop {
+            match &**node {
+                Node::Internal(inode) => {
+                    for (idx, child) in inode.children().iter().enumerate() {
+                        if child.measure::<M>() > M::zero() {
+                            self.stack.push((node, idx));
+                            node = child;
+                            continue 'outer;
+                        } else {
+                            summary += child.summary();
+                            leaf_count += child.num_leaves();
+                        }
+                    }
+
+                    unreachable!();
+                },
+
+                Node::Leaf(leaf) => {
+                    debug_assert!(leaf.measure::<M>() > M::zero());
+
+                    self.leaf_node = node;
+                    return (leaf, inode, before, summary, leaf_count);
+                },
+            }
+        }
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn next_unit_in_range(&mut self) -> TreeSlice<'a, N, L> {
         debug_assert_eq!(M::measure(&self.start_summary), M::zero());
         debug_assert!(self.units_yielded < self.units_total);
 
@@ -385,104 +442,36 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
             }
         }
 
+        let (leaf, root, before, mut summary, leaf_count) =
+            self.next_leaf_with_measure();
+
         let start_slice = self.start_slice;
         let start_summary = self.start_summary.clone();
 
-        let mut yielded = self.yielded_in_leaf.clone();
-        let mut summary = start_summary.clone();
-        let mut num_leaves = 1;
+        summary += &start_summary;
 
-        // 1: find the root.
+        let (slice, slice_summary) = {
+            let contains_last_slice = self.base_yielded
+                + L::BaseMetric::measure(&summary)
+                + leaf.base_measure()
+                > self.base_total;
 
-        'outer: loop {
-            let (node, mut child_idx) = self.stack.pop().unwrap();
-
-            // Safety: every node in the stack is an internal node.
-            let inode = unsafe { node.as_internal_unchecked() };
-
-            for child in &inode.children()[..child_idx] {
-                yielded += child.summary();
-            }
-
-            if inode.measure::<M>() > M::measure(&yielded) {
-                // This is the root and it needs to be pushed back onto the
-                // stack.
-
-                child_idx += 1;
-
-                for child in &inode.children()[child_idx..] {
-                    if child.measure::<M>() > M::zero() {
-                        self.stack.push((node, child_idx));
-                        break 'outer;
-                    } else {
-                        child_idx += 1;
-                        summary += child.summary();
-                        num_leaves += child.num_leaves();
-                    }
-                }
-
-                unreachable!();
+            if contains_last_slice {
+                self.last_slice.take().unwrap()
             } else {
-                for child in &inode.children()[child_idx + 1..] {
-                    summary += child.summary();
-                    num_leaves += child.num_leaves();
-                }
-            }
-        }
-
-        // 2.
-
-        let (root, child_idx) = self.last_mut();
-
-        // Safety: every node in the stack is an internal node.
-        let mut node =
-            unsafe { &root.as_internal_unchecked().children()[*child_idx] };
-
-        let (leaf_slice, leaf_summary) = 'outer: loop {
-            match &**node {
-                Node::Internal(inode) => {
-                    for (idx, child) in inode.children().iter().enumerate() {
-                        if child.measure::<M>() != M::zero() {
-                            self.stack.push((node, idx));
-                            node = child;
-                            continue 'outer;
-                        } else {
-                            summary += child.summary();
-                            num_leaves += child.num_leaves();
-                        }
-                    }
-                },
-
-                Node::Leaf(leaf) => {
-                    self.leaf_node = node;
-
-                    let (slice, summary) = if self.base_yielded
-                        + L::BaseMetric::measure(&summary)
-                        + leaf.base_measure()
-                        <= self.base_total
-                    {
-                        (leaf.as_slice(), leaf.summary())
-                    } else {
-                        self.last_slice.take().unwrap()
-                    };
-
-                    break (slice, summary);
-                },
+                (leaf.as_slice(), leaf.summary())
             }
         };
 
-        debug_assert!(M::measure(leaf_summary) >= M::one());
-
-        // 3.
-
         let (left_slice, left_summary, right_slice, right_summary) =
-            M::split(leaf_slice, M::one(), leaf_summary);
+            M::split(slice, M::one(), slice_summary);
 
         summary += &left_summary;
-        num_leaves += 1;
 
         self.base_yielded += L::BaseMetric::measure(&summary);
         self.units_yielded += M::one();
+
+        let before = before + L::BaseMetric::measure(&self.yielded_in_leaf);
 
         if L::BaseMetric::measure(&right_summary) > L::BaseMetric::zero() {
             self.yielded_in_leaf = left_summary.clone();
@@ -497,59 +486,27 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
 
         TreeSlice {
             root,
-            before: L::BaseMetric::measure(&yielded),
+            before,
             summary,
             end_slice: left_slice,
             end_summary: left_summary,
             start_slice,
             start_summary,
-            num_leaves,
+            // +2 to account for the leaves containing the first and last
+            // slices.
+            num_leaves: leaf_count + 2,
         }
     }
 
     /// TODO: docs
     #[inline]
-    fn yield_last(&mut self) -> TreeSlice<'a, N, L> {
-        debug_assert_eq!(self.units_yielded, self.units_total);
-        debug_assert!(self.base_yielded < self.base_total);
-
-        let (mut yielded, start_slice, start_summary) =
-            if L::BaseMetric::measure(&self.start_summary)
-                == L::BaseMetric::zero()
-            {
-                let (next_slice, next_summary) = self.next_leaf();
-                (L::BaseMetric::zero(), next_slice, next_summary)
-            } else {
-                (
-                    L::BaseMetric::measure(&self.yielded_in_leaf),
-                    self.start_slice,
-                    std::mem::take(&mut self.start_summary),
-                )
-            };
-
-        let mut summary = start_summary.clone();
-        let mut num_leaves = 1;
-
-        // First, check if the leaf node is the root. If it is we're done.
-        if self.base_yielded + L::BaseMetric::measure(&start_summary)
-            == self.base_total
-        {
-            return TreeSlice {
-                root: self.leaf_node,
-                before: yielded,
-                summary,
-                end_slice: start_slice,
-                end_summary: start_summary.clone(),
-                start_slice,
-                start_summary,
-                num_leaves,
-            };
-        }
-
-        // 1: find the root in the stack.
-        //
-        // The root is the deepest node in the stack that fully contains the
-        // `(base_offset + base_yielded)..(base_offset + base_total)` range.
+    fn last_leaf(
+        &self,
+    ) -> (&'a Lnode<L>, &'a Arc<Node<N, L>>, L::BaseMetric, L::Summary, usize)
+    {
+        // Step 1: find the index of deepest node in the stack that fully
+        // contains the `(base_offset + base_yielded)..(base_offset +
+        // base_total)` range.
 
         let mut range = (self.base_offset + self.base_yielded)
             ..(self.base_offset + self.base_total);
@@ -593,26 +550,24 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
             root_idx
         };
 
-        // Keep the old code to increase `summary`, `num_leaves`, `yielded`,
-        // except it starts from `root_idx + 1` instead of `root_idx`.
-        //
-        // At the root_idx level do the same until `child_idx`, skip
-        // `child_idx`, then check which child contain the end_slice from
-        // `(child_idx + 1)..`.
+        // Step 2: traverse down the stack starting from the node after the
+        // root, increasing `after`, `summary` and `leaf_count` as you go.
 
-        // 2: increase `yielded`, `summary`, `num_leaves`.
+        let mut before = L::BaseMetric::zero();
+        let mut summary = L::Summary::default();
+        let mut leaf_count = 0;
 
         for &(node, child_idx) in &self.stack[root_idx + 1..] {
             // Safety: every node in the stack is an internal node.
             let inode = unsafe { node.as_internal_unchecked() };
 
             for child in &inode.children()[..child_idx] {
-                yielded += child.base_measure();
+                before += child.base_measure();
             }
 
             for child in &inode.children()[child_idx + 1..] {
                 summary += child.summary();
-                num_leaves += child.num_leaves();
+                leaf_count += child.num_leaves();
             }
         }
 
@@ -621,46 +576,46 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         // Safety: every node in the stack is an internal node.
         let inode = unsafe { root.as_internal_unchecked() };
 
-        let mut measured = L::BaseMetric::zero();
+        let mut offset = L::BaseMetric::zero();
 
         for child in &inode.children()[..child_idx] {
             let child_measure = child.base_measure();
-            measured += child_measure;
-            yielded += child_measure;
+            offset += child_measure;
+            before += child_measure;
         }
 
-        measured += inode.children()[child_idx].base_measure();
+        offset += inode.children()[child_idx].base_measure();
 
-        // This is the children of the root node that contains the ending
+        // This will be the child of the root node that contains the last
         // slice.
         let mut node = inode.first();
 
         for child in &inode.children()[child_idx + 1..] {
             let child_measure = child.base_measure();
 
-            if measured + child_measure >= range.end {
+            if offset + child_measure >= range.end {
                 node = child;
                 break;
             } else {
+                offset += child_measure;
                 summary += child.summary();
-                num_leaves += child.num_leaves();
-                measured += child_measure;
+                leaf_count += child.num_leaves();
             }
         }
 
-        let (end_slice, end_summary) = 'outer: loop {
+        'outer: loop {
             match &**node {
                 Node::Internal(inode) => {
                     for child in inode.children() {
                         let child_measure = child.base_measure();
 
-                        if measured + child_measure >= range.end {
+                        if offset + child_measure >= range.end {
                             node = child;
                             continue 'outer;
                         } else {
+                            offset += child_measure;
                             summary += child.summary();
-                            num_leaves += child.num_leaves();
-                            measured += child_measure;
+                            leaf_count += child.num_leaves();
                         }
                     }
 
@@ -668,16 +623,60 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
                 },
 
                 Node::Leaf(leaf) => {
-                    break (match self.last_slice.take() {
-                        Some(last) => last,
-                        None => (leaf.as_slice(), leaf.summary()),
-                    })
+                    return (leaf, root, before, summary, leaf_count);
                 },
             }
+        }
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn remainder(&mut self) -> TreeSlice<'a, N, L> {
+        debug_assert_eq!(self.units_yielded, self.units_total);
+        debug_assert!(self.base_yielded < self.base_total);
+
+        if L::BaseMetric::measure(&self.start_summary) == L::BaseMetric::zero()
+        {
+            let (next_slice, next_summary) = self.next_leaf();
+            self.yielded_in_leaf = L::Summary::default();
+            self.start_slice = next_slice;
+            self.start_summary = next_summary;
+        }
+
+        // First, check if the leaf node is the root. If it is we're done.
+        if self.base_yielded + L::BaseMetric::measure(&self.start_summary)
+            == self.base_total
+        {
+            let summary = std::mem::take(&mut self.start_summary);
+
+            return TreeSlice {
+                root: self.leaf_node,
+                before: L::BaseMetric::measure(&self.yielded_in_leaf),
+                start_slice: self.start_slice,
+                start_summary: summary.clone(),
+                end_slice: self.start_slice,
+                end_summary: summary.clone(),
+                summary,
+                num_leaves: 1,
+            };
+        }
+
+        let start_slice = self.start_slice;
+        let start_summary = std::mem::take(&mut self.start_summary);
+
+        let (last_leaf, root, before, mut summary, leaf_count) =
+            self.last_leaf();
+
+        summary += &start_summary;
+
+        let (end_slice, end_summary) = match self.last_slice.take() {
+            Some((slice, summary)) => (slice, summary.clone()),
+            None => (last_leaf.as_slice(), last_leaf.summary().clone()),
         };
 
-        summary += end_summary;
-        num_leaves += 1;
+        summary += &end_summary;
+
+        let before = before + L::BaseMetric::measure(&self.yielded_in_leaf);
 
         self.base_yielded += L::BaseMetric::measure(&summary);
 
@@ -685,13 +684,15 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
 
         TreeSlice {
             root,
-            before: yielded,
+            before,
             summary,
             start_slice,
             start_summary,
             end_slice,
-            end_summary: end_summary.clone(),
-            num_leaves,
+            end_summary,
+            // +2 to account for the leaves containing the first and last
+            // slices.
+            num_leaves: leaf_count + 2,
         }
     }
 
@@ -704,9 +705,9 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         if M::measure(&self.start_summary) > M::zero() {
             Some(self.next_unit_in_leaf())
         } else if self.units_yielded < self.units_total {
-            Some(self.next_unit_in_stack())
+            Some(self.next_unit_in_range())
         } else if self.base_yielded < self.base_total {
-            Some(self.yield_last())
+            Some(self.remainder())
         } else {
             None
         }
@@ -966,8 +967,8 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
             root_idx
         };
 
-        // Step 2: traverse down the stack starting from the node following the
-        // root increase `after`, `summary` and `leaf_count` as you go.
+        // Step 2: traverse down the stack starting from the node after the
+        // root, increasing `after`, `summary` and `leaf_count` as you go.
 
         let mut after = L::BaseMetric::zero();
         let mut summary = L::Summary::default();
@@ -1109,6 +1110,8 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
             - L::BaseMetric::measure(&summary);
 
         self.base_yielded += L::BaseMetric::measure(&summary);
+
+        debug_assert_eq!(self.base_yielded, self.base_total);
 
         TreeSlice {
             root,
