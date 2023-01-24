@@ -183,6 +183,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     /// Returns a reference to the last child of this internal node.
+    #[allow(dead_code)]
     #[inline]
     pub(super) fn last(&self) -> &Arc<Node<N, L>> {
         let last_idx = self.children.len() - 1;
@@ -196,6 +197,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &mut self.children[last_idx]
     }
 
+    #[allow(dead_code)]
     #[inline]
     pub fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
