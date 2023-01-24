@@ -231,8 +231,6 @@ fn raw_lines_over_rope_slices() {
             let start = rand::thread_rng().gen_range(0..=r.byte_len());
             let end = rand::thread_rng().gen_range(start..=r.byte_len());
 
-            println!("Byte range: {start}..{end}");
-
             let slice = r.byte_slice(start..end);
 
             let mut checked = 0;
@@ -249,14 +247,20 @@ fn raw_lines_over_rope_slices() {
                 //  assert_eq!(s_line, rope_line);
                 //  checked += rope_line.byte_len();
 
-                println!("i: {i}");
-
                 if i != slice.line_len() - 1 || s[start..end].ends_with("\n") {
                     let mut line = s_line.to_owned();
                     line.push_str("\n");
-                    assert_eq!(line, rope_line);
+                    if line != rope_line {
+                        println!("i: {i}");
+                        println!("Byte range: {start}..{end}");
+                        panic!("{line:?} vs {rope_line:?}");
+                    }
                 } else {
-                    assert_eq!(s_line, rope_line);
+                    if s_line != rope_line {
+                        println!("i: {i}");
+                        println!("Byte range: {start}..{end}");
+                        panic!("{s_line:?} vs {rope_line:?}");
+                    }
                 }
             }
         }
@@ -317,13 +321,13 @@ fn aaa_lines_over_rope_slices() {
                     let mut line = s_line.to_owned();
                     line.push_str("\n");
                     if line != rope_line {
-                        println!("i {i}");
+                        println!("i: {i}");
                         println!("Byte range: {start}..{end}");
                         panic!("{line:?} vs {rope_line:?}");
                     }
                 } else {
                     if s_line != rope_line {
-                        println!("i {i}");
+                        println!("i: {i}");
                         println!("Byte range: {start}..{end}");
                         panic!("{s_line:?} vs {rope_line:?}");
                     }
