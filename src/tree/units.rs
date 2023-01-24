@@ -725,8 +725,8 @@ struct UnitsBackward<'a, const N: usize, L: Leaf, M: Metric<L>> {
     /// The current leaf node.
     leaf_node: &'a Arc<Node<N, L>>,
 
-    /// How much of `leaf_node`'s summary has already been yielded.
-    yielded_in_leaf: L::Summary,
+    /// How much of `leaf_node`'s base measure has already been yielded.
+    yielded_in_leaf: L::BaseMetric,
 
     /// The `end_slice` field of the next `TreeSlice` that's returned by
     /// calling [`previous`](Self::previous()).
@@ -777,7 +777,6 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> Clone
     fn clone(&self) -> Self {
         Self {
             stack: self.stack.clone(),
-            yielded_in_leaf: self.yielded_in_leaf.clone(),
             end_summary: self.end_summary.clone(),
             ..*self
         }
@@ -835,7 +834,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
             is_initialized: false,
             stack: Vec::with_capacity(root.depth()),
             leaf_node: root,
-            yielded_in_leaf: L::Summary::default(),
+            yielded_in_leaf: L::BaseMetric::zero(),
             end_slice: <&L::Slice>::default(),
             end_summary: L::Summary::default(),
             first_slice,
@@ -889,8 +888,8 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
 
                     match self.last_slice.take() {
                         Some((slice, summary)) => {
-                            self.yielded_in_leaf = leaf.summary().clone();
-                            self.yielded_in_leaf -= summary;
+                            self.yielded_in_leaf = leaf.base_measure()
+                                - L::BaseMetric::measure(summary);
 
                             self.end_slice = slice;
                             self.end_summary = summary.clone();
@@ -1060,6 +1059,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
     ///
     /// In both cases the next call to [`previous`](UnitsBackward::previous())
     /// should return `None`. #[inline]
+    #[inline]
     fn first(&mut self) -> TreeSlice<'a, N, L> {
         debug_assert!(
             self.units_total == M::zero()
@@ -1105,7 +1105,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
 
         let before = root.base_measure()
             - after
-            - L::BaseMetric::measure(&self.yielded_in_leaf)
+            - self.yielded_in_leaf
             - L::BaseMetric::measure(&summary);
 
         self.base_yielded += L::BaseMetric::measure(&summary);
@@ -1140,7 +1140,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
 
         let offset = L::BaseMetric::measure(&left_summary);
 
-        self.yielded_in_leaf += &right_summary;
+        self.yielded_in_leaf += L::BaseMetric::measure(&right_summary);
         self.end_slice = left_slice;
         self.end_summary = left_summary;
 
@@ -1341,10 +1341,10 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
 
             let offset = root.base_measure()
                 - after
-                - L::BaseMetric::measure(&self.yielded_in_leaf)
+                - self.yielded_in_leaf
                 - L::BaseMetric::measure(&summary);
 
-            self.yielded_in_leaf = right_summary.clone();
+            self.yielded_in_leaf = L::BaseMetric::measure(&right_summary);
             self.end_slice = left_slice;
             self.end_summary = left_summary;
 
@@ -1362,7 +1362,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
                 num_leaves: leaf_count,
             }
         } else {
-            self.yielded_in_leaf = L::Summary::default();
+            self.yielded_in_leaf = L::BaseMetric::zero();
             self.end_slice = slice;
             self.end_summary = slice_summary.clone();
 
@@ -1459,7 +1459,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
             if L::BaseMetric::measure(&right_summary) > L::BaseMetric::zero() {
                 let offset = L::BaseMetric::measure(&left_summary);
 
-                self.yielded_in_leaf += &right_summary;
+                self.yielded_in_leaf += L::BaseMetric::measure(&right_summary);
                 self.end_slice = left_slice;
                 self.end_summary = left_summary;
 
