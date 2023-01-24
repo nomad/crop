@@ -3,18 +3,28 @@ use std::sync::Arc;
 use super::tree_slice;
 use crate::tree::{Leaf, Lnode, Metric, Node, Tree, TreeSlice};
 
-/// An iterator over consecutive units of a particular metric.
+/// An iterator over the units of a metric.
 #[derive(Clone)]
 pub struct Units<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
     /*
-      Hello
+      This iterator is implemented using two separate iterators, one for
+      iterating forward (used in the `Iterator` impl), and the other for
+      iterating backward (used in the `DoubleEndedIterator` impl).
+
+      These two iterators are completely independent and don't know about each
+      other, which could cause them to overlap if alternating between calling
+      `Units::next()` and `Units::next_back()`.
+
+      To prevent this we also store the yielded and total base measures,
+      increasing the yielded measure as we go. Once those two are equal this
+      iterator will stop yielding any more items.
     */
     #[rustfmt::skip]
 
-    /// TODO: docs
+    /// Iterates over the `M`-units from front to back.
     forward: UnitsForward<'a, FANOUT, L, M>,
 
-    /// TODO: docs
+    /// Iterates over the `M`-units from back to front.
     backward: UnitsBackward<'a, FANOUT, L, M>,
 
     /// The base measure of all the `TreeSlice`s yielded so far.
@@ -109,40 +119,54 @@ struct UnitsForward<'a, const N: usize, L: Leaf, M: Metric<L>> {
     /// [`initialize`](UnitsForward::initialize).
     is_initialized: bool,
 
-    /// All the nodes in the stack are guaranteed to be internal nodes.
+    /// The path from the root node down to `leaf_node`. All the nodes in the
+    /// stack are guaranteed to be internal node.
     stack: Vec<(&'a Arc<Node<N, L>>, usize)>,
 
-    /// Guaranteed to be a leaf.
+    /// The current leaf node.
     leaf_node: &'a Arc<Node<N, L>>,
 
     /// How much of `leaf_node`'s base measure has already been yielded.
     yielded_in_leaf: L::BaseMetric,
 
-    /// TODO: docs
+    /// The `start_slice` field of the next `TreeSlice` that'll be returned by
+    /// calling [`next`](Self::previous()).
     start_slice: &'a L::Slice,
 
-    /// TODO: docs
+    /// The `start_summary` field of the next `TreeSlice` that'll be returned
+    /// by calling [`next`](Self::previous()).
     start_summary: L::Summary,
 
-    /// TODO: docs
+    /// The first slice in the yielding range and its summary. It's only set if
+    /// we're iterating over a `TreeSlice`. If it's set it will be `.take()`n
+    /// when initializing.
     first_slice: Option<(&'a L::Slice, &'a L::Summary)>,
 
-    /// TODO: docs
+    /// The last slice in the yielding range and its summary. It's only set if
+    /// we're iterating over a `TreeSlice`.
     last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
 
-    /// TODO: docs
+    /// The start of the yielding range as an offset into the root.
     base_offset: L::BaseMetric,
 
-    /// TODO: docs
+    /// How many base units have been yielded so far. It gets increased every
+    /// time [`next`](Self::next()) gets called.
     base_yielded: L::BaseMetric,
 
-    /// TODO: docs
+    /// The total number of base units contained in the yielding range. It
+    /// follows that the yielding range is `base_offset..(base_offset +
+    /// base_total)` in the root.
     base_total: L::BaseMetric,
 
-    /// TODO: docs
+    /// How many `M`-units have been yielded so far. It gets increased (usually
+    /// by `M::one()` unless we're calling [`remainder`][1]), every time
+    /// [`next`][2] gets called.
+    ///
+    /// [1]: Self::remainder()
+    /// [2]: Self::next()
     units_yielded: M,
 
-    /// TODO: docs
+    /// The total number of `M`-units contained in the yielding range.
     units_total: M,
 }
 
@@ -160,7 +184,25 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> Clone
 }
 
 impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
-    /// TODO: docs
+    /// Creates a new [`UnitsForward`].
+    ///
+    /// The `opts` argument can be a set to a
+    /// `(BaseOffset, BaseTotal, UnitsTotal, FirstSlice, LastSlice)` tuple
+    /// where:
+    ///
+    /// - `BaseOffset`: is an offset into `root` after which the iterating range
+    /// starts. If not set the iterating range will start at the beginning of
+    /// the first leaf;
+    ///
+    /// - `BaseTotal`: the base measure of the iterating range. If not set the
+    /// iterating range will span across the whole `root`;
+    ///
+    /// - `UnitsTotal`: the total number of `M`-units contained in the
+    /// iterating range;
+    ///
+    /// - `FirstSlice`: the first slice in the iterating range and its summary;
+    ///
+    /// - `LastSlice`: the last slice in the iterating range and its summary.
     #[inline]
     fn new(
         root: &'a Arc<Node<N, L>>,
@@ -269,7 +311,9 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         }
     }
 
-    /// TODO: docs
+    /// Returns the next leaf in the iterating range after the current
+    /// `leaf_node` together with its summary, **without** checking if there is
+    /// one.
     #[inline]
     fn next_leaf(&mut self) -> (&'a L::Slice, L::Summary) {
         debug_assert!(self.base_yielded < self.base_total);
@@ -317,7 +361,8 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         }
     }
 
-    /// TODO: docs
+    /// Yields the next unit in the current `self.leaf_node`. To do this
+    /// correctly `self.start_slice` needs to contain at least one `M`-unit.
     #[inline]
     fn next_unit_in_leaf(&mut self) -> TreeSlice<'a, N, L> {
         debug_assert!(M::measure(&self.start_summary) > M::zero());
@@ -347,7 +392,32 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         }
     }
 
-    /// TODO: docs
+    /// Traverses the stack to find the next leaf node with a non-zero
+    /// `M`-measure.
+    ///
+    /// Returns a `(Leaf, Inode, Base, Summary, Count)` tuple where:
+    ///
+    /// - `Leaf` is that leaf node;
+    ///
+    /// - `Inode` is the deepest internal node containing both the current
+    /// `self.leaf_node` and `Leaf` in its subtree;
+    ///
+    /// - `Base` is the sum of the base measures of all the nodes between the
+    /// start of `Inode` and the current `self.leaf_node`;
+    ///
+    /// - `Summary` and `Count` are the sum of the summaries and leaf counts of
+    /// all the nodes between (but not including) `self.leaf_node` and `Leaf`.
+    ///
+    /// Note: it assumes that such a leaf node exists. If that's not the case
+    /// this function may panic or return a leaf node outside of the valid
+    /// range for this iterator.
+    ///
+    /// Note: after calling this function the stack will contain the path from
+    /// the root down to the internal node containing `Leaf`, and
+    /// `self.leaf_node` will be set to `Leaf`.
+    ///
+    /// Invariants: `Leaf` is guaranteed to have an `M`-measure of at least
+    /// `M::one()`.
     #[inline]
     fn next_leaf_with_measure(
         &mut self,
@@ -421,7 +491,16 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         }
     }
 
-    /// TODO: docs
+    /// Yields the next unit in the iterating range. This is the function that
+    /// gets called in the general case, i.e. when the next unit is not the
+    /// last and it's not contained in `self.leaf_node`. The root of the
+    /// returned `TreeSlice` is a node in the stack so it's guaranteed to be an
+    /// internal node.
+    ///
+    /// Note: this uses [`next_leaf_with_measure`][1] internally so it should
+    /// only be called when `self.units_yielded < self.units_total`.
+    ///
+    /// [1]: UnitsForward::next_leaf_with_measure()
     #[inline]
     fn next_unit_in_range(&mut self) -> TreeSlice<'a, N, L> {
         debug_assert_eq!(M::measure(&self.start_summary), M::zero());
@@ -497,7 +576,17 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         }
     }
 
-    /// TODO: docs
+    /// Very similar to [`next_leaf_with_measure`](1), except it doesn't
+    /// mutate any state and instead of returning the next leaf node with a
+    /// non-zero `M`-measure it returns the leaf node containing
+    /// [`last_slice`](2), or the last leaf node in the root if that's not set.
+    ///
+    /// Note: it assumes that leaf node is different than the current
+    /// [`leaf_node`](3). That case should be handled by the caller.
+    ///
+    /// [1]: UnitsForward::next_leaf_with_measure()
+    /// [2]: UnitsForward::last_slice
+    /// [3]: UnitsForward::leaf_node
     #[inline]
     fn last_leaf(
         &self,
@@ -628,7 +717,9 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         }
     }
 
-    /// TODO: docs
+    /// This is the analogous of [`UnitsBackward::remainder()`] when iterating
+    /// forward. Check the doc comment of that function as most of it applies
+    /// 1:1 to this.
     #[inline]
     fn remainder(&mut self) -> TreeSlice<'a, N, L> {
         debug_assert_eq!(self.units_yielded, self.units_total);
@@ -719,7 +810,8 @@ struct UnitsBackward<'a, const N: usize, L: Leaf, M: Metric<L>> {
     /// [`initialize`](Self::initialize()).
     is_initialized: bool,
 
-    /// The path from the root node down to `leaf_node`.
+    /// The path from the root node down to `leaf_node`. All the nodes in the
+    /// stack are guaranteed to be internal node.
     stack: Vec<(&'a Arc<Node<N, L>>, usize)>,
 
     /// The current leaf node.
@@ -728,7 +820,7 @@ struct UnitsBackward<'a, const N: usize, L: Leaf, M: Metric<L>> {
     /// How much of `leaf_node`'s base measure has already been yielded.
     yielded_in_leaf: L::BaseMetric,
 
-    /// The `end_slice` field of the next `TreeSlice` that's returned by
+    /// The `end_slice` field of the next `TreeSlice` that'll be returned by
     /// calling [`previous`](Self::previous()).
     end_slice: &'a L::Slice,
 
@@ -786,14 +878,14 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> Clone
 impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
     /*
        NOTE: this implementation should be a pretty close port of
-       `UnitsForward` and yet iterating backwards over `large.txt` takes almost
+       `UnitsForward` and yet iterating backward over `large.txt` takes almost
        twice as much as iterating forward (while for `tiny.txt` this is only
        5-10% slower which is expected).
 
        TODO: figure out why.
     */
 
-    /// Initializes a new [`UnitsBackward`].
+    /// Creates a new [`UnitsBackward`].
     ///
     /// Note: check out the doc comment for [`UnitsForward::new()`] as it
     /// applies 1:1 to this.
@@ -908,17 +1000,17 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
     }
 
     /// Very similar to [`previous_leaf_with_measure`](1), except it doesn't
-    /// mutate any state and instead of returning previous the leaf node with a
+    /// mutate any state and instead of returning the previous leaf node with a
     /// non-zero `M`-measure it returns the leaf node containing
     /// [`first_slice`](2), or the first leaf node in the root if that's not
     /// set.
     ///
-    /// Note: it assumes that leaf node is different than [`leaf_node`](3).
-    /// That case should be handled by the caller.
+    /// Note: it assumes that leaf node is different than the current
+    /// [`leaf_node`](3). That case should be handled by the caller.
     ///
     /// [1]: UnitsBackward::previous_leaf_with_measure()
-    /// [2]: UnitsBackward::first_slice()
-    /// [3]: UnitsBackward::leaf_node()
+    /// [2]: UnitsBackward::first_slice
+    /// [3]: UnitsBackward::leaf_node
     #[inline]
     fn first_leaf(
         &self,
@@ -1127,8 +1219,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
     }
 
     /// Yields the previous unit in the current `self.leaf_node`. To do this
-    /// correcly we actually need `self.end_slice` to measure in at at least 2
-    /// units.
+    /// correctly `self.end_slice` needs to contain at least two `M`-units.
     #[inline]
     fn previous_unit_in_leaf(&mut self) -> TreeSlice<'a, N, L> {
         debug_assert!(M::measure(&self.end_summary) > M::one());
@@ -1220,7 +1311,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
     /// the root down to the internal node containing `Leaf`, and
     /// `self.leaf_node` will be set to `Leaf`.
     ///
-    /// Invariants: [`Leaf`] is guaranteed to have an `M`-measure of at least
+    /// Invariants: `Leaf` is guaranteed to have an `M`-measure of at least
     /// `M::one()`.
     #[inline]
     fn previous_leaf_with_measure(
@@ -1297,16 +1388,16 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
         }
     }
 
-    /// Yields the next unit in the iterating range. This is the general
-    /// function that gets called when the next unit is not the first, the last
-    /// and it's not contained in `self.leaf_node`. The root of the returned
-    /// `TreeSlice` is a node in the stack so it's guaranteed to be an internal
-    /// node.
+    /// Yields the previous unit in the iterating range. This is the function
+    /// that gets called in the general case, i.e. when the next unit is not
+    /// the first, the last and it's not contained in `self.leaf_node`. The
+    /// root of the returned `TreeSlice` is a node in the stack so it's
+    /// guaranteed to be an internal node.
     ///
-    /// Note: this uses [`previous_leaf_with_measure`][0] internally so it should
+    /// Note: this uses [`previous_leaf_with_measure`][1] internally so it should
     /// only be called when `self.units_yielded < self.units_total`.
     ///
-    /// [0]: UnitsBackward::previous_leaf_with_measure()
+    /// [1]: UnitsBackward::previous_leaf_with_measure()
     #[inline]
     fn previous_unit_in_range(&mut self) -> TreeSlice<'a, N, L> {
         debug_assert!(self.units_yielded < self.units_total);
@@ -1441,9 +1532,9 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
     /// `units_total > M::one()`. If there are zero units in the yielding range
     /// [`yield_first`][3] should be called instead.
     ///
-    /// [1]: UnitsBackwards::next()
-    /// [2]: UnitsBackwards::next_something()
-    /// [3]: UnitsBackwards::yield_first()
+    /// [1]: UnitsBackward::next()
+    /// [2]: UnitsBackward::next_something()
+    /// [3]: UnitsBackward::yield_first()
     #[inline]
     fn remainder(&mut self) -> Option<TreeSlice<'a, N, L>> {
         debug_assert_eq!(self.base_yielded, L::BaseMetric::zero());
