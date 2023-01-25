@@ -126,6 +126,41 @@ impl Metric<RopeChunk> for LineMetric {
     ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
         split_slice_at_line_break(chunk, at, summary)
     }
+
+    #[inline]
+    fn last_unit<'a>(
+        chunk: &'a ChunkSlice,
+        summary: &ChunkSummary,
+    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
+        // if chunk.as_bytes()[chunk.len() - 1] == b'\n' {
+        //     split_slice_at_line_break(chunk, summary.line_breaks - 1, summary)
+        // } else {
+        //     split_slice_at_line_break(chunk, summary.line_breaks, summary)
+        // }
+        let mut last_summary = ChunkSummary::default();
+
+        for (idx, byte) in chunk.bytes().rev().enumerate() {
+            if byte == b'\n' {
+                if idx == 0 {
+                    last_summary.line_breaks = 1;
+                } else {
+                    last_summary.bytes = idx;
+                    break;
+                }
+            }
+        }
+
+        let last = chunk[chunk.len() - last_summary.bytes..].into();
+
+        let rest = chunk[..chunk.len() - last_summary.bytes].into();
+
+        let rest_summary = ChunkSummary {
+            bytes: chunk.len() - last_summary.bytes,
+            line_breaks: summary.line_breaks - last_summary.line_breaks,
+        };
+
+        (rest, rest_summary, last, last_summary)
+    }
 }
 
 #[cfg(test)]

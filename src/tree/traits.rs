@@ -73,4 +73,13 @@ pub trait Metric<L: Leaf>:
             std::any::type_name::<Self>()
         )
     }
+
+    #[allow(unused_variables)]
+    #[allow(clippy::type_complexity)]
+    fn last_unit<'a>(
+        slice: &'a L::Slice,
+        summary: &L::Summary,
+    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary) {
+        unimplemented!();
+    }
 }

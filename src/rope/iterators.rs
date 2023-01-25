@@ -396,20 +396,30 @@ impl<'a> std::iter::FusedIterator for LinesRaw<'a> {}
 /// TODO: docs
 #[derive(Clone)]
 pub struct Lines<'a> {
-    lines_raw: LinesRaw<'a>,
+    units: Units<'a, { Rope::fanout() }, RopeChunk, LineMetric>,
+    yielded: usize,
+    total: usize,
 }
 
 impl<'a> From<&'a Rope> for Lines<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        Self { lines_raw: rope.lines_raw() }
+        Self {
+            units: rope.tree().units::<LineMetric>(),
+            yielded: 0,
+            total: rope.line_len(),
+        }
     }
 }
 
 impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
     #[inline]
     fn from(rope_slice: &'a RopeSlice<'b>) -> Self {
-        Self { lines_raw: rope_slice.lines_raw() }
+        Self {
+            units: rope_slice.tree_slice.units::<LineMetric>(),
+            yielded: 0,
+            total: rope_slice.line_len(),
+        }
     }
 }
 
@@ -418,14 +428,14 @@ impl<'a> Iterator for Lines<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let mut tree_slice = self.lines_raw.next()?.tree_slice;
-        tree_slice_remove_trailing_line_break(&mut tree_slice);
-        Some(RopeSlice { tree_slice, last_byte_is_newline: false })
+        let tree_slice = self.units.next()?;
+        self.yielded += 1;
+        Some(RopeSlice::from(tree_slice))
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let exact = self.lines_raw.len();
+        let exact = self.total - self.yielded;
         (exact, Some(exact))
     }
 }
@@ -433,16 +443,16 @@ impl<'a> Iterator for Lines<'a> {
 impl<'a> DoubleEndedIterator for Lines<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        let mut tree_slice = self.lines_raw.next_back()?.tree_slice;
-        tree_slice_remove_trailing_line_break(&mut tree_slice);
-        Some(RopeSlice { tree_slice, last_byte_is_newline: false })
+        let tree_slice = self.units.next_back()?;
+        self.yielded += 1;
+        Some(RopeSlice::from(tree_slice))
     }
 }
 
 impl<'a> ExactSizeIterator for Lines<'a> {
     #[inline]
     fn len(&self) -> usize {
-        self.lines_raw.len()
+        self.total - self.yielded
     }
 }
 

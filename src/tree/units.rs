@@ -876,15 +876,6 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> Clone
 }
 
 impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
-    /*
-       NOTE: this implementation should be a pretty close port of
-       `UnitsForward` and yet iterating backward over `large.txt` takes almost
-       twice as much as iterating forward (while for `tiny.txt` this is only
-       5-10% slower which is expected).
-
-       TODO: figure out why.
-    */
-
     /// Creates a new [`UnitsBackward`].
     ///
     /// Note: check out the doc comment for [`UnitsForward::new()`] as it
@@ -1225,17 +1216,18 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
         debug_assert!(M::measure(&self.end_summary) > M::one());
         debug_assert!(self.units_yielded < self.units_total);
 
-        let (left_slice, left_summary, right_slice, right_summary) = M::split(
-            self.end_slice,
-            M::measure(&self.end_summary) - M::one(),
-            &self.end_summary,
+        let (rest, rest_summary, right_slice, right_summary) =
+            M::last_unit(self.end_slice, &self.end_summary);
+
+        debug_assert!(
+            L::BaseMetric::measure(&rest_summary) > L::BaseMetric::zero()
         );
 
-        let offset = L::BaseMetric::measure(&left_summary);
+        let offset = L::BaseMetric::measure(&rest_summary);
 
         self.yielded_in_leaf += L::BaseMetric::measure(&right_summary);
-        self.end_slice = left_slice;
-        self.end_summary = left_summary;
+        self.end_slice = rest;
+        self.end_summary = rest_summary;
 
         self.base_yielded += L::BaseMetric::measure(&right_summary);
         self.units_yielded += M::one();
