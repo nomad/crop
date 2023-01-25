@@ -3,7 +3,7 @@ use rand::{thread_rng, Rng};
 
 mod common;
 
-use common::{CURSED_LIPSUM, LARGE};
+use common::{CURSED_LIPSUM, LARGE, MEDIUM, SMALL, TINY};
 
 #[test]
 fn bytes_empty() {
@@ -97,5 +97,62 @@ fn bytes_cursed() {
 
     for (b1, b2) in r.bytes().rev().zip(s.bytes().rev()) {
         assert_eq!(b1, b2);
+    }
+}
+
+#[test]
+fn bytes_over_slice_forward() {
+    let mut rng = rand::thread_rng();
+
+    for s in [TINY, SMALL, MEDIUM, LARGE] {
+        let r = Rope::from(s);
+
+        for _ in 0..1 {
+            let start = rng.gen_range(0..=r.byte_len());
+            let end = rng.gen_range(start..=r.byte_len());
+
+            let rope_slice = r.byte_slice(start..end);
+            let str_slice = &s[start..end];
+
+            for (idx, (rope_byte, str_byte)) in
+                rope_slice.bytes().zip(str_slice.bytes()).enumerate()
+            {
+                if rope_byte != str_byte {
+                    println!("idx: {idx}");
+                    println!("Byte range: {start}..{end}");
+                    panic!("{rope_byte:?} vs {str_byte:?}");
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn bytes_over_slice_backward() {
+    let mut rng = rand::thread_rng();
+
+    for s in [TINY, SMALL, MEDIUM, LARGE] {
+        let r = Rope::from(s);
+
+        for _ in 0..1 {
+            let start = rng.gen_range(0..=r.byte_len());
+            let end = rng.gen_range(start..=r.byte_len());
+
+            let rope_slice = r.byte_slice(start..end);
+            let str_slice = &s[start..end];
+
+            for (idx, (rope_byte, str_byte)) in rope_slice
+                .bytes()
+                .rev()
+                .zip(str_slice.bytes().rev())
+                .enumerate()
+            {
+                if rope_byte != str_byte {
+                    println!("idx: {idx}");
+                    println!("Byte range: {start}..{end}");
+                    panic!("{rope_byte:?} vs {str_byte:?}");
+                }
+            }
+        }
     }
 }

@@ -1,5 +1,4 @@
 use super::metrics::LineMetric;
-use super::utils::*;
 use super::{Rope, RopeChunk, RopeSlice};
 use crate::tree::{Leaves, Units};
 
@@ -36,7 +35,8 @@ impl<'a> Iterator for Chunks<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.leaves.next().map(std::ops::Deref::deref)
+        use std::ops::Deref;
+        self.leaves.next().map(|(slice, _)| slice.deref())
     }
 
     #[inline]
@@ -49,7 +49,8 @@ impl<'a> Iterator for Chunks<'a> {
 impl<'a> DoubleEndedIterator for Chunks<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.leaves.next_back().map(std::ops::Deref::deref)
+        use std::ops::Deref;
+        self.leaves.next_back().map(|(slice, _)| slice.deref())
     }
 }
 
