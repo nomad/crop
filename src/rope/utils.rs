@@ -386,28 +386,7 @@ pub(super) fn tree_slice_remove_trailing_line_break(
     slice: &mut TreeSlice<'_, { Rope::fanout() }, RopeChunk>,
 ) {
     debug_assert!(matches!(slice.summary().line_breaks, 0 | 1));
-
-    if slice.summary().line_breaks == 0 {
-        return;
-    }
-
-    use std::ops::Deref;
-
-    match slice.end_slice().deref() {
-        "\r\n" => {
-            *slice = todo!();
-        },
-
-        "\n" => {
-            *slice = todo!();
-        },
-
-        _ => {
-            todo!();
-        },
-    }
-
-    debug_assert_eq!(slice.summary().line_breaks, 0);
+    todo!();
 }
 
 /// Splits a chunk at the `line_break`-th line break (0-indexed), returning the

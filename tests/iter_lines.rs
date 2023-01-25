@@ -150,8 +150,8 @@ fn lines_asymmetric_forward_backward() {
 
     let mut backward = r.lines().rev();
     assert_eq!("c", backward.next().unwrap());
-    assert_eq!("a", backward.next().unwrap());
     assert_eq!("b", backward.next().unwrap());
+    assert_eq!("a", backward.next().unwrap());
     assert_eq!("", backward.next().unwrap());
     assert_eq!(None, backward.next());
 }

@@ -58,7 +58,7 @@ fn iter_forward(c: &mut Criterion) {
 
     group.bench_function("lines_tiny", |bench| {
         let r = Rope::from(TINY);
-        let mut iter = r.lines_raw().cycle();
+        let mut iter = r.lines().cycle();
         bench.iter(|| {
             iter.next();
         })
@@ -66,7 +66,7 @@ fn iter_forward(c: &mut Criterion) {
 
     group.bench_function("lines_large", |bench| {
         let r = Rope::from(LARGE);
-        let mut iter = r.lines_raw().cycle();
+        let mut iter = r.lines().cycle();
         bench.iter(|| {
             iter.next();
         })
@@ -78,7 +78,7 @@ fn iter_backward(c: &mut Criterion) {
 
     group.bench_function("lines_tiny", |bench| {
         let r = Rope::from(TINY);
-        let mut iter = r.lines_raw().rev().cycle();
+        let mut iter = r.lines().rev().cycle();
         bench.iter(|| {
             iter.next();
         })
@@ -86,7 +86,7 @@ fn iter_backward(c: &mut Criterion) {
 
     group.bench_function("lines_large", |bench| {
         let r = Rope::from(LARGE);
-        let mut iter = r.lines_raw().rev().cycle();
+        let mut iter = r.lines().rev().cycle();
         bench.iter(|| {
             iter.next();
         })
