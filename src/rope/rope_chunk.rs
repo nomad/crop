@@ -84,7 +84,7 @@ impl Leaf for RopeChunk {
     type Slice = ChunkSlice;
 
     #[inline]
-    fn is_leaf_big_enough(_: &RopeChunk, summary: &ChunkSummary) -> bool {
+    fn is_big_enough(&self, summary: &ChunkSummary) -> bool {
         summary.bytes >= RopeChunk::min_bytes()
     }
 

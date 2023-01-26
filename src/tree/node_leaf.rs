@@ -57,7 +57,7 @@ impl<L: Leaf> Lnode<L> {
 
     #[inline]
     pub(super) fn is_big_enough(&self) -> bool {
-        L::is_leaf_big_enough(self.value(), self.summary())
+        L::is_big_enough(self.value(), self.summary())
     }
 
     #[inline]

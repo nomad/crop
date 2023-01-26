@@ -5,7 +5,7 @@ use super::{Leaf, Leaves, Metric, Node, Units};
 
 #[derive(Debug)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
-    /// TODO: docs
+    /// The deepest node that contains all the leaves between..
     pub(super) root: &'a Arc<Node<FANOUT, L>>,
 
     /// The summary between the left-most leaf of the root and the start of the
@@ -27,8 +27,8 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     /// TODO: docs
     pub(super) end_summary: L::Summary,
 
-    /// The number of leaves included in this slice (including the start and
-    /// end slices). Used by the [`Leaves`] iterator.
+    /// The number of leaves spanned by this slice, also counting the leaves
+    /// containing the start and end slices.
     pub(super) num_leaves: usize,
 }
 
@@ -36,7 +36,6 @@ impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
     #[inline]
     fn clone(&self) -> Self {
         TreeSlice {
-            before: self.before.clone(),
             summary: self.summary.clone(),
             start_summary: self.start_summary.clone(),
             end_summary: self.end_summary.clone(),
@@ -51,6 +50,12 @@ impl<'a, const FANOUT: usize, L: Leaf> Copy for TreeSlice<'a, FANOUT, L> where
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
+    /// Returns the base measure of this slice's summary.
+    #[inline]
+    pub fn base_measure(&self) -> L::BaseMetric {
+        self.measure::<L::BaseMetric>()
+    }
+
     #[inline]
     pub fn convert_measure<M1, M2>(&self, from: M1) -> M2
     where
@@ -64,11 +69,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         todo!();
     }
 
-    #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
-        self.measure::<L::BaseMetric>()
-    }
-
+    /// Returns the `M`-measure of this slice's summary.
     #[inline]
     pub fn measure<M: Metric<L>>(&self) -> M {
         M::measure(self.summary())
@@ -112,7 +113,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
     /// Returns .
     #[inline]
-    pub fn num_leaves(&'a self) -> usize {
+    pub fn leaf_count(&'a self) -> usize {
         self.num_leaves
     }
 

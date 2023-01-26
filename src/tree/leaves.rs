@@ -54,7 +54,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
             forward: LeavesForward::from(slice),
             backward: LeavesBackward::from(slice),
             yielded: 0,
-            total: slice.num_leaves(),
+            total: slice.leaf_count(),
         }
     }
 }
@@ -184,7 +184,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
             leaves: &[],
             next_leaf_idx: 0,
             whole_yielded: 0,
-            whole_total: slice.num_leaves().saturating_sub(2),
+            whole_total: slice.leaf_count().saturating_sub(2),
         }
     }
 }
@@ -423,7 +423,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
             leaves: &[],
             last_leaf_idx: 0,
             whole_yielded: 0,
-            whole_total: slice.num_leaves().saturating_sub(2),
+            whole_total: slice.leaf_count().saturating_sub(2),
         }
     }
 }

@@ -89,6 +89,11 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
+    pub(super) fn is_big_enough(&self) -> bool {
+        self.children().len() >= Self::min_children()
+    }
+
+    #[inline]
     pub(super) fn two_mut(
         &mut self,
         first_idx: usize,
