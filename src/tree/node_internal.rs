@@ -83,13 +83,247 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
     }
 
+    /// Rebalances the first child of this internal node with its second child.
+    ///
+    /// Returns whether the node has now less than the minimum number of
+    /// children:
+    ///
+    /// - `true`: a child was removed and this internal node needs to be
+    /// rebalanced with another internal node of the same depth to become valid
+    /// again;
+    ///
+    /// - `false`: we're good.
+    ///
+    /// Note: the second child is assumed to:
+    ///
+    /// a) exist (so the minimum number of children has to be >= 2, which means
+    /// the fanout has to be >= 4);
+    ///
+    /// b) be valid, i.e. calling [`Node::is_valid()`] on the second child is
+    /// assumed to return `true`.
+    ///
+    /// Note: when the first and second children are leaves the leaf count may
+    /// decrease by 1.
+    #[inline]
+    pub(super) fn balance_first_child_with_second(&mut self) -> bool {
+        debug_assert!(self.children().len() >= 2);
+
+        let (first, second) = self.two_mut(0, 1);
+
+        debug_assert!(second.is_valid());
+
+        // TODO: explain why we call `make_mut` on the first child but not the
+        // second.
+        match (Arc::make_mut(first), &**second) {
+            (Node::Internal(first), Node::Internal(second)) => {
+                // Do nothing.
+                if first.has_enough_children() {
+                    false
+                }
+                // Move all the second child's children over to the first
+                // child, then remove the second child.
+                else if first.children().len() + second.children().len()
+                    <= Self::max_children()
+                {
+                    first
+                        .children
+                        .extend(second.children.iter().map(Arc::clone));
+
+                    first.num_leaves += second.num_leaves;
+
+                    first.summary += second.summary();
+
+                    self.children.remove(1);
+
+                    self.children.len() < Self::min_children()
+                }
+                // Move the minimum number of children from the second child
+                // over to the first child, keeping both.
+                else {
+                    let to_first =
+                        Self::min_children() - first.children().len();
+
+                    let (to_first, keep_second) =
+                        second.children().split_at(to_first);
+
+                    for child in to_first {
+                        first.push(Arc::clone(child));
+                    }
+
+                    let second =
+                        Arc::new(Node::Internal(Self::from_children(
+                            keep_second.iter().map(Arc::clone),
+                        )));
+
+                    self.children[1] = second;
+
+                    debug_assert!(self.children[0].is_valid());
+                    debug_assert!(self.children[1].is_valid());
+
+                    false
+                }
+            },
+
+            (Node::Leaf(first), Node::Leaf(second)) => {
+                if first.is_big_enough() {
+                    false
+                } else {
+                    let (left, right) = L::balance_slices(
+                        (first.as_slice(), first.summary()),
+                        (second.as_slice(), second.summary()),
+                    );
+
+                    *first = Lnode::from(left);
+
+                    if let Some(second) = right {
+                        let second = Arc::new(Node::Leaf(Lnode::from(second)));
+                        self.children[1] = second;
+                        false
+                    } else {
+                        self.num_leaves -= 1;
+                        self.children.remove(1);
+                        self.children.len() < Self::min_children()
+                    }
+                }
+            },
+
+            _ => {
+                // Safety: the first and second children are siblings so they
+                // must be of the same kind.
+                unsafe { std::hint::unreachable_unchecked() }
+            },
+        }
+    }
+
+    /// Rebalances the last child of this internal node with its penultimate
+    /// (i.e. second to last) child.
+    ///
+    /// Returns whether the node has now less than the minimum number of
+    /// children:
+    ///
+    /// - `true`: a child was removed and this internal node needs to be
+    /// rebalanced with another internal node of the same depth to become valid
+    /// again;
+    ///
+    /// - `false`: we're good.
+    ///
+    /// Note: the penultimate child is assumed to:
+    ///
+    /// a) exist (so the minimum number of children has to be >= 2, which means
+    /// the fanout has to be >= 4);
+    ///
+    /// b) be valid, i.e. calling [`Node::is_valid()`] on the penultimate child
+    /// is assumed to return `true`.
+    ///
+    /// Note: when the last and penultimate children are leaves the leaf count
+    /// may decrease by 1.
+    #[inline]
+    pub(super) fn balance_last_child_with_penultimate(&mut self) -> bool {
+        debug_assert!(self.children().len() >= 2);
+
+        let last_idx = self.children.len() - 1;
+
+        let (penultimate, last) = self.two_mut(last_idx - 1, last_idx);
+
+        debug_assert!(penultimate.is_valid());
+
+        // TODO: explain why we call `make_mut` on the last child but not the
+        // penulimate.
+        match (&**penultimate, Arc::make_mut(last)) {
+            (Node::Internal(penultimate), Node::Internal(last)) => {
+                // Do nothing.
+                if last.has_enough_children() {
+                    false
+                }
+                // TODO: try to do the opposite, move last to penultimate.
+                //
+                // Move all the penultimate child's children over to the last
+                // child, then remove the penultimate child.
+                else if penultimate.children().len() + last.children().len()
+                    <= Self::max_children()
+                {
+                    for (idx, child) in penultimate.children.iter().enumerate()
+                    {
+                        last.children.insert(idx, Arc::clone(child));
+                    }
+
+                    last.num_leaves += penultimate.num_leaves;
+
+                    last.summary += penultimate.summary();
+
+                    self.children.remove(last_idx - 1);
+
+                    self.children.len() < Self::min_children()
+                }
+                // Move the minimum number of children from the second child
+                // over to the first child, keeping both.
+                else {
+                    let to_last = Self::min_children() - last.children().len();
+
+                    let (keep_penultimate, to_last) = penultimate
+                        .children()
+                        .split_at(penultimate.children.len() - to_last);
+
+                    for (idx, child) in to_last.iter().enumerate() {
+                        last.insert(idx, Arc::clone(child));
+                    }
+
+                    let penultimate =
+                        Arc::new(Node::Internal(Self::from_children(
+                            keep_penultimate.iter().map(Arc::clone),
+                        )));
+
+                    self.children[last_idx - 1] = penultimate;
+
+                    debug_assert!(self.children[last_idx - 1].is_valid());
+                    debug_assert!(self.children[last_idx].is_valid());
+
+                    false
+                }
+            },
+
+            (Node::Leaf(penultimate), Node::Leaf(last)) => {
+                if last.is_big_enough() {
+                    false
+                } else {
+                    let (left, right) = L::balance_slices(
+                        (penultimate.as_slice(), penultimate.summary()),
+                        (last.as_slice(), last.summary()),
+                    );
+
+                    if let Some(right) = right {
+                        *last = Lnode::from(right);
+
+                        let penultimate =
+                            Arc::new(Node::Leaf(Lnode::from(left)));
+
+                        self.children[last_idx - 1] = penultimate;
+
+                        false
+                    } else {
+                        *last = Lnode::from(left);
+                        self.num_leaves -= 1;
+                        self.children.remove(last_idx - 1);
+                        self.children.len() < Self::min_children()
+                    }
+                }
+            },
+
+            _ => {
+                // Safety: the penultimate and last children are siblings so
+                // they must be of the same kind.
+                unsafe { std::hint::unreachable_unchecked() }
+            },
+        }
+    }
+
     #[inline]
     pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
         &self.children
     }
 
     #[inline]
-    pub(super) fn is_big_enough(&self) -> bool {
+    pub(super) fn has_enough_children(&self) -> bool {
         self.children().len() >= Self::min_children()
     }
 
@@ -118,26 +352,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn prepend<I>(&mut self, nodes: I)
-    where
-        I: IntoIterator<Item = Arc<Node<N, L>>>,
-    {
-        for (idx, node) in nodes.into_iter().enumerate() {
-            self.insert(idx, node);
-        }
-    }
-
-    #[inline]
-    pub(super) fn extend<I>(&mut self, nodes: I)
-    where
-        I: IntoIterator<Item = Arc<Node<N, L>>>,
-    {
-        for node in nodes.into_iter() {
-            self.push(node);
-        }
-    }
-
-    #[inline]
     pub(super) fn depth(&self) -> usize {
         self.depth
     }
@@ -145,34 +359,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn empty() -> Self {
         Self::default()
-    }
-
-    #[inline]
-    pub(super) fn extend_from_other(&mut self, other: &Self) {
-        debug_assert_eq!(self.depth(), other.depth());
-        self.num_leaves += other.num_leaves;
-        self.summary += other.summary();
-        self.children.extend(other.children().iter().map(Arc::clone));
-    }
-
-    #[inline]
-    pub(super) fn prepend_from_other(&mut self, other: &Self) {
-        debug_assert_eq!(self.depth(), other.depth());
-        self.num_leaves += other.num_leaves();
-        self.summary += other.summary();
-
-        for (idx, child) in other.children().iter().map(Arc::clone).enumerate()
-        {
-            self.children.insert(idx, child);
-        }
-    }
-
-    #[inline]
-    pub(super) fn pop(&mut self, index: usize) -> Arc<Node<N, L>> {
-        let node = &*self.children[index];
-        self.num_leaves -= node.num_leaves();
-        self.summary -= node.summary();
-        self.children.remove(index)
     }
 
     /// Returns a reference to the first child of this internal node.
@@ -231,18 +417,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     fn is_empty(&self) -> bool {
         self.children.len() == 0
-    }
-
-    /// Note: does **not** update the inode's summary or its leaf count.
-    #[inline]
-    pub(super) fn swap(
-        &mut self,
-        index: usize,
-        child: Arc<Node<N, L>>,
-    ) -> Arc<Node<N, L>> {
-        debug_assert!(index < self.children.len());
-        debug_assert_eq!(self.depth(), child.depth() + 1);
-        std::mem::replace(&mut self.children[index], child)
     }
 
     #[inline]

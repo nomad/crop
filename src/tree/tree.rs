@@ -251,14 +251,14 @@ mod from_treeslice {
                     }
                 }
 
-                should_rebalance |= !i.is_big_enough();
+                should_rebalance |= !i.has_enough_children();
                 (Arc::new(Node::Internal(i)), should_rebalance)
             },
 
             Node::Leaf(_) => {
                 let leaf = start_slice.to_owned();
-                let should_rebalance = !leaf.is_big_enough(&start_summary);
                 let lnode = Lnode::new(leaf, start_summary);
+                let should_rebalance = !lnode.is_big_enough();
                 (Arc::new(Node::Leaf(lnode)), should_rebalance)
             },
         }
@@ -303,7 +303,7 @@ mod from_treeslice {
                     }
                 }
 
-                should_rebalance |= !i.is_big_enough();
+                should_rebalance |= !i.has_enough_children();
                 (Arc::new(Node::Internal(i)), should_rebalance)
             },
 
@@ -450,99 +450,11 @@ mod from_treeslice {
     }
 
     #[inline]
-    fn something_start_rec<'a, const N: usize, L: Leaf>(
-        node: &Node<N, L>,
-        from: L::BaseMetric,
-        start_slice: &'a L::Slice,
-        start_summary: L::Summary,
-    ) -> Arc<Node<N, L>> {
-        match node {
-            Node::Internal(inode) => {
-                let mut measured = L::BaseMetric::zero();
-
-                let mut i = Inode::empty();
-
-                let mut children = inode.children().iter();
-
-                while let Some(child) = children.next() {
-                    let this = L::BaseMetric::measure(child.summary());
-
-                    if measured + this > from {
-                        i.push(something_start_rec(
-                            child,
-                            from - measured,
-                            start_slice,
-                            start_summary,
-                        ));
-
-                        for child in children {
-                            i.push(Arc::clone(child));
-                        }
-
-                        break;
-                    } else {
-                        measured += this;
-                    }
-                }
-
-                Arc::new(Node::Internal(i))
-            },
-
-            Node::Leaf(_) => Arc::new(Node::Leaf(Lnode::new(
-                start_slice.to_owned(),
-                start_summary,
-            ))),
-        }
-    }
-
-    #[inline]
-    fn something_end_rec<'a, const N: usize, L: Leaf>(
-        node: &Node<N, L>,
-        up_to: L::BaseMetric,
-        end_slice: &'a L::Slice,
-        end_summary: L::Summary,
-    ) -> Arc<Node<N, L>> {
-        match node {
-            Node::Internal(inode) => {
-                let mut measured = L::BaseMetric::zero();
-
-                let mut i = Inode::empty();
-
-                let mut children = inode.children().iter();
-
-                while let Some(child) = children.next() {
-                    let this = L::BaseMetric::measure(child.summary());
-
-                    if measured + this >= up_to {
-                        i.push(something_end_rec(
-                            child,
-                            up_to - measured,
-                            end_slice,
-                            end_summary,
-                        ));
-
-                        break;
-                    } else {
-                        i.push(Arc::clone(child));
-                        measured += this;
-                    }
-                }
-
-                Arc::new(Node::Internal(i))
-            },
-
-            Node::Leaf(_) => Arc::new(Node::Leaf(Lnode::new(
-                end_slice.to_owned(),
-                end_summary,
-            ))),
-        }
-    }
-
-    #[inline]
     fn balance_left_side<const N: usize, L: Leaf>(
         inode: &mut Inode<N, L>,
     ) -> bool {
-        let mut parent_should_rebalance = merge_distribute_first_second(inode);
+        let mut parent_should_rebalance =
+            inode.balance_first_child_with_second();
 
         if let Node::Internal(first_child) = Arc::make_mut(inode.first_mut()) {
             let this_should_rebalance = balance_left_side(first_child);
@@ -568,7 +480,8 @@ mod from_treeslice {
                 // instead of `|=`.
                 debug_assert!(!parent_should_rebalance);
 
-                parent_should_rebalance = merge_distribute_first_second(inode);
+                parent_should_rebalance =
+                    inode.balance_first_child_with_second();
             }
         }
 
@@ -580,7 +493,7 @@ mod from_treeslice {
         inode: &mut Inode<N, L>,
     ) -> bool {
         let mut parent_should_rebalance =
-            merge_distribute_penultimate_last(inode);
+            inode.balance_last_child_with_penultimate();
 
         if let Node::Internal(last_child) = Arc::make_mut(inode.last_mut()) {
             let this_should_rebalance = balance_right_side(last_child);
@@ -595,168 +508,11 @@ mod from_treeslice {
                 debug_assert!(!parent_should_rebalance);
 
                 parent_should_rebalance =
-                    merge_distribute_penultimate_last(inode);
+                    inode.balance_last_child_with_penultimate();
             }
         }
 
         parent_should_rebalance
-    }
-
-    #[inline]
-    fn merge_distribute_first_second<const N: usize, L: Leaf>(
-        inode: &mut Inode<N, L>,
-    ) -> bool {
-        let (first, second) = inode.two_mut(0, 1);
-
-        match (Arc::make_mut(first), &**second) {
-            (Node::Internal(first), Node::Internal(second)) => {
-                if first.children().len() >= Inode::<N, L>::min_children() {
-                    return false;
-                }
-
-                // If the first and second children can be combined we can
-                // avoid calling `Arc::make_mut` on the second child, we can
-                // instead pop it and append its children to the first node.
-                if first.children().len() + second.children().len()
-                    <= Inode::<N, L>::max_children()
-                {
-                    first.extend_from_other(second);
-                    inode.pop(1);
-                }
-                // If not, we move the minimum number of nodes needed to make
-                // the first child valid from the second to the first child.
-                // This is guaranteed to leave the second node valid because..
-                else {
-                    let to_move =
-                        Inode::<N, L>::min_children() - first.children().len();
-
-                    let (move_to_first, keep_in_second) =
-                        second.children().split_at(to_move);
-
-                    first.extend(move_to_first.iter().map(Arc::clone));
-
-                    let new_second =
-                        Arc::new(Node::Internal(Inode::from_children(
-                            keep_in_second.iter().map(Arc::clone),
-                        )));
-
-                    inode.swap(1, new_second);
-
-                    return false;
-                }
-            },
-
-            (Node::Leaf(first), Node::Leaf(second)) => {
-                if first.is_big_enough() {
-                    return false;
-                }
-
-                let (left, right) = L::balance_slices(
-                    (first.as_slice(), first.summary()),
-                    (second.as_slice(), second.summary()),
-                );
-
-                *first = Lnode::from(left);
-
-                if let Some(second) = right {
-                    inode.swap(1, Arc::new(Node::Leaf(Lnode::from(second))));
-                    return false;
-                } else {
-                    inode.pop(1);
-                }
-            },
-
-            // Safety: the first and second children are siblings so they must
-            // be of the same kind.
-            _ => unsafe { std::hint::unreachable_unchecked() },
-        }
-
-        // The parent should only rebalance if after removing the second child
-        // this inode has less than the minimum number of children.
-        inode.children().len() < Inode::<N, L>::min_children()
-    }
-
-    #[inline]
-    fn merge_distribute_penultimate_last<const N: usize, L: Leaf>(
-        inode: &mut Inode<N, L>,
-    ) -> bool {
-        let last_idx = inode.children().len() - 1;
-
-        let (penultimate, last) = inode.two_mut(last_idx - 1, last_idx);
-
-        match (&**penultimate, Arc::make_mut(last)) {
-            (Node::Internal(penultimate), Node::Internal(last)) => {
-                if last.children().len() >= Inode::<N, L>::min_children() {
-                    return false;
-                }
-
-                // If the penultimate and last children can be combined we can
-                // avoid calling `Arc::make_mut` on the penultimate child, we
-                // can instead pop it and append its children to the last node.
-                if penultimate.children().len() + last.children().len()
-                    <= Inode::<N, L>::max_children()
-                {
-                    last.prepend_from_other(penultimate);
-                    inode.pop(last_idx - 1);
-                }
-                // If not, we move the minimum number of nodes needed to make
-                // the first child valid from the penultimate to the first
-                // child. This is guaranteed to leave the penultimate node
-                // valid because..
-                else {
-                    let to_move =
-                        Inode::<N, L>::min_children() - last.children().len();
-
-                    let (keep_in_penultimate, move_to_last) = penultimate
-                        .children()
-                        .split_at(penultimate.children().len() - to_move);
-
-                    let new_penultimate =
-                        Arc::new(Node::Internal(Inode::from_children(
-                            keep_in_penultimate.iter().map(Arc::clone),
-                        )));
-
-                    last.prepend(move_to_last.iter().map(Arc::clone));
-
-                    inode.swap(last_idx - 1, new_penultimate);
-
-                    return false;
-                }
-            },
-
-            (Node::Leaf(penultimate), Node::Leaf(last)) => {
-                if last.is_big_enough() {
-                    return false;
-                }
-
-                let (left, right) = L::balance_slices(
-                    (penultimate.as_slice(), penultimate.summary()),
-                    (last.as_slice(), last.summary()),
-                );
-
-                if let Some(right) = right {
-                    *last = Lnode::from(right);
-
-                    inode.swap(
-                        last_idx - 1,
-                        Arc::new(Node::Leaf(Lnode::from(left))),
-                    );
-
-                    return false;
-                } else {
-                    *last = Lnode::from(left);
-                    inode.pop(last_idx - 1);
-                }
-            },
-
-            // Safety: the first and second children are siblings so they must
-            // be of the same kind.
-            _ => unsafe { std::hint::unreachable_unchecked() },
-        }
-
-        // The parent should only rebalance if after removing the penultimate
-        // child this inode has less than the minimum number of children.
-        inode.children().len() < Inode::<N, L>::min_children()
     }
 
     #[inline]

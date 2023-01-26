@@ -169,6 +169,14 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
+    pub(super) fn is_valid(&self) -> bool {
+        match self {
+            Node::Internal(inode) => inode.has_enough_children(),
+            Node::Leaf(leaf) => leaf.is_big_enough(),
+        }
+    }
+
+    #[inline]
     pub fn measure<M: Metric<L>>(&self) -> M {
         match self {
             Node::Internal(inode) => inode.measure(),
