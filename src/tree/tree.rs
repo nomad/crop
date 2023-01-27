@@ -60,12 +60,6 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
                 first
             }
         } else {
-            // println!(
-            //     "{:?}..{:?} of {:?}",
-            //     slice.before,
-            //     slice.before + slice.base_measure(),
-            //     slice.root.base_measure()
-            // );
             from_treeslice::into_tree_root(slice)
         };
 
@@ -218,17 +212,11 @@ mod from_treeslice {
     pub(super) fn into_tree_root<'a, const N: usize, L: Leaf>(
         slice: TreeSlice<'a, N, L>,
     ) -> Arc<Node<N, L>> {
-        // println!("{slice:#?}");
-
-        let (root, invalid_start, invalid_end) = tree_slice_cut(slice);
+        let (root, mut invalid_start, mut invalid_end) = tree_slice_cut(slice);
 
         let mut root = Arc::new(Node::Internal(root));
 
-        // println!("START: {root:#?}");
-        // println!("INVALID START: {invalid_start}");
-        // println!("INVALID END: {invalid_end}");
-
-        {
+        if invalid_start > 0 {
             // TODO: use `Arc::get_mut_unchecked` once it's stable.
             //
             // Safety (unwrap_unchecked): the `Arc` containing the root was
@@ -242,13 +230,11 @@ mod from_treeslice {
                     .as_mut_internal_unchecked()
             };
 
-            if invalid_start > 0 {
-                balance_left_side(inode);
-                pull_up_singular(&mut root);
-            }
+            balance_left_side(inode);
+            pull_up_singular(&mut root);
         }
 
-        {
+        if invalid_end > 0 {
             // TODO: use `Arc::get_mut_unchecked` once it's stable.
             //
             // Safety (unwrap_unchecked): see above.
@@ -263,13 +249,9 @@ mod from_treeslice {
                     .as_mut_internal_unchecked()
             };
 
-            if invalid_end > 0 {
-                balance_right_side(inode);
-                pull_up_singular(&mut root);
-            }
+            balance_right_side(inode);
+            pull_up_singular(&mut root);
         }
-
-        // println!("FINAL ROOT: {root:#?}");
 
         root
     }
@@ -301,7 +283,7 @@ mod from_treeslice {
                 if slice.before == L::BaseMetric::zero() {
                     root.push(Arc::clone(child));
                 } else {
-                    let (first, _) = cut_start_rec(
+                    let first = cut_start_rec(
                         child,
                         slice.before - offset,
                         slice.start_slice,
@@ -328,7 +310,7 @@ mod from_treeslice {
                 if end == slice.root().base_measure() {
                     root.push(Arc::clone(child));
                 } else {
-                    let (last, _) = cut_end_rec(
+                    let last = cut_end_rec(
                         child,
                         end - offset,
                         slice.end_slice,
@@ -346,15 +328,9 @@ mod from_treeslice {
             }
         }
 
-        // println!("start has {invalid_nodes_start} invalid nodes");
-        // println!("end has {invalid_nodes_end} invalid nodes");
-
         (root, invalid_nodes_start, invalid_nodes_end)
     }
 
-    // TODO: don't give up that easily when `should_rebalance` is true. Most of
-    // the time you're gonna have another node to use to rebalance the two. In
-    // that case you can rebalance right away and return a None.
     #[inline]
     fn cut_start_rec<const N: usize, L: Leaf>(
         node: &Arc<Node<N, L>>,
@@ -362,20 +338,20 @@ mod from_treeslice {
         start_slice: &L::Slice,
         start_summary: L::Summary,
         invalid_nodes: &mut usize,
-    ) -> (Arc<Node<N, L>>, bool) {
+    ) -> Arc<Node<N, L>> {
         match &**node {
-            Node::Internal(inode) => {
-                let mut i = Inode::empty();
+            Node::Internal(i) => {
+                let mut inode = Inode::empty();
 
                 let mut offset = L::BaseMetric::zero();
 
-                let mut children = inode.children().iter();
+                let mut children = i.children().iter();
 
                 while let Some(child) = children.next() {
                     let this = child.base_measure();
 
                     if offset + this > take_from {
-                        let (first_child, first_not_valid) = cut_start_rec(
+                        let first = cut_start_rec(
                             child,
                             take_from - offset,
                             start_slice,
@@ -383,28 +359,24 @@ mod from_treeslice {
                             invalid_nodes,
                         );
 
-                        i.push(first_child);
+                        let first_is_valid = first.is_valid();
+
+                        inode.push(first);
 
                         for child in children {
-                            i.push(Arc::clone(child));
+                            inode.push(Arc::clone(child));
                         }
 
-                        let this_not_valid = if first_not_valid {
-                            if i.children().len() >= 2 {
-                                *invalid_nodes -= 1;
-                                i.balance_first_child_with_second()
-                            } else {
-                                true
-                            }
-                        } else {
-                            !i.has_enough_children()
-                        };
+                        if !first_is_valid && inode.children().len() > 1 {
+                            inode.balance_first_child_with_second();
+                            *invalid_nodes -= 1;
+                        }
 
-                        if this_not_valid {
+                        if !inode.has_enough_children() {
                             *invalid_nodes += 1;
                         }
 
-                        return (Arc::new(Node::Internal(i)), this_not_valid);
+                        return Arc::new(Node::Internal(inode));
                     } else {
                         offset += this;
                     }
@@ -414,15 +386,13 @@ mod from_treeslice {
             },
 
             Node::Leaf(_) => {
-                let leaf = start_slice.to_owned();
-                let lnode = Lnode::new(leaf, start_summary);
-                let this_not_valid = !lnode.is_big_enough();
+                let lnode = Lnode::new(start_slice.to_owned(), start_summary);
 
-                if this_not_valid {
+                if !lnode.is_big_enough() {
                     *invalid_nodes += 1;
                 }
 
-                (Arc::new(Node::Leaf(lnode)), this_not_valid)
+                Arc::new(Node::Leaf(lnode))
             },
         }
     }
@@ -434,21 +404,18 @@ mod from_treeslice {
         end_slice: &L::Slice,
         end_summary: L::Summary,
         invalid_nodes: &mut usize,
-    ) -> (Arc<Node<N, L>>, bool) {
-        // println!("cutting up to {take_up_to:?} of {node:#?}");
-        // println!("");
-
+    ) -> Arc<Node<N, L>> {
         match &**node {
-            Node::Internal(inode) => {
-                let mut i = Inode::empty();
+            Node::Internal(i) => {
+                let mut inode = Inode::empty();
 
                 let mut offset = L::BaseMetric::zero();
 
-                for child in inode.children() {
+                for child in i.children() {
                     let this = child.base_measure();
 
                     if offset + this >= take_up_to {
-                        let (last_child, last_not_valid) = cut_end_rec(
+                        let last = cut_end_rec(
                             child,
                             take_up_to - offset,
                             end_slice,
@@ -456,26 +423,22 @@ mod from_treeslice {
                             invalid_nodes,
                         );
 
-                        i.push(last_child);
+                        let last_is_valid = last.is_valid();
 
-                        let this_not_valid = if last_not_valid {
-                            if i.children().len() >= 2 {
-                                *invalid_nodes -= 1;
-                                i.balance_last_child_with_penultimate()
-                            } else {
-                                true
-                            }
-                        } else {
-                            !i.has_enough_children()
-                        };
+                        inode.push(last);
 
-                        if this_not_valid {
+                        if !last_is_valid && inode.children().len() > 1 {
+                            inode.balance_last_child_with_penultimate();
+                            *invalid_nodes -= 1;
+                        }
+
+                        if !inode.has_enough_children() {
                             *invalid_nodes += 1;
                         }
 
-                        return (Arc::new(Node::Internal(i)), this_not_valid);
+                        return Arc::new(Node::Internal(inode));
                     } else {
-                        i.push(Arc::clone(child));
+                        inode.push(Arc::clone(child));
                         offset += this;
                     }
                 }
@@ -484,16 +447,64 @@ mod from_treeslice {
             },
 
             Node::Leaf(_) => {
-                let leaf = end_slice.to_owned();
-                let lnode = Lnode::new(leaf, end_summary);
-                let this_not_valid = !lnode.is_big_enough();
+                let lnode = Lnode::new(end_slice.to_owned(), end_summary);
 
-                if this_not_valid {
+                if !lnode.is_big_enough() {
                     *invalid_nodes = 1;
                 }
 
-                (Arc::new(Node::Leaf(lnode)), this_not_valid)
+                Arc::new(Node::Leaf(lnode))
             },
+        }
+    }
+
+    #[inline]
+    fn balance_first_rec<const N: usize, L: Leaf>(
+        inode: &mut Inode<N, L>,
+        yet_to_fix: &mut usize,
+    ) -> bool {
+        let this_not_valid = if !inode.first().is_valid() {
+            inode.balance_first_child_with_second();
+            if inode.has_enough_children() {
+                *yet_to_fix -= 1;
+                false
+            } else {
+                true
+            }
+        } else {
+            !inode.has_enough_children()
+        };
+
+        if *yet_to_fix > 0 {
+            if let Node::Internal(first) =
+                Arc::get_mut(inode.first_mut()).unwrap()
+            {
+                let first_not_valid = balance_first_rec(first, yet_to_fix);
+
+                // NOTE: It's possible that after rebalancing, this inode was
+                // left with only 1 child. When this is the case all of this
+                // inode's parents will also have a single child, and the root
+                // will be fixed by calling `pull_up_singular`.
+                if inode.children().len() == 1 {
+                    return false;
+                }
+
+                if first_not_valid {
+                    inode.balance_first_child_with_second();
+                    if inode.has_enough_children() {
+                        *yet_to_fix -= 1;
+                        false
+                    } else {
+                        true
+                    }
+                } else {
+                    this_not_valid
+                }
+            } else {
+                this_not_valid
+            }
+        } else {
+            false
         }
     }
 
@@ -501,10 +512,13 @@ mod from_treeslice {
     fn balance_left_side<const N: usize, L: Leaf>(
         inode: &mut Inode<N, L>,
     ) -> bool {
-        let mut parent_should_rebalance =
-            inode.balance_first_child_with_second();
+        inode.balance_first_child_with_second();
 
-        if let Node::Internal(first_child) = Arc::make_mut(inode.first_mut()) {
+        let mut parent_should_rebalance = !inode.has_enough_children();
+
+        if let Node::Internal(first_child) =
+            Arc::get_mut(inode.first_mut()).unwrap()
+        {
             let this_should_rebalance = balance_left_side(first_child);
 
             if this_should_rebalance {
@@ -528,8 +542,9 @@ mod from_treeslice {
                 // instead of `|=`.
                 debug_assert!(!parent_should_rebalance);
 
-                parent_should_rebalance =
-                    inode.balance_first_child_with_second();
+                inode.balance_first_child_with_second();
+
+                parent_should_rebalance = !inode.has_enough_children();
             }
         }
 
@@ -540,10 +555,13 @@ mod from_treeslice {
     fn balance_right_side<const N: usize, L: Leaf>(
         inode: &mut Inode<N, L>,
     ) -> bool {
-        let mut parent_should_rebalance =
-            inode.balance_last_child_with_penultimate();
+        inode.balance_last_child_with_penultimate();
 
-        if let Node::Internal(last_child) = Arc::make_mut(inode.last_mut()) {
+        let mut parent_should_rebalance = !inode.has_enough_children();
+
+        if let Node::Internal(last_child) =
+            Arc::get_mut(inode.last_mut()).unwrap()
+        {
             let this_should_rebalance = balance_right_side(last_child);
 
             if this_should_rebalance {
@@ -555,8 +573,9 @@ mod from_treeslice {
                 // NOTE: see other comment in `balance_left_side`.
                 debug_assert!(!parent_should_rebalance);
 
-                parent_should_rebalance =
-                    inode.balance_last_child_with_penultimate();
+                inode.balance_last_child_with_penultimate();
+
+                parent_should_rebalance = !inode.has_enough_children();
             }
         }
 
@@ -572,8 +591,15 @@ mod from_treeslice {
             // ok to unwrap after calling `get_mut`.
             if let Node::Internal(i) = Arc::get_mut(root).unwrap() {
                 if i.children().len() == 1 {
-                    let first = i.children.drain(..).next().unwrap();
-                    *root = first;
+                    // Safety: i.children has exactly 1 child.
+                    let child = unsafe {
+                        i.children
+                            .drain(..)
+                            .into_iter()
+                            .next()
+                            .unwrap_unchecked()
+                    };
+                    *root = child;
                 } else {
                     break;
                 }

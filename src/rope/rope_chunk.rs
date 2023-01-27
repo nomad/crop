@@ -126,8 +126,8 @@ impl Leaf for RopeChunk {
         // Viceversa, if the right side is lacking we take text from the left
         // side.
         else {
-            debug_assert!(left.len() > Self::min_bytes());
             debug_assert!(right.len() < Self::min_bytes());
+            debug_assert!(left.len() > Self::min_bytes());
 
             let (left, right) = balance_right_with_left(
                 left,

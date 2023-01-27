@@ -85,44 +85,23 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     /// Rebalances the first child of this internal node with its second child.
     ///
-    /// Returns whether the node has now less than the minimum number of
-    /// children:
-    ///
-    /// - `true`: a child was removed and this internal node needs to be
-    /// rebalanced with another internal node of the same depth to become valid
-    /// again;
-    ///
-    /// - `false`: we're good.
-    ///
     /// Note: the second child is assumed to exist, so the minimum number of
     /// children has to be >= 2 (which means the fanout has to be >= 4);
     ///
     /// Note: when the first and second children are leaves the leaf count may
     /// decrease by 1.
     #[inline]
-    pub(super) fn balance_first_child_with_second(&mut self) -> bool {
+    pub(super) fn balance_first_child_with_second(&mut self) {
         debug_assert!(self.children().len() >= 2);
 
         // Check for early returns.
-        match &**self.first() {
-            Node::Internal(first) => {
-                if first.has_enough_children() {
-                    return self.has_enough_children();
-                }
-            },
-
-            Node::Leaf(first) => {
-                if first.is_big_enough() {
-                    return self.has_enough_children();
-                }
-            },
+        if self.first().is_valid() {
+            return;
         }
 
         let (first, second) = self.two_mut(0, 1);
 
-        // TODO: explain why we call `make_mut` on the first child but not the
-        // second.
-        match (Arc::make_mut(first), &**second) {
+        match (Arc::get_mut(first).unwrap(), &**second) {
             (Node::Internal(first), Node::Internal(second)) => {
                 // Move all the second child's children over to the first
                 // child, then remove the second child.
@@ -187,20 +166,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 unsafe { std::hint::unreachable_unchecked() }
             },
         }
-
-        self.has_enough_children()
     }
 
     /// Rebalances the last child of this internal node with its penultimate
     /// (i.e. second to last) child.
-    ///
-    /// Returns whether the node has now less than the minimum number of
-    /// children:
-    ///
-    /// - `true`: this internal node needs to be rebalanced with another
-    /// internal node of the same depth to become again;
-    ///
-    /// - `false`: we're good.
     ///
     /// Note: the penultimate child is assumed to exist, so the minimum number
     /// of children has to be >= 2 (which means the fanout has to be >= 4).
@@ -208,31 +177,19 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// Note: when the last and penultimate children are leaves the leaf count
     /// may decrease by 1.
     #[inline]
-    pub(super) fn balance_last_child_with_penultimate(&mut self) -> bool {
+    pub(super) fn balance_last_child_with_penultimate(&mut self) {
         debug_assert!(self.children().len() >= 2);
 
         // Check for early returns.
-        match &**self.last() {
-            Node::Internal(last) => {
-                if last.has_enough_children() {
-                    return self.has_enough_children();
-                }
-            },
-
-            Node::Leaf(last) => {
-                if last.is_big_enough() {
-                    return self.has_enough_children();
-                }
-            },
+        if self.last().is_valid() {
+            return;
         }
 
         let last_idx = self.children.len() - 1;
 
         let (penultimate, last) = self.two_mut(last_idx - 1, last_idx);
 
-        // TODO: explain why we call `make_mut` on the last child but not the
-        // penulimate.
-        match (&**penultimate, Arc::make_mut(last)) {
+        match (&**penultimate, Arc::get_mut(last).unwrap()) {
             (Node::Internal(penultimate), Node::Internal(last)) => {
                 // TODO: try to do the opposite, move last to penultimate.
                 //
@@ -302,8 +259,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 unsafe { std::hint::unreachable_unchecked() }
             },
         }
-
-        self.has_enough_children()
     }
 
     #[inline]
