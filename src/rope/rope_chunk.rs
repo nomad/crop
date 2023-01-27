@@ -93,8 +93,15 @@ impl Leaf for RopeChunk {
         (left, left_summary): (&'a ChunkSlice, &'a ChunkSummary),
         (right, right_summary): (&'a ChunkSlice, &'a ChunkSummary),
     ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
+        if left.len() >= Self::min_bytes() && right.len() >= Self::min_bytes()
+        {
+            (
+                (left.to_owned(), *left_summary),
+                Some((right.to_owned(), *right_summary)),
+            )
+        }
         // If both slices can fit in a single chunk we join them.
-        if left.len() + right.len() <= Self::max_bytes() {
+        else if left.len() + right.len() <= Self::max_bytes() {
             let mut left = left.to_owned();
             left.push_str(right);
 

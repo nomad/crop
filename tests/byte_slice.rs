@@ -120,12 +120,13 @@ fn shrinking_byte_slices() {
 
         for slice in slices {
             let r = Rope::from(slice);
-            assert_eq!(slice, r);
 
             // TODO: remove this if.
             if slice.byte_len() < s.len() {
                 r.assert_invariants();
             }
+
+            assert_eq!(slice, r);
         }
     }
 }

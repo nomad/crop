@@ -94,13 +94,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     ///
     /// - `false`: we're good.
     ///
-    /// Note: the second child is assumed to:
-    ///
-    /// a) exist (so the minimum number of children has to be >= 2, which means
-    /// the fanout has to be >= 4);
-    ///
-    /// b) be valid, i.e. calling [`Node::is_valid()`] on the second child is
-    /// assumed to return `true`.
+    /// Note: the second child is assumed to exist, so the minimum number of
+    /// children has to be >= 2 (which means the fanout has to be >= 4);
     ///
     /// Note: when the first and second children are leaves the leaf count may
     /// decrease by 1.
@@ -108,21 +103,30 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     pub(super) fn balance_first_child_with_second(&mut self) -> bool {
         debug_assert!(self.children().len() >= 2);
 
-        let (first, second) = self.two_mut(0, 1);
+        // Check for early returns.
+        match &**self.first() {
+            Node::Internal(first) => {
+                if first.has_enough_children() {
+                    return self.has_enough_children();
+                }
+            },
 
-        debug_assert!(second.is_valid());
+            Node::Leaf(first) => {
+                if first.is_big_enough() {
+                    return self.has_enough_children();
+                }
+            },
+        }
+
+        let (first, second) = self.two_mut(0, 1);
 
         // TODO: explain why we call `make_mut` on the first child but not the
         // second.
         match (Arc::make_mut(first), &**second) {
             (Node::Internal(first), Node::Internal(second)) => {
-                // Do nothing.
-                if first.has_enough_children() {
-                    false
-                }
                 // Move all the second child's children over to the first
                 // child, then remove the second child.
-                else if first.children().len() + second.children().len()
+                if first.children().len() + second.children().len()
                     <= Self::max_children()
                 {
                     first
@@ -134,8 +138,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                     first.summary += second.summary();
 
                     self.children.remove(1);
-
-                    self.children.len() < Self::min_children()
                 }
                 // Move the minimum number of children from the second child
                 // over to the first child, keeping both.
@@ -159,31 +161,23 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
                     debug_assert!(self.children[0].is_valid());
                     debug_assert!(self.children[1].is_valid());
-
-                    false
                 }
             },
 
             (Node::Leaf(first), Node::Leaf(second)) => {
-                if first.is_big_enough() {
-                    false
+                let (left, right) = L::balance_slices(
+                    (first.as_slice(), first.summary()),
+                    (second.as_slice(), second.summary()),
+                );
+
+                *first = Lnode::from(left);
+
+                if let Some(second) = right {
+                    let second = Arc::new(Node::Leaf(Lnode::from(second)));
+                    self.children[1] = second;
                 } else {
-                    let (left, right) = L::balance_slices(
-                        (first.as_slice(), first.summary()),
-                        (second.as_slice(), second.summary()),
-                    );
-
-                    *first = Lnode::from(left);
-
-                    if let Some(second) = right {
-                        let second = Arc::new(Node::Leaf(Lnode::from(second)));
-                        self.children[1] = second;
-                        false
-                    } else {
-                        self.num_leaves -= 1;
-                        self.children.remove(1);
-                        self.children.len() < Self::min_children()
-                    }
+                    self.num_leaves -= 1;
+                    self.children.remove(1);
                 }
             },
 
@@ -193,6 +187,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 unsafe { std::hint::unreachable_unchecked() }
             },
         }
+
+        self.has_enough_children()
     }
 
     /// Rebalances the last child of this internal node with its penultimate
@@ -201,19 +197,13 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// Returns whether the node has now less than the minimum number of
     /// children:
     ///
-    /// - `true`: a child was removed and this internal node needs to be
-    /// rebalanced with another internal node of the same depth to become valid
-    /// again;
+    /// - `true`: this internal node needs to be rebalanced with another
+    /// internal node of the same depth to become again;
     ///
     /// - `false`: we're good.
     ///
-    /// Note: the penultimate child is assumed to:
-    ///
-    /// a) exist (so the minimum number of children has to be >= 2, which means
-    /// the fanout has to be >= 4);
-    ///
-    /// b) be valid, i.e. calling [`Node::is_valid()`] on the penultimate child
-    /// is assumed to return `true`.
+    /// Note: the penultimate child is assumed to exist, so the minimum number
+    /// of children has to be >= 2 (which means the fanout has to be >= 4).
     ///
     /// Note: when the last and penultimate children are leaves the leaf count
     /// may decrease by 1.
@@ -221,25 +211,34 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     pub(super) fn balance_last_child_with_penultimate(&mut self) -> bool {
         debug_assert!(self.children().len() >= 2);
 
+        // Check for early returns.
+        match &**self.last() {
+            Node::Internal(last) => {
+                if last.has_enough_children() {
+                    return self.has_enough_children();
+                }
+            },
+
+            Node::Leaf(last) => {
+                if last.is_big_enough() {
+                    return self.has_enough_children();
+                }
+            },
+        }
+
         let last_idx = self.children.len() - 1;
 
         let (penultimate, last) = self.two_mut(last_idx - 1, last_idx);
-
-        debug_assert!(penultimate.is_valid());
 
         // TODO: explain why we call `make_mut` on the last child but not the
         // penulimate.
         match (&**penultimate, Arc::make_mut(last)) {
             (Node::Internal(penultimate), Node::Internal(last)) => {
-                // Do nothing.
-                if last.has_enough_children() {
-                    false
-                }
                 // TODO: try to do the opposite, move last to penultimate.
                 //
                 // Move all the penultimate child's children over to the last
                 // child, then remove the penultimate child.
-                else if penultimate.children().len() + last.children().len()
+                if penultimate.children().len() + last.children().len()
                     <= Self::max_children()
                 {
                     for (idx, child) in penultimate.children.iter().enumerate()
@@ -252,8 +251,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                     last.summary += penultimate.summary();
 
                     self.children.remove(last_idx - 1);
-
-                    self.children.len() < Self::min_children()
                 }
                 // Move the minimum number of children from the second child
                 // over to the first child, keeping both.
@@ -277,35 +274,25 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
                     debug_assert!(self.children[last_idx - 1].is_valid());
                     debug_assert!(self.children[last_idx].is_valid());
-
-                    false
                 }
             },
 
             (Node::Leaf(penultimate), Node::Leaf(last)) => {
-                if last.is_big_enough() {
-                    false
+                let (left, right) = L::balance_slices(
+                    (penultimate.as_slice(), penultimate.summary()),
+                    (last.as_slice(), last.summary()),
+                );
+
+                if let Some(right) = right {
+                    *last = Lnode::from(right);
+
+                    let penultimate = Arc::new(Node::Leaf(Lnode::from(left)));
+
+                    self.children[last_idx - 1] = penultimate;
                 } else {
-                    let (left, right) = L::balance_slices(
-                        (penultimate.as_slice(), penultimate.summary()),
-                        (last.as_slice(), last.summary()),
-                    );
-
-                    if let Some(right) = right {
-                        *last = Lnode::from(right);
-
-                        let penultimate =
-                            Arc::new(Node::Leaf(Lnode::from(left)));
-
-                        self.children[last_idx - 1] = penultimate;
-
-                        false
-                    } else {
-                        *last = Lnode::from(left);
-                        self.num_leaves -= 1;
-                        self.children.remove(last_idx - 1);
-                        self.children.len() < Self::min_children()
-                    }
+                    *last = Lnode::from(left);
+                    self.num_leaves -= 1;
+                    self.children.remove(last_idx - 1);
                 }
             },
 
@@ -315,6 +302,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 unsafe { std::hint::unreachable_unchecked() }
             },
         }
+
+        self.has_enough_children()
     }
 
     #[inline]

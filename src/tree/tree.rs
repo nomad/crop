@@ -206,116 +206,6 @@ mod from_treeslice {
 
     use super::*;
 
-    // TODO: don't give up that easily when `should_rebalance` is true. Most of
-    // the time you're gonna have another node to use to rebalance the two. In
-    // that case you can rebalance right away and return a None.
-    #[inline]
-    fn cut_start_rec<const N: usize, L: Leaf>(
-        node: &Arc<Node<N, L>>,
-        take_from: L::BaseMetric,
-        start_slice: &L::Slice,
-        start_summary: L::Summary,
-    ) -> (Arc<Node<N, L>>, bool) {
-        match &**node {
-            Node::Internal(inode) => {
-                let mut offset = L::BaseMetric::zero();
-
-                let mut i = Inode::empty();
-
-                let mut children = inode.children().iter();
-
-                let mut should_rebalance = false;
-
-                while let Some(child) = children.next() {
-                    let this = child.base_measure();
-
-                    if offset + this > take_from {
-                        let (first_child, rebalance) = cut_start_rec(
-                            child,
-                            take_from - offset,
-                            start_slice,
-                            start_summary,
-                        );
-
-                        should_rebalance |= rebalance;
-
-                        i.push(first_child);
-
-                        for child in children {
-                            i.push(Arc::clone(child));
-                        }
-
-                        break;
-                    } else {
-                        offset += this;
-                    }
-                }
-
-                should_rebalance |= !i.has_enough_children();
-                (Arc::new(Node::Internal(i)), should_rebalance)
-            },
-
-            Node::Leaf(_) => {
-                let leaf = start_slice.to_owned();
-                let lnode = Lnode::new(leaf, start_summary);
-                let should_rebalance = !lnode.is_big_enough();
-                (Arc::new(Node::Leaf(lnode)), should_rebalance)
-            },
-        }
-    }
-
-    #[inline]
-    fn cut_end_rec<const N: usize, L: Leaf>(
-        node: &Arc<Node<N, L>>,
-        take_up_to: L::BaseMetric,
-        end_slice: &L::Slice,
-        end_summary: L::Summary,
-    ) -> (Arc<Node<N, L>>, bool) {
-        match &**node {
-            Node::Internal(inode) => {
-                let mut offset = L::BaseMetric::zero();
-
-                let mut i = Inode::empty();
-
-                let mut children = inode.children().iter();
-
-                let mut should_rebalance = false;
-
-                while let Some(child) = children.next() {
-                    let this = child.base_measure();
-
-                    if offset + this >= take_up_to {
-                        let (last_child, rebalance) = cut_end_rec(
-                            child,
-                            take_up_to - offset,
-                            end_slice,
-                            end_summary,
-                        );
-
-                        should_rebalance |= rebalance;
-
-                        i.push(last_child);
-
-                        break;
-                    } else {
-                        i.push(Arc::clone(child));
-                        offset += this;
-                    }
-                }
-
-                should_rebalance |= !i.has_enough_children();
-                (Arc::new(Node::Internal(i)), should_rebalance)
-            },
-
-            Node::Leaf(_) => {
-                let leaf = end_slice.to_owned();
-                let should_rebalance = !leaf.is_big_enough(&end_summary);
-                let lnode = Lnode::new(leaf, end_summary);
-                (Arc::new(Node::Leaf(lnode)), should_rebalance)
-            },
-        }
-    }
-
     /// This is the only public function this module exports and it converts a
     /// `TreeSlice` into the root of an equivalent `Tree`.
     ///
@@ -326,12 +216,17 @@ mod from_treeslice {
     /// internal node is less than 2.
     #[inline]
     pub(super) fn into_tree_root<'a, const N: usize, L: Leaf>(
-        tree_slice: TreeSlice<'a, N, L>,
+        slice: TreeSlice<'a, N, L>,
     ) -> Arc<Node<N, L>> {
-        let (root, balance_left, balance_right) =
-            remove_before_and_after(tree_slice);
+        // println!("{slice:#?}");
+
+        let (root, invalid_start, invalid_end) = tree_slice_cut(slice);
 
         let mut root = Arc::new(Node::Internal(root));
+
+        // println!("START: {root:#?}");
+        // println!("INVALID START: {invalid_start}");
+        // println!("INVALID END: {invalid_end}");
 
         {
             // TODO: use `Arc::get_mut_unchecked` once it's stable.
@@ -347,7 +242,7 @@ mod from_treeslice {
                     .as_mut_internal_unchecked()
             };
 
-            if balance_left {
+            if invalid_start > 0 {
                 balance_left_side(inode);
                 pull_up_singular(&mut root);
             }
@@ -368,85 +263,238 @@ mod from_treeslice {
                     .as_mut_internal_unchecked()
             };
 
-            if balance_right {
+            if invalid_end > 0 {
                 balance_right_side(inode);
                 pull_up_singular(&mut root);
             }
         }
+
+        // println!("FINAL ROOT: {root:#?}");
 
         root
     }
 
     /// TODO: docs
     #[inline]
-    fn remove_before_and_after<'a, const N: usize, L: Leaf>(
-        slice: TreeSlice<'a, N, L>,
-    ) -> (Inode<N, L>, bool, bool) {
-        let mut inode = Inode::empty();
+    fn tree_slice_cut<const N: usize, L: Leaf>(
+        slice: TreeSlice<'_, N, L>,
+    ) -> (Inode<N, L>, usize, usize) {
+        debug_assert!(slice.leaf_count() > 2);
 
-        let mut measured = L::BaseMetric::zero();
+        let mut root = Inode::empty();
+        let mut invalid_nodes_start = 0;
+        let mut invalid_nodes_end = 0;
 
-        let mut found_start = false;
+        let mut offset = L::BaseMetric::zero();
 
-        let start = slice.before;
+        let mut children = {
+            // Safety: the slice's leaf count is > 1 so its root has to be an
+            // internal node.
+            let root = unsafe { slice.root().as_internal_unchecked() };
+            root.children().iter()
+        };
 
-        let end = start + slice.base_measure();
+        while let Some(child) = children.next() {
+            let this = child.base_measure();
 
-        // Safety: if the TreeSlice's root was a leaf it would only have had a
-        // single leaf, but this function can only be called if the TreeSlice
-        // spans 3+ leaves.
-        let root = unsafe { slice.root.as_internal_unchecked() };
-
-        let mut balance_left = true;
-
-        let mut balance_right = true;
-
-        for node in root.children() {
-            let this = node.base_measure();
-
-            if !found_start {
-                if measured + this > start {
-                    if start > L::BaseMetric::zero() {
-                        let (first, balance) = cut_start_rec(
-                            node,
-                            start - measured,
-                            slice.start_slice,
-                            slice.start_summary.clone(),
-                        );
-                        inode.push(first);
-                        balance_left = balance;
-                    } else {
-                        inode.push(Arc::clone(node));
-                        balance_left = false;
-                    }
-                    found_start = true;
-                }
-                measured += this;
-            } else if measured + this >= end {
-                if end < slice.root().base_measure() {
-                    let (last, balance) = cut_end_rec(
-                        node,
-                        end - measured,
-                        slice.end_slice,
-                        slice.end_summary.clone(),
-                    );
-                    inode.push(last);
-                    balance_right = balance;
+            if offset + this > slice.before {
+                if slice.before == L::BaseMetric::zero() {
+                    root.push(Arc::clone(child));
                 } else {
-                    inode.push(Arc::clone(node));
-                    balance_right = false;
+                    let (first, _) = cut_start_rec(
+                        child,
+                        slice.before - offset,
+                        slice.start_slice,
+                        slice.start_summary.clone(),
+                        &mut invalid_nodes_start,
+                    );
+
+                    root.push(first);
                 }
+
+                offset += this;
                 break;
             } else {
-                inode.push(Arc::clone(node));
-                measured += this;
+                offset += this;
             }
         }
 
-        // println!("should balance start: {balance_left}");
-        // println!("should balance end: {balance_right}");
+        let end = slice.before + slice.base_measure();
 
-        (inode, balance_left, balance_right)
+        while let Some(child) = children.next() {
+            let this = child.base_measure();
+
+            if offset + this >= end {
+                if end == slice.root().base_measure() {
+                    root.push(Arc::clone(child));
+                } else {
+                    let (last, _) = cut_end_rec(
+                        child,
+                        end - offset,
+                        slice.end_slice,
+                        slice.end_summary.clone(),
+                        &mut invalid_nodes_end,
+                    );
+
+                    root.push(last);
+                }
+
+                break;
+            } else {
+                root.push(Arc::clone(child));
+                offset += this;
+            }
+        }
+
+        // println!("start has {invalid_nodes_start} invalid nodes");
+        // println!("end has {invalid_nodes_end} invalid nodes");
+
+        (root, invalid_nodes_start, invalid_nodes_end)
+    }
+
+    // TODO: don't give up that easily when `should_rebalance` is true. Most of
+    // the time you're gonna have another node to use to rebalance the two. In
+    // that case you can rebalance right away and return a None.
+    #[inline]
+    fn cut_start_rec<const N: usize, L: Leaf>(
+        node: &Arc<Node<N, L>>,
+        take_from: L::BaseMetric,
+        start_slice: &L::Slice,
+        start_summary: L::Summary,
+        invalid_nodes: &mut usize,
+    ) -> (Arc<Node<N, L>>, bool) {
+        match &**node {
+            Node::Internal(inode) => {
+                let mut i = Inode::empty();
+
+                let mut offset = L::BaseMetric::zero();
+
+                let mut children = inode.children().iter();
+
+                while let Some(child) = children.next() {
+                    let this = child.base_measure();
+
+                    if offset + this > take_from {
+                        let (first_child, first_not_valid) = cut_start_rec(
+                            child,
+                            take_from - offset,
+                            start_slice,
+                            start_summary,
+                            invalid_nodes,
+                        );
+
+                        i.push(first_child);
+
+                        for child in children {
+                            i.push(Arc::clone(child));
+                        }
+
+                        let this_not_valid = if first_not_valid {
+                            if i.children().len() >= 2 {
+                                *invalid_nodes -= 1;
+                                i.balance_first_child_with_second()
+                            } else {
+                                true
+                            }
+                        } else {
+                            !i.has_enough_children()
+                        };
+
+                        if this_not_valid {
+                            *invalid_nodes += 1;
+                        }
+
+                        return (Arc::new(Node::Internal(i)), this_not_valid);
+                    } else {
+                        offset += this;
+                    }
+                }
+
+                unreachable!();
+            },
+
+            Node::Leaf(_) => {
+                let leaf = start_slice.to_owned();
+                let lnode = Lnode::new(leaf, start_summary);
+                let this_not_valid = !lnode.is_big_enough();
+
+                if this_not_valid {
+                    *invalid_nodes += 1;
+                }
+
+                (Arc::new(Node::Leaf(lnode)), this_not_valid)
+            },
+        }
+    }
+
+    #[inline]
+    fn cut_end_rec<const N: usize, L: Leaf>(
+        node: &Arc<Node<N, L>>,
+        take_up_to: L::BaseMetric,
+        end_slice: &L::Slice,
+        end_summary: L::Summary,
+        invalid_nodes: &mut usize,
+    ) -> (Arc<Node<N, L>>, bool) {
+        // println!("cutting up to {take_up_to:?} of {node:#?}");
+        // println!("");
+
+        match &**node {
+            Node::Internal(inode) => {
+                let mut i = Inode::empty();
+
+                let mut offset = L::BaseMetric::zero();
+
+                for child in inode.children() {
+                    let this = child.base_measure();
+
+                    if offset + this >= take_up_to {
+                        let (last_child, last_not_valid) = cut_end_rec(
+                            child,
+                            take_up_to - offset,
+                            end_slice,
+                            end_summary,
+                            invalid_nodes,
+                        );
+
+                        i.push(last_child);
+
+                        let this_not_valid = if last_not_valid {
+                            if i.children().len() >= 2 {
+                                *invalid_nodes -= 1;
+                                i.balance_last_child_with_penultimate()
+                            } else {
+                                true
+                            }
+                        } else {
+                            !i.has_enough_children()
+                        };
+
+                        if this_not_valid {
+                            *invalid_nodes += 1;
+                        }
+
+                        return (Arc::new(Node::Internal(i)), this_not_valid);
+                    } else {
+                        i.push(Arc::clone(child));
+                        offset += this;
+                    }
+                }
+
+                unreachable!();
+            },
+
+            Node::Leaf(_) => {
+                let leaf = end_slice.to_owned();
+                let lnode = Lnode::new(leaf, end_summary);
+                let this_not_valid = !lnode.is_big_enough();
+
+                if this_not_valid {
+                    *invalid_nodes = 1;
+                }
+
+                (Arc::new(Node::Leaf(lnode)), this_not_valid)
+            },
+        }
     }
 
     #[inline]
