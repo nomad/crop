@@ -27,11 +27,8 @@ pub struct Units<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
     /// Iterates over the `M`-units from back to front.
     backward: UnitsBackward<'a, FANOUT, L, M>,
 
-    /// The base measure of all the `TreeSlice`s yielded so far.
-    yielded: L::BaseMetric,
-
-    /// The base measure of all the `TreeSlice`s this iterator will yield.
-    total: L::BaseMetric,
+    /// The base measure of all the `TreeSlice`s which are yet to be yielded.
+    remaining: L::BaseMetric,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
@@ -44,8 +41,7 @@ where
         Self {
             forward: UnitsForward::new(tree.root(), None),
             backward: UnitsBackward::new(tree.root(), None),
-            yielded: L::BaseMetric::zero(),
-            total: tree.base_measure(),
+            remaining: tree.base_measure(),
         }
     }
 }
@@ -70,8 +66,7 @@ where
         Self {
             forward: UnitsForward::new(tree_slice.root(), Some(opts)),
             backward: UnitsBackward::new(tree_slice.root(), Some(opts)),
-            yielded: L::BaseMetric::zero(),
-            total: tree_slice.base_measure(),
+            remaining: tree_slice.base_measure(),
         }
     }
 }
@@ -83,11 +78,11 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.yielded == self.total {
+        if self.remaining == L::BaseMetric::zero() {
             None
         } else {
             let tree_slice = self.forward.next()?;
-            self.yielded += tree_slice.base_measure();
+            self.remaining -= tree_slice.base_measure();
             Some(tree_slice)
         }
     }
@@ -98,11 +93,11 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> DoubleEndedIterator
 {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.yielded == self.total {
+        if self.remaining == L::BaseMetric::zero() {
             None
         } else {
             let tree_slice = self.backward.previous()?;
-            self.yielded += tree_slice.base_measure();
+            self.remaining -= tree_slice.base_measure();
             Some(tree_slice)
         }
     }
@@ -138,8 +133,7 @@ struct UnitsForward<'a, const N: usize, L: Leaf, M: Metric<L>> {
     start_summary: L::Summary,
 
     /// The first slice in the yielding range and its summary. It's only set if
-    /// we're iterating over a `TreeSlice`. If it's set it will be `.take()`n
-    /// when initializing.
+    /// we're iterating over a `TreeSlice`.
     first_slice: Option<(&'a L::Slice, &'a L::Summary)>,
 
     /// The last slice in the yielding range and its summary. It's only set if
@@ -158,16 +152,8 @@ struct UnitsForward<'a, const N: usize, L: Leaf, M: Metric<L>> {
     /// base_total)` in the root.
     base_total: L::BaseMetric,
 
-    /// How many `M`-units have been yielded so far. It gets increased (usually
-    /// by `M::one()` unless we're calling [`remainder`][1]), every time
-    /// [`next`][2] gets called.
-    ///
-    /// [1]: Self::remainder()
-    /// [2]: Self::next()
-    units_yielded: M,
-
-    /// The total number of `M`-units contained in the yielding range.
-    units_total: M,
+    /// The `M`-units which are yet to be yielded.
+    units_remaining: M,
 }
 
 impl<'a, const N: usize, L: Leaf, M: Metric<L>> Clone
@@ -217,24 +203,25 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
     where
         for<'d> &'d L::Slice: Default,
     {
-        let (base_offset, base_total, units_total, first_slice, last_slice) =
-            match opts {
-                Some((base_offset, base_total, units_total, start, end)) => (
-                    base_offset,
-                    base_total,
-                    units_total,
-                    Some(start),
-                    Some(end),
-                ),
+        let (
+            base_offset,
+            base_total,
+            units_remaining,
+            first_slice,
+            last_slice,
+        ) = match opts {
+            Some((base_offset, base_total, units_total, start, end)) => {
+                (base_offset, base_total, units_total, Some(start), Some(end))
+            },
 
-                None => (
-                    L::BaseMetric::zero(),
-                    root.base_measure(),
-                    root.measure::<M>(),
-                    None,
-                    None,
-                ),
-            };
+            None => (
+                L::BaseMetric::zero(),
+                root.base_measure(),
+                root.measure::<M>(),
+                None,
+                None,
+            ),
+        };
 
         Self {
             is_initialized: false,
@@ -248,8 +235,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
             base_offset,
             base_total,
             base_yielded: L::BaseMetric::zero(),
-            units_total,
-            units_yielded: M::zero(),
+            units_remaining,
         }
     }
 
@@ -366,7 +352,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
     #[inline]
     fn next_unit_in_leaf(&mut self) -> TreeSlice<'a, N, L> {
         debug_assert!(M::measure(&self.start_summary) > M::zero());
-        debug_assert!(self.units_yielded < self.units_total);
+        debug_assert!(self.units_remaining > M::zero());
 
         let (left_slice, left_summary, right_slice, right_summary) =
             M::split(self.start_slice, M::one(), &self.start_summary);
@@ -378,7 +364,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         self.start_summary = right_summary;
 
         self.base_yielded += L::BaseMetric::measure(&left_summary);
-        self.units_yielded += M::one();
+        self.units_remaining -= M::one();
 
         TreeSlice {
             root: self.leaf_node,
@@ -423,7 +409,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         &mut self,
     ) -> (&'a Lnode<L>, &'a Arc<Node<N, L>>, L::BaseMetric, L::Summary, usize)
     {
-        debug_assert!(self.units_yielded < self.units_total);
+        debug_assert!(self.units_remaining > M::zero());
 
         let mut before = L::BaseMetric::zero();
         let mut summary = L::Summary::default();
@@ -504,7 +490,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
     #[inline]
     fn next_unit_in_range(&mut self) -> TreeSlice<'a, N, L> {
         debug_assert_eq!(M::measure(&self.start_summary), M::zero());
-        debug_assert!(self.units_yielded < self.units_total);
+        debug_assert!(self.units_remaining > M::zero());
 
         // A previous call to `next_unit_in_leaf` might've left the start slice
         // empty.
@@ -547,7 +533,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         summary += &left_summary;
 
         self.base_yielded += L::BaseMetric::measure(&summary);
-        self.units_yielded += M::one();
+        self.units_remaining -= M::one();
 
         let before = before + self.yielded_in_leaf;
 
@@ -722,7 +708,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
     /// 1:1 to this.
     #[inline]
     fn remainder(&mut self) -> TreeSlice<'a, N, L> {
-        debug_assert_eq!(self.units_yielded, self.units_total);
+        debug_assert_eq!(self.units_remaining, M::zero());
         debug_assert!(self.base_yielded < self.base_total);
 
         if L::BaseMetric::measure(&self.start_summary) == L::BaseMetric::zero()
@@ -794,7 +780,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
 
         if M::measure(&self.start_summary) > M::zero() {
             Some(self.next_unit_in_leaf())
-        } else if self.units_yielded < self.units_total {
+        } else if self.units_remaining > M::zero() {
             Some(self.next_unit_in_range())
         } else if self.base_yielded < self.base_total {
             Some(self.remainder())

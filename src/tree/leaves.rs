@@ -2,22 +2,22 @@ use std::sync::Arc;
 
 use crate::tree::{Inode, Leaf, Metric, Node, Tree, TreeSlice};
 
-/// An iterator over the leaves of trees or tree slices.
-///
-/// This iterator is created via the `leaves` method on
-/// [`Tree`](super::Tree::leaves) and [`TreeSlice`](super::TreeSlice::leaves).
+/// An iterator over the leaves of `Tree`s and `TreeSlice`s.
 pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
-    /// TODO: docs
+    /*
+      Just like the `Units` iterator, this iterator is also implemented using
+      two independent iterators advancing in opposite directions.
+    */
+    #[rustfmt::skip]
+
+    /// Iterates over the leaves from front to back.
     forward: LeavesForward<'a, FANOUT, L>,
 
-    /// TODO: docs
+    /// Iterates over the leaves from back to front.
     backward: LeavesBackward<'a, FANOUT, L>,
 
-    /// TODO: docs.
-    yielded: usize,
-
-    /// TODO: docs.
-    total: usize,
+    /// The number of leaves which are yet to be yielded.
+    leaves_remaining: usize,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> Clone for Leaves<'a, FANOUT, L> {
@@ -39,8 +39,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
         Self {
             forward: LeavesForward::from(tree),
             backward: LeavesBackward::from(tree),
-            yielded: 0,
-            total: tree.root.num_leaves(),
+            leaves_remaining: tree.root.num_leaves(),
         }
     }
 }
@@ -53,8 +52,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
         Self {
             forward: LeavesForward::from(slice),
             backward: LeavesBackward::from(slice),
-            yielded: 0,
-            total: slice.leaf_count(),
+            leaves_remaining: slice.leaf_count(),
         }
     }
 }
@@ -64,17 +62,17 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.yielded == self.total {
+        if self.leaves_remaining == 0 {
             None
         } else {
-            self.yielded += 1;
+            self.leaves_remaining -= 1;
             self.forward.next()
         }
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let exact = self.total - self.yielded;
+        let exact = self.len();
         (exact, Some(exact))
     }
 }
@@ -84,10 +82,10 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
 {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.yielded == self.total {
+        if self.leaves_remaining == 0 {
             None
         } else {
-            self.yielded += 1;
+            self.leaves_remaining -= 1;
             self.backward.previous()
         }
     }
@@ -98,7 +96,7 @@ impl<'a, const FANOUT: usize, L: Leaf> ExactSizeIterator
 {
     #[inline]
     fn len(&self) -> usize {
-        self.total - self.yielded
+        self.leaves_remaining
     }
 }
 
@@ -108,22 +106,16 @@ impl<'a, const FANOUT: usize, L: Leaf> std::iter::FusedIterator
 }
 
 struct LeavesForward<'a, const N: usize, L: Leaf> {
-    /// TODO: docs
+    /// Whether `Self` has been initialized by calling
+    /// [`initialize`](LeavesForward::initialize).
     is_initialized: bool,
 
-    /// TODO: docs
-    base_offset: L::BaseMetric,
-
-    /// TODO: docs
-    first_slice: Option<(&'a L::Slice, &'a L::Summary)>,
-
-    /// TODO: docs
-    last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
-
-    /// TODO: docs
+    /// The root of the `Tree` or `TreeSlice` we're iterating over.
     root: &'a Node<N, L>,
 
-    /// TODO: docs
+    /// The path from the root down to (but not including) the internal node
+    /// containing `leaves`. It follows that the depth of the last node (if
+    /// there is one) is 2.
     path: Vec<(&'a Inode<N, L>, usize)>,
 
     /// TODO: docs
@@ -131,6 +123,17 @@ struct LeavesForward<'a, const N: usize, L: Leaf> {
 
     /// TODO: docs
     next_leaf_idx: usize,
+
+    /// The first slice in the yielding range and its summary. It's only set if
+    /// we're iterating over a `TreeSlice`.
+    first_slice: Option<(&'a L::Slice, &'a L::Summary)>,
+
+    /// The last slice in the yielding range and its summary. It's only set if
+    /// we're iterating over a `TreeSlice`.
+    last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
+
+    /// TODO: docs
+    base_offset: L::BaseMetric,
 
     /// TODO: docs
     whole_yielded: usize,
