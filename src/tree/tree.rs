@@ -212,7 +212,9 @@ mod from_treeslice {
     pub(super) fn into_tree_root<'a, const N: usize, L: Leaf>(
         slice: TreeSlice<'a, N, L>,
     ) -> Arc<Node<N, L>> {
-        let (root, invalid_start, invalid_end) = tree_slice_cut(slice);
+        debug_assert!(slice.leaf_count() > 2);
+
+        let (root, invalid_start, invalid_end) = cut_tree_slice(slice);
 
         let mut root = Arc::new(Node::Internal(root));
 
@@ -230,7 +232,8 @@ mod from_treeslice {
                     .as_mut_internal_unchecked()
             };
 
-            balance_left_side(inode);
+            balance_first_rec(inode);
+
             pull_up_singular(&mut root);
         }
 
@@ -249,7 +252,8 @@ mod from_treeslice {
                     .as_mut_internal_unchecked()
             };
 
-            balance_right_side(inode);
+            balance_last_rec(inode);
+
             pull_up_singular(&mut root);
         }
 
@@ -258,7 +262,7 @@ mod from_treeslice {
 
     /// TODO: docs
     #[inline]
-    fn tree_slice_cut<const N: usize, L: Leaf>(
+    fn cut_tree_slice<const N: usize, L: Leaf>(
         slice: TreeSlice<'_, N, L>,
     ) -> (Inode<N, L>, usize, usize) {
         debug_assert!(slice.leaf_count() > 2);
@@ -283,7 +287,7 @@ mod from_treeslice {
                 if slice.before == L::BaseMetric::zero() {
                     root.push(Arc::clone(child));
                 } else {
-                    let first = cut_start_rec(
+                    let first = cut_first_rec(
                         child,
                         slice.before - offset,
                         slice.start_slice,
@@ -310,7 +314,7 @@ mod from_treeslice {
                 if end == slice.root().base_measure() {
                     root.push(Arc::clone(child));
                 } else {
-                    let last = cut_end_rec(
+                    let last = cut_last_rec(
                         child,
                         end - offset,
                         slice.end_slice,
@@ -331,8 +335,9 @@ mod from_treeslice {
         (root, invalid_nodes_start, invalid_nodes_end)
     }
 
+    // TODO: docs
     #[inline]
-    fn cut_start_rec<const N: usize, L: Leaf>(
+    fn cut_first_rec<const N: usize, L: Leaf>(
         node: &Arc<Node<N, L>>,
         take_from: L::BaseMetric,
         start_slice: &L::Slice,
@@ -351,7 +356,7 @@ mod from_treeslice {
                     let this = child.base_measure();
 
                     if offset + this > take_from {
-                        let first = cut_start_rec(
+                        let first = cut_first_rec(
                             child,
                             take_from - offset,
                             start_slice,
@@ -397,8 +402,9 @@ mod from_treeslice {
         }
     }
 
+    // TODO: docs
     #[inline]
-    fn cut_end_rec<const N: usize, L: Leaf>(
+    fn cut_last_rec<const N: usize, L: Leaf>(
         node: &Arc<Node<N, L>>,
         take_up_to: L::BaseMetric,
         end_slice: &L::Slice,
@@ -415,7 +421,7 @@ mod from_treeslice {
                     let this = child.base_measure();
 
                     if offset + this >= take_up_to {
-                        let last = cut_end_rec(
+                        let last = cut_last_rec(
                             child,
                             take_up_to - offset,
                             end_slice,
@@ -458,87 +464,39 @@ mod from_treeslice {
         }
     }
 
+    // TODO: docs
     #[inline]
-    fn balance_left_side<const N: usize, L: Leaf>(
-        inode: &mut Inode<N, L>,
-    ) -> bool {
+    fn balance_first_rec<const N: usize, L: Leaf>(inode: &mut Inode<N, L>) {
         inode.balance_first_child_with_second();
 
-        let mut parent_should_rebalance = !inode.has_enough_children();
-
-        if let Node::Internal(first_child) =
-            Arc::get_mut(inode.first_mut()).unwrap()
+        if let Node::Internal(first) = Arc::get_mut(inode.first_mut()).unwrap()
         {
-            let this_should_rebalance = balance_left_side(first_child);
+            balance_first_rec(first);
 
-            if this_should_rebalance {
-                // NOTE: It's possible that after rebalancing, this inode was
-                // left with only 1 child. When this is the case all of this
-                // inode's parents will also have a single child, and the root
-                // will be fixed by calling `pull_up_singular`.
-                if inode.children().len() == 1 {
-                    return false;
-                }
-
-                // NOTE: if the first call to `merge_distribute_first_second`
-                // returned `true` it means the first and second children of
-                // this inode were rebalanced, leaving the first child with at
-                // least `Inode::min_children + 1` children, so calling
-                // `balance_left_side` on the first child could not have
-                // returrned `true`.
-                //
-                // Since it did, it must mean `parent_should_rebalance` was
-                // false, which means we can use a simple `=` assignment
-                // instead of `|=`.
-                debug_assert!(!parent_should_rebalance);
-
+            if !first.has_enough_children() && inode.children().len() > 1 {
                 inode.balance_first_child_with_second();
-
-                parent_should_rebalance = !inode.has_enough_children();
             }
         }
-
-        parent_should_rebalance
     }
 
+    // TODO: docs
     #[inline]
-    fn balance_right_side<const N: usize, L: Leaf>(
-        inode: &mut Inode<N, L>,
-    ) -> bool {
+    fn balance_last_rec<const N: usize, L: Leaf>(inode: &mut Inode<N, L>) {
         inode.balance_last_child_with_penultimate();
 
-        let mut parent_should_rebalance = !inode.has_enough_children();
+        if let Node::Internal(last) = Arc::get_mut(inode.last_mut()).unwrap() {
+            balance_last_rec(last);
 
-        if let Node::Internal(last_child) =
-            Arc::get_mut(inode.last_mut()).unwrap()
-        {
-            let this_should_rebalance = balance_right_side(last_child);
-
-            if this_should_rebalance {
-                // NOTE: see comment in `balance_left_side`.
-                if inode.children().len() == 1 {
-                    return false;
-                }
-
-                // NOTE: see other comment in `balance_left_side`.
-                debug_assert!(!parent_should_rebalance);
-
+            if !last.has_enough_children() && inode.children().len() > 1 {
                 inode.balance_last_child_with_penultimate();
-
-                parent_should_rebalance = !inode.has_enough_children();
             }
         }
-
-        parent_should_rebalance
     }
 
+    // TODO: docs
     #[inline]
     fn pull_up_singular<const N: usize, L: Leaf>(root: &mut Arc<Node<N, L>>) {
         loop {
-            // NOTE: if an internal node has a single child, the `Arc`
-            // enclosing that node should have been created somewhere in this
-            // module, which means its reference count is 1, which means it's
-            // ok to unwrap after calling `get_mut`.
             if let Node::Internal(i) = Arc::get_mut(root).unwrap() {
                 if i.children().len() == 1 {
                     // Safety: i.children has exactly 1 child.
