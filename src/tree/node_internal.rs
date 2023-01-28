@@ -83,13 +83,20 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
     }
 
-    /// Rebalances the first child of this internal node with its second child.
+    /// Balances the first child using the contents of the second child,
+    /// possibly merging them together if necessary.
     ///
-    /// Note: the second child is assumed to exist, so the minimum number of
-    /// children has to be >= 2 (which means the fanout has to be >= 4);
+    /// NOTE: when the first and second children are leaves this inode's
+    /// [`leaf_count()`] may decrease by 1.
     ///
-    /// Note: when the first and second children are leaves the leaf count may
-    /// decrease by 1.
+    /// # Panics
+    ///
+    /// Panics if:
+    ///
+    /// - this inode has only one child (the second child is assumed to exist);
+    ///
+    /// - the `Arc` enclosing the first child has a strong counter > 1. This
+    /// function assumes that there are zero `Arc::clone`s of the first child.
     #[inline]
     pub(super) fn balance_first_child_with_second(&mut self) {
         debug_assert!(self.children().len() >= 2);
@@ -168,14 +175,21 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
     }
 
-    /// Rebalances the last child of this internal node with its penultimate
-    /// (i.e. second to last) child.
+    /// Balances the last child using the contents of the penultimate (i.e.
+    /// second to last) child, possibly merging them together if necessary.
     ///
-    /// Note: the penultimate child is assumed to exist, so the minimum number
-    /// of children has to be >= 2 (which means the fanout has to be >= 4).
+    /// NOTE: when the penultimate and last children are leaves this inode's
+    /// [`leaf_count()`] may decrease by 1.
     ///
-    /// Note: when the last and penultimate children are leaves the leaf count
-    /// may decrease by 1.
+    /// # Panics
+    ///
+    /// Panics if:
+    ///
+    /// - this inode has only one child (the penultimate child is assumed to
+    /// exist);
+    ///
+    /// - the `Arc` enclosing the last child has a strong counter > 1. This
+    /// function assumes that there are zero `Arc::clone`s of the last child.
     #[inline]
     pub(super) fn balance_last_child_with_penultimate(&mut self) {
         debug_assert!(self.children().len() >= 2);
