@@ -209,8 +209,8 @@ mod from_treeslice {
     /// Note: this function can panic if the minimum number of children for an
     /// internal node is less than 2.
     #[inline]
-    pub(super) fn into_tree_root<'a, const N: usize, L: Leaf>(
-        slice: TreeSlice<'a, N, L>,
+    pub(super) fn into_tree_root<const N: usize, L: Leaf>(
+        slice: TreeSlice<'_, N, L>,
     ) -> Arc<Node<N, L>> {
         debug_assert!(slice.leaf_count() > 2);
 
@@ -219,40 +219,36 @@ mod from_treeslice {
         let mut root = Arc::new(Node::Internal(root));
 
         if invalid_start > 0 {
-            // TODO: use `Arc::get_mut_unchecked` once it's stable.
-            //
-            // Safety (unwrap_unchecked): the `Arc` containing the root was
-            // just created so there are no other copies.
-            //
-            // Safety (as_mut_internal_unchecked): `root` was just enclosed in
-            // a `Node::Internal` variant.
-            let inode = unsafe {
-                Arc::get_mut(&mut root)
-                    .unwrap_unchecked()
-                    .as_mut_internal_unchecked()
-            };
+            {
+                // Safety : `root` was just enclosed in a `Node::Internal`
+                // variant.
+                let root = unsafe {
+                    Arc::get_mut(&mut root)
+                        .unwrap()
+                        .as_mut_internal_unchecked()
+                };
 
-            balance_first_rec(inode);
+                balance_first_rec(root);
+            }
 
             pull_up_singular(&mut root);
         }
 
         if invalid_end > 0 {
-            // TODO: use `Arc::get_mut_unchecked` once it's stable.
-            //
-            // Safety (unwrap_unchecked): see above.
-            //
-            // Safety (as_mut_internal_unchecked): for the root to become a
-            // leaf node after the previous call to `pull_up_singular` the
-            // TreeSlice would've had to span 2 leaves, and that case case
-            // should have already been handled before calling this function.
-            let inode = unsafe {
-                Arc::get_mut(&mut root)
-                    .unwrap_unchecked()
-                    .as_mut_internal_unchecked()
-            };
+            {
+                // Safety (as_mut_internal_unchecked): for the root to become a
+                // leaf node after the previous call to `pull_up_singular` the
+                // TreeSlice would've had to span 2 leaves, and that case case
+                // should have already been handled before calling this
+                // function.
+                let root = unsafe {
+                    Arc::get_mut(&mut root)
+                        .unwrap()
+                        .as_mut_internal_unchecked()
+                };
 
-            balance_last_rec(inode);
+                balance_last_rec(root);
+            }
 
             pull_up_singular(&mut root);
         }
