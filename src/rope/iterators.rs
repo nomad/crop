@@ -2,7 +2,7 @@ use super::metrics::LineMetric;
 use super::{Rope, RopeChunk, RopeSlice};
 use crate::tree::{Leaves, Units};
 
-/// TODO: docs
+/// An iterator over the chunks of `Rope`s and `RopeSlice`s.
 #[derive(Clone)]
 pub struct Chunks<'a> {
     leaves: Leaves<'a, { Rope::fanout() }, RopeChunk>,
@@ -19,11 +19,11 @@ impl<'a> From<&'a Rope> for Chunks<'a> {
     }
 }
 
-impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chunks<'a> {
+impl<'a> From<&'a RopeSlice<'a>> for Chunks<'a> {
     #[inline]
-    fn from(rope_slice: &'a RopeSlice<'b>) -> Self {
-        let mut leaves = rope_slice.tree_slice.leaves();
-        if rope_slice.byte_len() == 0 {
+    fn from(slice: &'a RopeSlice<'a>) -> Self {
+        let mut leaves = slice.tree_slice.leaves();
+        if slice.byte_len() == 0 {
             let _ = leaves.next();
         }
         Self { leaves }
@@ -46,7 +46,7 @@ impl<'a> Iterator for Chunks<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for Chunks<'a> {
+impl DoubleEndedIterator for Chunks<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         use std::ops::Deref;
@@ -54,38 +54,36 @@ impl<'a> DoubleEndedIterator for Chunks<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for Chunks<'a> {
+impl ExactSizeIterator for Chunks<'_> {
     #[inline]
     fn len(&self) -> usize {
         self.leaves.len()
     }
 }
 
-impl<'a> std::iter::FusedIterator for Chunks<'a> {}
+impl std::iter::FusedIterator for Chunks<'_> {}
 
-/// TODO: docs
+/// An iterator over the bytes of `Rope`s and `RopeSlice`s.
 #[derive(Clone)]
 pub struct Bytes<'a> {
-    /// TODO: docs
     chunks: Chunks<'a>,
 
-    /// TODO: docs
-    chunk_front: &'a [u8],
+    /// The chunk used when calling [`Bytes::next()`].
+    forward_chunk: &'a [u8],
 
-    /// TODO: docs
-    byte_idx_front: usize,
+    /// The number of bytes of [`forward_chunk`] that have already been
+    /// yielded.
+    forward_byte_idx: usize,
 
-    /// TODO: docs
-    chunk_back: &'a [u8],
+    /// The chunk used when calling [`Bytes::next_back()`].
+    backward_chunk: &'a [u8],
 
-    /// TODO: docs
-    byte_idx_back: usize,
+    /// The number of bytes of [`backward_chunk`] which are yet to be yielded.
+    backward_byte_idx: usize,
 
-    /// TODO: docs
-    yielded: usize,
-
-    /// TODO: docs
-    total: usize,
+    /// The number of bytes which are yet to be yielded. We keep track of this
+    /// to implement [`ExactSizeIterator`].
+    bytes_remaining: usize,
 }
 
 impl<'a> From<&'a Rope> for Bytes<'a> {
@@ -93,125 +91,128 @@ impl<'a> From<&'a Rope> for Bytes<'a> {
     fn from(rope: &'a Rope) -> Self {
         Self {
             chunks: rope.chunks(),
-            chunk_front: &[],
-            byte_idx_front: 0,
-            chunk_back: &[],
-            byte_idx_back: 0,
-            yielded: 0,
-            total: rope.byte_len(),
+            forward_chunk: &[],
+            forward_byte_idx: 0,
+            backward_chunk: &[],
+            backward_byte_idx: 0,
+            bytes_remaining: rope.byte_len(),
         }
     }
 }
 
-impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Bytes<'a> {
+impl<'a> From<&'a RopeSlice<'a>> for Bytes<'a> {
     #[inline]
-    fn from(slice: &'a RopeSlice<'b>) -> Self {
+    fn from(slice: &'a RopeSlice<'a>) -> Self {
         Self {
             chunks: slice.chunks(),
-            chunk_front: &[],
-            byte_idx_front: 0,
-            chunk_back: &[],
-            byte_idx_back: 0,
-            yielded: 0,
-            total: slice.byte_len(),
+            forward_chunk: &[],
+            forward_byte_idx: 0,
+            backward_chunk: &[],
+            backward_byte_idx: 0,
+            bytes_remaining: slice.byte_len(),
         }
     }
 }
 
-impl<'a> Iterator for Bytes<'a> {
+impl Iterator for Bytes<'_> {
     type Item = u8;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.byte_idx_front == self.chunk_front.len() {
+        if self.forward_byte_idx == self.forward_chunk.len() {
             // We've exhausted the current chunk.
             if let Some(chunk) = self.chunks.next() {
-                self.chunk_front = chunk.as_bytes();
-                self.byte_idx_front = 0;
+                self.forward_chunk = chunk.as_bytes();
+                self.forward_byte_idx = 0;
             } else {
                 // There are no more chunks but there may still be some
                 // un-yielded bytes on the backward chunk.
-                if self.byte_idx_back == 0 {
+                if self.backward_byte_idx == 0 {
                     return None;
                 } else {
                     // We return the first byte of the backward chunk, remove
                     // that byte from the chunk and update the backward byte
                     // index.
-                    let byte = self.chunk_back[0];
-                    self.chunk_back = &self.chunk_back[1..];
-                    self.byte_idx_back -= 1;
-                    self.yielded += 1;
+                    let byte = self.backward_chunk[0];
+                    self.backward_chunk = &self.backward_chunk[1..];
+                    self.backward_byte_idx -= 1;
+                    self.bytes_remaining -= 1;
                     return Some(byte);
                 }
             }
         }
 
-        let byte = self.chunk_front[self.byte_idx_front];
-        self.byte_idx_front += 1;
-        self.yielded += 1;
+        let byte = self.forward_chunk[self.forward_byte_idx];
+        self.forward_byte_idx += 1;
+        self.bytes_remaining -= 1;
         Some(byte)
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let exact = self.total - self.yielded;
+        let exact = self.len();
         (exact, Some(exact))
     }
 }
 
-impl<'a> DoubleEndedIterator for Bytes<'a> {
+impl DoubleEndedIterator for Bytes<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.byte_idx_back == 0 {
+        if self.backward_byte_idx == 0 {
             // We've exhausted the current chunk.
             if let Some(chunk) = self.chunks.next_back() {
-                self.chunk_back = chunk.as_bytes();
-                self.byte_idx_back = chunk.len();
+                self.backward_chunk = chunk.as_bytes();
+                self.backward_byte_idx = chunk.len();
             } else {
                 // There are no more chunks but there may still be some
                 // un-yielded bytes on the forward chunk.
-                if self.byte_idx_front == self.chunk_front.len() {
+                if self.forward_byte_idx == self.forward_chunk.len() {
                     return None;
                 } else {
                     // We return the last byte of the forward chunk and remove
                     // that byte from the chunk.
-                    let byte_idx = self.chunk_front.len() - 1;
-                    let byte = self.chunk_front[byte_idx];
-                    self.chunk_front = &self.chunk_front[..byte_idx];
-                    self.yielded += 1;
+                    let byte_idx = self.forward_chunk.len() - 1;
+                    let byte = self.forward_chunk[byte_idx];
+                    self.forward_chunk = &self.forward_chunk[..byte_idx];
+                    self.bytes_remaining += 1;
                     return Some(byte);
                 }
             }
         }
 
-        self.byte_idx_back -= 1;
-        let byte = self.chunk_back[self.byte_idx_back];
-        self.yielded += 1;
+        self.backward_byte_idx -= 1;
+        let byte = self.backward_chunk[self.backward_byte_idx];
+        self.bytes_remaining += 1;
         Some(byte)
     }
 }
 
-impl<'a> ExactSizeIterator for Bytes<'a> {}
+impl ExactSizeIterator for Bytes<'_> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.bytes_remaining
+    }
+}
 
-impl<'a> std::iter::FusedIterator for Bytes<'a> {}
+impl std::iter::FusedIterator for Bytes<'_> {}
 
-/// TODO: docs
+/// An iterator over the [`char`]s of `Rope`s and `RopeSlice`s.
 #[derive(Clone)]
 pub struct Chars<'a> {
-    /// TODO: docs
     chunks: Chunks<'a>,
 
-    /// TODO: docs
-    chunk_front: &'a str,
+    /// The chunk used when calling [`Chars::next()`].
+    forward_chunk: &'a str,
 
-    /// TODO: docs
-    byte_idx_front: usize,
+    /// The number of bytes of [`forward_chunk`] that have already been
+    /// yielded.
+    forward_byte_idx: usize,
 
-    /// TODO: docs
-    chunk_back: &'a str,
+    /// The chunk used when calling [`Chars::next_back()`].
+    backward_chunk: &'a str,
 
-    /// TODO: docs
-    byte_idx_back: usize,
+    /// The number of bytes of [`backward_chunk`] which are yet to be yielded.
+    backward_byte_idx: usize,
 }
 
 impl<'a> From<&'a Rope> for Chars<'a> {
@@ -219,23 +220,23 @@ impl<'a> From<&'a Rope> for Chars<'a> {
     fn from(rope: &'a Rope) -> Self {
         Self {
             chunks: rope.chunks(),
-            chunk_front: "",
-            byte_idx_front: 0,
-            chunk_back: "",
-            byte_idx_back: 0,
+            forward_chunk: "",
+            forward_byte_idx: 0,
+            backward_chunk: "",
+            backward_byte_idx: 0,
         }
     }
 }
 
-impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Chars<'a> {
+impl<'a> From<&'a RopeSlice<'a>> for Chars<'a> {
     #[inline]
-    fn from(slice: &'a RopeSlice<'b>) -> Self {
+    fn from(slice: &'a RopeSlice<'a>) -> Self {
         Self {
             chunks: slice.chunks(),
-            chunk_front: "",
-            byte_idx_front: 0,
-            chunk_back: "",
-            byte_idx_back: 0,
+            forward_chunk: "",
+            forward_byte_idx: 0,
+            backward_chunk: "",
+            backward_byte_idx: 0,
         }
     }
 }
@@ -245,40 +246,40 @@ impl<'a> Iterator for Chars<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.byte_idx_front == self.chunk_front.len() {
+        if self.forward_byte_idx == self.forward_chunk.len() {
             if let Some(chunk) = self.chunks.next() {
-                self.chunk_front = chunk;
-                self.byte_idx_front = 0;
+                self.forward_chunk = chunk;
+                self.forward_byte_idx = 0;
             } else {
                 // Note: see `Bytes::next` for some relevant comments.
-                if self.byte_idx_back == 0 {
+                if self.backward_byte_idx == 0 {
                     return None;
                 } else {
-                    let ch = self.chunk_back.chars().next();
+                    let ch = self.backward_chunk.chars().next();
 
                     debug_assert!(ch.is_some());
 
-                    // Safety: `byte_idx_back` is greater than zero so there
+                    // Safety: `backward_byte_idx` is greater than zero so there
                     // are still chars to yield in that chunk.
                     let ch = unsafe { ch.unwrap_unchecked() };
 
                     let len = ch.len_utf8();
-                    self.chunk_back = &self.chunk_back[len..];
-                    self.byte_idx_back -= len;
+                    self.backward_chunk = &self.backward_chunk[len..];
+                    self.backward_byte_idx -= len;
                     return Some(ch);
                 }
             }
         }
 
-        let ch = self.chunk_front[self.byte_idx_front..].chars().next();
+        let ch = self.forward_chunk[self.forward_byte_idx..].chars().next();
 
         debug_assert!(ch.is_some());
 
-        // Safety: `byte_idx_front` is less than the byte length of
+        // Safety: `forward_byte_idx` is less than the byte length of
         // `chunk_front`, so there are still chars to yield in this chunk.
         let ch = unsafe { ch.unwrap_unchecked() };
 
-        self.byte_idx_front += ch.len_utf8();
+        self.forward_byte_idx += ch.len_utf8();
 
         Some(ch)
     }
@@ -287,41 +288,42 @@ impl<'a> Iterator for Chars<'a> {
 impl<'a> DoubleEndedIterator for Chars<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.byte_idx_back == 0 {
+        if self.backward_byte_idx == 0 {
             if let Some(chunk) = self.chunks.next_back() {
-                self.chunk_back = chunk;
-                self.byte_idx_back = self.chunk_back.len();
+                self.backward_chunk = chunk;
+                self.backward_byte_idx = self.backward_chunk.len();
             } else {
                 // Note: see `Bytes::next_back` for some relevant comments.
-                if self.byte_idx_front == self.chunk_front.len() {
+                if self.forward_byte_idx == self.forward_chunk.len() {
                     return None;
                 } else {
-                    let ch = self.chunk_front.chars().next_back();
+                    let ch = self.forward_chunk.chars().next_back();
 
                     debug_assert!(ch.is_some());
 
-                    // Safety: `byte_idx_front` is less than the byte length of
-                    // `chunk_front`, so there are still chars to yield in that
-                    // chunk.
+                    // Safety: `forward_byte_idx` is less than the byte length
+                    // of `chunk_front`, so there are still chars to yield in
+                    // that chunk.
                     let ch = unsafe { ch.unwrap_unchecked() };
 
-                    self.chunk_front = &self.chunk_front
-                        [..self.chunk_front.len() - ch.len_utf8()];
+                    self.forward_chunk = &self.forward_chunk
+                        [..self.forward_chunk.len() - ch.len_utf8()];
 
                     return Some(ch);
                 }
             }
         }
 
-        let ch = self.chunk_back[..self.byte_idx_back].chars().next_back();
+        let ch =
+            self.backward_chunk[..self.backward_byte_idx].chars().next_back();
 
         debug_assert!(ch.is_some());
 
-        // Safety: `byte_idx_back` is greater than zero so there
+        // Safety: `backward_byte_idx` is greater than zero so there
         // are still chars to yield in this chunk.
         let ch = unsafe { ch.unwrap_unchecked() };
 
-        self.byte_idx_back -= ch.len_utf8();
+        self.backward_byte_idx -= ch.len_utf8();
 
         Some(ch)
     }
@@ -329,12 +331,14 @@ impl<'a> DoubleEndedIterator for Chars<'a> {
 
 impl<'a> std::iter::FusedIterator for Chars<'a> {}
 
-/// TODO: docs
+/// An iterator over the raw lines of `Rope`s and `RopeSlice`s.
 #[derive(Clone)]
 pub struct LinesRaw<'a> {
     units: Units<'a, { Rope::fanout() }, RopeChunk, LineMetric>,
-    yielded: usize,
-    total: usize,
+
+    /// The number of lines which are yet to be yielded. We keep track of this
+    /// to implement [`ExactSizeIterator`].
+    lines_remaining: usize,
 }
 
 impl<'a> From<&'a Rope> for LinesRaw<'a> {
@@ -342,19 +346,17 @@ impl<'a> From<&'a Rope> for LinesRaw<'a> {
     fn from(rope: &'a Rope) -> Self {
         Self {
             units: rope.tree().units::<LineMetric>(),
-            yielded: 0,
-            total: rope.line_len(),
+            lines_remaining: rope.line_len(),
         }
     }
 }
 
-impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for LinesRaw<'a> {
+impl<'a> From<&'a RopeSlice<'a>> for LinesRaw<'a> {
     #[inline]
-    fn from(rope_slice: &'a RopeSlice<'b>) -> Self {
+    fn from(slice: &'a RopeSlice<'a>) -> Self {
         Self {
-            units: rope_slice.tree_slice.units::<LineMetric>(),
-            yielded: 0,
-            total: rope_slice.line_len(),
+            units: slice.tree_slice.units::<LineMetric>(),
+            lines_remaining: slice.line_len(),
         }
     }
 }
@@ -365,13 +367,13 @@ impl<'a> Iterator for LinesRaw<'a> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next()?;
-        self.yielded += 1;
+        self.lines_remaining -= 1;
         Some(RopeSlice::from(tree_slice))
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let exact = self.total - self.yielded;
+        let exact = self.len();
         (exact, Some(exact))
     }
 }
@@ -380,7 +382,7 @@ impl<'a> DoubleEndedIterator for LinesRaw<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next_back()?;
-        self.yielded += 1;
+        self.lines_remaining -= 1;
         Some(RopeSlice::from(tree_slice))
     }
 }
@@ -388,18 +390,20 @@ impl<'a> DoubleEndedIterator for LinesRaw<'a> {
 impl<'a> ExactSizeIterator for LinesRaw<'a> {
     #[inline]
     fn len(&self) -> usize {
-        self.total - self.yielded
+        self.lines_remaining
     }
 }
 
 impl<'a> std::iter::FusedIterator for LinesRaw<'a> {}
 
-/// TODO: docs
+/// An iterator over the lines of `Rope`s and `RopeSlice`s.
 #[derive(Clone)]
 pub struct Lines<'a> {
     units: Units<'a, { Rope::fanout() }, RopeChunk, LineMetric>,
-    yielded: usize,
-    total: usize,
+
+    /// The number of lines which are yet to be yielded. We keep track of this
+    /// to implement [`ExactSizeIterator`].
+    lines_remaining: usize,
 }
 
 impl<'a> From<&'a Rope> for Lines<'a> {
@@ -407,19 +411,17 @@ impl<'a> From<&'a Rope> for Lines<'a> {
     fn from(rope: &'a Rope) -> Self {
         Self {
             units: rope.tree().units::<LineMetric>(),
-            yielded: 0,
-            total: rope.line_len(),
+            lines_remaining: rope.line_len(),
         }
     }
 }
 
-impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Lines<'a> {
+impl<'a> From<&'a RopeSlice<'a>> for Lines<'a> {
     #[inline]
-    fn from(rope_slice: &'a RopeSlice<'b>) -> Self {
+    fn from(slice: &'a RopeSlice<'a>) -> Self {
         Self {
-            units: rope_slice.tree_slice.units::<LineMetric>(),
-            yielded: 0,
-            total: rope_slice.line_len(),
+            units: slice.tree_slice.units::<LineMetric>(),
+            lines_remaining: slice.line_len(),
         }
     }
 }
@@ -430,13 +432,13 @@ impl<'a> Iterator for Lines<'a> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next()?;
-        self.yielded += 1;
-        Some(RopeSlice::from(tree_slice))
+        self.lines_remaining -= 1;
+        Some(RopeSlice { tree_slice, last_byte_is_newline: false })
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let exact = self.total - self.yielded;
+        let exact = self.len();
         (exact, Some(exact))
     }
 }
@@ -445,15 +447,15 @@ impl<'a> DoubleEndedIterator for Lines<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next_back()?;
-        self.yielded += 1;
-        Some(RopeSlice::from(tree_slice))
+        self.lines_remaining -= 1;
+        Some(RopeSlice { tree_slice, last_byte_is_newline: false })
     }
 }
 
 impl<'a> ExactSizeIterator for Lines<'a> {
     #[inline]
     fn len(&self) -> usize {
-        self.total - self.yielded
+        self.lines_remaining
     }
 }
 
