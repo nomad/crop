@@ -200,25 +200,21 @@ mod from_treeslice {
 
     use super::*;
 
-    /// This is the only public function this module exports and it converts a
-    /// `TreeSlice` into the root of an equivalent `Tree`.
+    /// Converts a `TreeSlice` into the root of an equivalent `Tree`.
     ///
-    /// Note: the cases `tree_slice.num_leaves = 1 | 2` should be handled
-    /// separately before calling this function.
-    ///
-    /// Note: this function can panic if the minimum number of children for an
-    /// internal node is less than 2.
+    /// NOTE: can only be called if the slice has a leaf count of at least 3.
+    /// Leaf counts of 1 or 2 should be handled before calling this function.
     #[inline]
     pub(super) fn into_tree_root<const N: usize, L: Leaf>(
         slice: TreeSlice<'_, N, L>,
     ) -> Arc<Node<N, L>> {
-        debug_assert!(slice.leaf_count() > 2);
+        debug_assert!(slice.leaf_count() >= 3);
 
-        let (root, invalid_start, invalid_end) = cut_tree_slice(slice);
+        let (root, invalid_in_first, invalid_in_last) = cut_tree_slice(slice);
 
         let mut root = Arc::new(Node::Internal(root));
 
-        if invalid_start > 0 {
+        if invalid_in_first > 0 {
             {
                 // Safety : `root` was just enclosed in a `Node::Internal`
                 // variant.
@@ -234,7 +230,7 @@ mod from_treeslice {
             pull_up_singular(&mut root);
         }
 
-        if invalid_end > 0 {
+        if invalid_in_last > 0 {
             {
                 // Safety (as_mut_internal_unchecked): for the root to become a
                 // leaf node after the previous call to `pull_up_singular` the
@@ -256,16 +252,38 @@ mod from_treeslice {
         root
     }
 
-    /// TODO: docs
+    /// Returns a `(Root, InvalidFirst, InvalidLast)` tuple where:
+    ///
+    /// - `Root`: the internal node obtained by removing all the nodes before
+    /// `slice.before` and after `slice.before + slice.base_measure`,
+    ///
+    /// - `Invalid{First,Last}`: the number of invalid nodes contained in the
+    /// subtree of the first and last child, respectively.
+    ///
+    /// NOTE: this function can only be called if the slice has a leaf count of
+    /// at least 3.
+    ///
+    /// NOTE: `Root` is guaranteed to have the same depth as the root of the
+    /// slice.
+    ///
+    /// NOTE: `Root` is guaranteed to have at least 2 children.
+    ///
+    /// NOTE: both `InvalidFirst` and `InvalidLast` are guaranteed to be less
+    /// than or equal to the depth of `Root`.
+    ///
+    /// NOTE: the `Arc` enclosing the first and last children all the way to
+    /// the bottom of the inode are guaranteed to have a strong count of 1, so
+    /// it's ok to call `Arc::get_mut` on them. The nodes in the middle will
+    /// usually be `Arc::clone`d from the slice.
     #[inline]
     fn cut_tree_slice<const N: usize, L: Leaf>(
         slice: TreeSlice<'_, N, L>,
     ) -> (Inode<N, L>, usize, usize) {
-        debug_assert!(slice.leaf_count() > 2);
+        debug_assert!(slice.leaf_count() >= 3);
 
         let mut root = Inode::empty();
-        let mut invalid_nodes_start = 0;
-        let mut invalid_nodes_end = 0;
+        let mut invalid_first = 0;
+        let mut invalid_last = 0;
 
         let mut offset = L::BaseMetric::zero();
 
@@ -288,7 +306,7 @@ mod from_treeslice {
                         slice.before - offset,
                         slice.start_slice,
                         slice.start_summary.clone(),
-                        &mut invalid_nodes_start,
+                        &mut invalid_first,
                     );
 
                     root.push(first);
@@ -315,7 +333,7 @@ mod from_treeslice {
                         end - offset,
                         slice.end_slice,
                         slice.end_summary.clone(),
-                        &mut invalid_nodes_end,
+                        &mut invalid_last,
                     );
 
                     root.push(last);
@@ -328,10 +346,9 @@ mod from_treeslice {
             }
         }
 
-        (root, invalid_nodes_start, invalid_nodes_end)
+        (root, invalid_first, invalid_last)
     }
 
-    // TODO: docs
     #[inline]
     fn cut_first_rec<const N: usize, L: Leaf>(
         node: &Arc<Node<N, L>>,
@@ -398,7 +415,6 @@ mod from_treeslice {
         }
     }
 
-    // TODO: docs
     #[inline]
     fn cut_last_rec<const N: usize, L: Leaf>(
         node: &Arc<Node<N, L>>,
@@ -460,7 +476,12 @@ mod from_treeslice {
         }
     }
 
-    // TODO: docs
+    /// Recursively balances the first child all the way down to the deepest
+    /// inode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the first child has a strong counter > 1.
     #[inline]
     fn balance_first_rec<const N: usize, L: Leaf>(inode: &mut Inode<N, L>) {
         inode.balance_first_child_with_second();
@@ -475,7 +496,12 @@ mod from_treeslice {
         }
     }
 
-    // TODO: docs
+    /// Recursively balances the last child all the way down to the deepest
+    /// inode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the last child has a strong counter > 1.
     #[inline]
     fn balance_last_rec<const N: usize, L: Leaf>(inode: &mut Inode<N, L>) {
         inode.balance_last_child_with_penultimate();
@@ -489,24 +515,26 @@ mod from_treeslice {
         }
     }
 
-    // TODO: docs
+    /// Continuously replaces the root with its first child as long as the root
+    /// is an internal node with a single child.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the root has a strong counter > 1.
     #[inline]
     fn pull_up_singular<const N: usize, L: Leaf>(root: &mut Arc<Node<N, L>>) {
-        loop {
-            if let Node::Internal(i) = Arc::get_mut(root).unwrap() {
-                if i.children().len() == 1 {
-                    // Safety: i.children has exactly 1 child.
-                    let child = unsafe {
-                        i.children
-                            .drain(..)
-                            .into_iter()
-                            .next()
-                            .unwrap_unchecked()
-                    };
-                    *root = child;
-                } else {
-                    break;
-                }
+        while let Node::Internal(i) = Arc::get_mut(root).unwrap() {
+            if i.children().len() == 1 {
+                let child = unsafe {
+                    i.children
+                        .drain(..)
+                        .next()
+                        // SAFETY: there is exactly 1 child.
+                        .unwrap_unchecked()
+                };
+                *root = child;
+            } else {
+                break;
             }
         }
     }
