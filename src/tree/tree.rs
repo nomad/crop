@@ -212,7 +212,7 @@ mod from_treeslice {
     pub(super) fn into_tree_root<'a, const N: usize, L: Leaf>(
         slice: TreeSlice<'a, N, L>,
     ) -> Arc<Node<N, L>> {
-        let (root, mut invalid_start, mut invalid_end) = tree_slice_cut(slice);
+        let (root, invalid_start, invalid_end) = tree_slice_cut(slice);
 
         let mut root = Arc::new(Node::Internal(root));
 
@@ -455,56 +455,6 @@ mod from_treeslice {
 
                 Arc::new(Node::Leaf(lnode))
             },
-        }
-    }
-
-    #[inline]
-    fn balance_first_rec<const N: usize, L: Leaf>(
-        inode: &mut Inode<N, L>,
-        yet_to_fix: &mut usize,
-    ) -> bool {
-        let this_not_valid = if !inode.first().is_valid() {
-            inode.balance_first_child_with_second();
-            if inode.has_enough_children() {
-                *yet_to_fix -= 1;
-                false
-            } else {
-                true
-            }
-        } else {
-            !inode.has_enough_children()
-        };
-
-        if *yet_to_fix > 0 {
-            if let Node::Internal(first) =
-                Arc::get_mut(inode.first_mut()).unwrap()
-            {
-                let first_not_valid = balance_first_rec(first, yet_to_fix);
-
-                // NOTE: It's possible that after rebalancing, this inode was
-                // left with only 1 child. When this is the case all of this
-                // inode's parents will also have a single child, and the root
-                // will be fixed by calling `pull_up_singular`.
-                if inode.children().len() == 1 {
-                    return false;
-                }
-
-                if first_not_valid {
-                    inode.balance_first_child_with_second();
-                    if inode.has_enough_children() {
-                        *yet_to_fix -= 1;
-                        false
-                    } else {
-                        true
-                    }
-                } else {
-                    this_not_valid
-                }
-            } else {
-                this_not_valid
-            }
-        } else {
-            false
         }
     }
 
