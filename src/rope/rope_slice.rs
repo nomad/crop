@@ -1,7 +1,7 @@
 use std::ops::RangeBounds;
 
 use super::iterators::{Bytes, Chars, Chunks, Lines, LinesRaw};
-use super::metrics::{ByteMetric, LineMetric};
+use super::metrics::{ByteMetric, RawLineMetric};
 use super::utils::*;
 use super::{Rope, RopeChunk};
 use crate::tree::TreeSlice;
@@ -51,7 +51,7 @@ impl<'a> RopeSlice<'a> {
         }
 
         let ByteMetric(byte_idx) =
-            self.tree_slice.convert_measure(LineMetric(line_idx));
+            self.tree_slice.convert_measure(RawLineMetric(line_idx));
 
         byte_idx
     }
@@ -169,7 +169,7 @@ impl<'a> RopeSlice<'a> {
 
         let mut tree_slice = self
             .tree_slice
-            .slice(LineMetric(line_idx)..LineMetric(line_idx + 1));
+            .slice(RawLineMetric(line_idx)..RawLineMetric(line_idx + 1));
 
         tree_slice_remove_trailing_line_break(&mut tree_slice);
 
@@ -196,7 +196,7 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        let LineMetric(line_idx) =
+        let RawLineMetric(line_idx) =
             self.tree_slice.convert_measure(ByteMetric(byte_idx));
 
         line_idx
@@ -220,7 +220,9 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        Self::from(self.tree_slice.slice(LineMetric(start)..LineMetric(end)))
+        Self::from(
+            self.tree_slice.slice(RawLineMetric(start)..RawLineMetric(end)),
+        )
     }
 
     /// Returns an iterator over the lines of this [`RopeSlice`].

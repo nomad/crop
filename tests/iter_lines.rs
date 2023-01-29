@@ -13,6 +13,61 @@ fn lines_empty() {
 }
 
 #[test]
+fn lines_over_random_slices() {
+    let mut rng = rand::thread_rng();
+
+    // let s = TINY;
+    // let rope = Rope::from(s);
+
+    // let range = 551..584;
+
+    // let rope_slice = rope.byte_slice(range.clone());
+    // let str_slice = &s[range];
+
+    // for (idx, (rope_line, str_line)) in
+    //     rope_slice.lines().zip(str_slice.lines()).enumerate()
+    // {
+    //     println!("Failed on {}", idx + 1);
+    //     assert_eq!(rope_line, str_line);
+    // }
+
+    for s in [TINY, SMALL, MEDIUM, LARGE] {
+        let rope = Rope::from(s);
+
+        for _ in 0..100 {
+            let start = rng.gen_range(0..=rope.byte_len());
+            let end = rng.gen_range(start..=rope.byte_len());
+
+            let range = start..end;
+
+            let rope_slice = rope.byte_slice(range.clone());
+            let str_slice = &s[range.clone()];
+
+            for (idx, (rope_line, str_line)) in
+                rope_slice.lines().zip(str_slice.lines()).enumerate()
+            {
+                if rope_line != str_line {
+                    println!(
+                        "Failed on line #{} in byte range: {range:?}",
+                        idx + 1
+                    );
+                    assert_eq!(rope_line, str_line);
+                }
+            }
+
+            // for (rope_line, str_line) in
+            //     rope_slice.lines().rev().zip(str_slice.lines().rev())
+            // {
+            //     if rope_line != str_line {
+            //         println!("Byte range: {range:?}");
+            //         assert_eq!(rope_line, str_line);
+            //     }
+            // }
+        }
+    }
+}
+
+#[test]
 fn lines_0() {
     // Note: all these ropes should fit in a single leaf node assuming a
     // `ROPE_CHUNK_MAX_BYTES` of 4 in test mode.

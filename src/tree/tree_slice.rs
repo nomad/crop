@@ -10,7 +10,7 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
 
     /// The summary between the left-most leaf of the root and the start of the
     /// slice.
-    pub(super) before: L::BaseMetric,
+    pub(super) offset: L::BaseMetric,
 
     /// The total summary of this slice.
     pub(super) summary: L::Summary,
@@ -29,7 +29,7 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
 
     /// The number of leaves spanned by this slice, also counting the leaves
     /// containing the start and end slices.
-    pub(super) num_leaves: usize,
+    pub(super) leaf_count: usize,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
@@ -114,7 +114,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     /// Returns .
     #[inline]
     pub fn leaf_count(&'a self) -> usize {
-        self.num_leaves
+        self.leaf_count
     }
 
     #[inline]
@@ -161,13 +161,13 @@ where
         // bound on L::Slice.
         let mut tree_slice = Self {
             root,
-            before: L::BaseMetric::zero(),
+            offset: L::BaseMetric::zero(),
             summary: L::Summary::default(),
             start_slice: Default::default(),
             start_summary: L::Summary::default(),
             end_slice: Default::default(),
             end_summary: L::Summary::default(),
-            num_leaves: 0,
+            leaf_count: 0,
         };
 
         tree_slice_from_range_in_root_rec(
@@ -187,8 +187,8 @@ where
         // In this case the root is the leaf *preceding* the start of the range
         // and all other metadata are set correctly, *except* the number of
         // leaves which never gets modified and is still set as zero.
-        if tree_slice.num_leaves == 0 {
-            tree_slice.num_leaves = 1;
+        if tree_slice.leaf_count == 0 {
+            tree_slice.leaf_count = 1;
         }
 
         tree_slice
@@ -299,7 +299,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                         )
                     } else {
                         // This child comes before the starting leaf.
-                        slice.before +=
+                        slice.offset +=
                             L::BaseMetric::measure(child.summary());
                         *measured += measure;
                     }
@@ -319,7 +319,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                     // This is a node fully contained between the starting and
                     // the ending slices.
                     slice.summary += child.summary();
-                    slice.num_leaves += child.num_leaves();
+                    slice.leaf_count += child.num_leaves();
                     *measured += measure;
                 }
             }
@@ -341,7 +341,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                                 leaf.summary(),
                             );
 
-                        slice.before += L::BaseMetric::measure(&left_summary);
+                        slice.offset += L::BaseMetric::measure(&left_summary);
 
                         let (start_slice, start_summary, _, _) = M::split(
                             right_slice,
@@ -357,7 +357,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                         slice.end_slice = start_slice;
                         slice.end_summary = start_summary;
 
-                        slice.num_leaves = 1;
+                        slice.leaf_count = 1;
                         *done = true;
                     } else {
                         // This leaf contains the starting slice but not the
@@ -369,17 +369,17 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                                 leaf.summary(),
                             );
                         *measured += measure;
-                        slice.before +=
+                        slice.offset +=
                             L::BaseMetric::measure(&before_summary);
                         slice.summary = start_summary.clone();
                         slice.start_slice = start_slice;
                         slice.start_summary = start_summary;
-                        slice.num_leaves = 1;
+                        slice.leaf_count = 1;
                         *found_start = true;
                     }
                 } else {
                     // This leaf comes before the starting leaf.
-                    slice.before += L::BaseMetric::measure(leaf.summary());
+                    slice.offset += L::BaseMetric::measure(leaf.summary());
                     *measured += measure;
                 }
             } else if *measured + measure >= range.end {
@@ -392,12 +392,12 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                 slice.summary += &end_summary;
                 slice.end_slice = end_slice;
                 slice.end_summary = end_summary;
-                slice.num_leaves += 1;
+                slice.leaf_count += 1;
                 *done = true;
             } else {
                 // This is a leaf between the starting and the ending slices.
                 slice.summary += leaf.summary();
-                slice.num_leaves += 1;
+                slice.leaf_count += 1;
                 *measured += measure;
             }
         },

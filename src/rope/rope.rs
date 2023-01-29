@@ -1,7 +1,7 @@
 use std::ops::RangeBounds;
 
 use super::iterators::{Bytes, Chars, Chunks, Lines, LinesRaw};
-use super::metrics::{ByteMetric, LineMetric};
+use super::metrics::{ByteMetric, RawLineMetric};
 use super::utils::*;
 use super::{RopeChunk, RopeChunkIter};
 use crate::tree::Tree;
@@ -76,7 +76,7 @@ impl Rope {
         }
 
         let ByteMetric(byte_idx) =
-            self.tree.convert_measure(LineMetric(line_idx));
+            self.tree.convert_measure(RawLineMetric(line_idx));
 
         byte_idx
     }
@@ -214,12 +214,22 @@ impl Rope {
             );
         }
 
-        let mut tree_slice =
-            self.tree.slice(LineMetric(line_idx)..LineMetric(line_idx + 1));
+        let tree_slice = self
+            .tree
+            .slice(RawLineMetric(line_idx)..RawLineMetric(line_idx + 1));
 
-        tree_slice_remove_trailing_line_break(&mut tree_slice);
+        if tree_slice.summary().line_breaks == 1 {
+            let tree_slice = tree_slice
+                .units::<super::metrics::LineMetric>()
+                .next()
+                .unwrap();
 
-        RopeSlice { tree_slice, last_byte_is_newline: false }
+            todo!();
+
+            // RopeSlice { tree_slice, last_byte_is_newline: false }
+        } else {
+            RopeSlice { tree_slice, last_byte_is_newline: false }
+        }
     }
 
     /// TODO: docs
@@ -242,7 +252,7 @@ impl Rope {
             );
         }
 
-        let LineMetric(line_idx) =
+        let RawLineMetric(line_idx) =
             self.tree.convert_measure(ByteMetric(byte_idx));
 
         line_idx
@@ -266,7 +276,9 @@ impl Rope {
             );
         }
 
-        RopeSlice::from(self.tree.slice(LineMetric(start)..LineMetric(end)))
+        RopeSlice::from(
+            self.tree.slice(RawLineMetric(start)..RawLineMetric(end)),
+        )
     }
 
     /// Returns an iterator over the lines of this [`Rope`].

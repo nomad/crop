@@ -297,13 +297,13 @@ mod from_treeslice {
         while let Some(child) = children.next() {
             let this = child.base_measure();
 
-            if offset + this > slice.before {
-                if slice.before == L::BaseMetric::zero() {
+            if offset + this > slice.offset {
+                if slice.offset == L::BaseMetric::zero() {
                     root.push(Arc::clone(child));
                 } else {
                     let first = cut_first_rec(
                         child,
-                        slice.before - offset,
+                        slice.offset - offset,
                         slice.start_slice,
                         slice.start_summary.clone(),
                         &mut invalid_first,
@@ -319,7 +319,7 @@ mod from_treeslice {
             }
         }
 
-        let end = slice.before + slice.base_measure();
+        let end = slice.offset + slice.base_measure();
 
         while let Some(child) = children.next() {
             let this = child.base_measure();

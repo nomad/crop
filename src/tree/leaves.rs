@@ -179,7 +179,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
     ) -> LeavesForward<'a, FANOUT, L> {
         Self {
             is_initialized: false,
-            base_offset: slice.before,
+            base_offset: slice.offset,
             first_slice: Some((slice.start_slice, &slice.start_summary)),
             last_slice: Some((slice.end_slice, &slice.end_summary)),
             root: &**slice.root(),
@@ -414,7 +414,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
         slice: &'a TreeSlice<'a, FANOUT, L>,
     ) -> LeavesBackward<'a, FANOUT, L> {
         let base_offset =
-            slice.root().base_measure() - slice.before - slice.base_measure();
+            slice.root().base_measure() - slice.offset - slice.base_measure();
 
         Self {
             is_initialized: false,

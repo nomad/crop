@@ -1,4 +1,4 @@
-use super::metrics::LineMetric;
+use super::metrics::{LineMetric, RawLineMetric};
 use super::{Rope, RopeChunk, RopeSlice};
 use crate::tree::{Leaves, Units};
 
@@ -334,7 +334,7 @@ impl<'a> std::iter::FusedIterator for Chars<'a> {}
 /// An iterator over the raw lines of `Rope`s and `RopeSlice`s.
 #[derive(Clone)]
 pub struct LinesRaw<'a> {
-    units: Units<'a, { Rope::fanout() }, RopeChunk, LineMetric>,
+    units: Units<'a, { Rope::fanout() }, RopeChunk, RawLineMetric>,
 
     /// The number of lines which are yet to be yielded. We keep track of this
     /// to implement [`ExactSizeIterator`].
@@ -345,7 +345,7 @@ impl<'a> From<&'a Rope> for LinesRaw<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
         Self {
-            units: rope.tree().units::<LineMetric>(),
+            units: rope.tree().units::<RawLineMetric>(),
             lines_remaining: rope.line_len(),
         }
     }
@@ -355,7 +355,7 @@ impl<'a> From<&'a RopeSlice<'a>> for LinesRaw<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'a>) -> Self {
         Self {
-            units: slice.tree_slice.units::<LineMetric>(),
+            units: slice.tree_slice.units::<RawLineMetric>(),
             lines_remaining: slice.line_len(),
         }
     }

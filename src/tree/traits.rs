@@ -76,10 +76,19 @@ pub trait Metric<L: Leaf>:
 
     #[allow(unused_variables)]
     #[allow(clippy::type_complexity)]
+    fn first_unit<'a>(
+        slice: &'a L::Slice,
+        summary: &L::Summary,
+    ) -> (&'a L::Slice, L::Summary, L::Summary, &'a L::Slice, L::Summary) {
+        unimplemented!();
+    }
+
+    #[allow(unused_variables)]
+    #[allow(clippy::type_complexity)]
     fn last_unit<'a>(
         slice: &'a L::Slice,
         summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary) {
+    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary, L::Summary) {
         unimplemented!();
     }
 }
