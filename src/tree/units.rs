@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
-use super::tree_slice;
-use crate::tree::{Leaf, Lnode, Metric, Node, Tree, TreeSlice};
+use super::*;
 
 /// An iterator over the units of a metric.
 #[derive(Clone)]
@@ -63,7 +62,7 @@ where
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
+impl<'a, const FANOUT: usize, L: Leaf, M: UnitMetric<L>> Iterator
     for Units<'a, FANOUT, L, M>
 {
     type Item = TreeSlice<'a, FANOUT, L>;
@@ -80,8 +79,8 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> Iterator
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> DoubleEndedIterator
-    for Units<'a, FANOUT, L, M>
+impl<'a, const FANOUT: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
+    DoubleEndedIterator for Units<'a, FANOUT, L, M>
 {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
@@ -95,8 +94,8 @@ impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> DoubleEndedIterator
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> std::iter::FusedIterator
-    for Units<'a, FANOUT, L, M>
+impl<'a, const FANOUT: usize, L: Leaf, M: UnitMetric<L>>
+    std::iter::FusedIterator for Units<'a, FANOUT, L, M>
 {
 }
 
@@ -206,7 +205,7 @@ where
     }
 }
 
-impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
+impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     /// Initializes `Self` by populating the stack with the path from the root
     /// down to the internal node containing the leaf node at `base_offset`,
     /// which is set to `leaf_node`.
@@ -921,6 +920,8 @@ where
     fn from(
         tree_slice: &'a TreeSlice<'a, FANOUT, L>,
     ) -> UnitsBackward<'a, FANOUT, L, M> {
+        println!("{tree_slice:#?}");
+
         Self {
             is_initialized: false,
             stack: Vec::with_capacity(tree_slice.root().depth()),
@@ -940,7 +941,9 @@ where
     }
 }
 
-impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
+impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
+    UnitsBackward<'a, N, L, M>
+{
     /// Initializes `Self` by populating the stack with the path from the root
     /// down to the internal node containing the leaf node at
     /// `base_offset + base_total`, which is set to `leaf_node`.
@@ -1155,6 +1158,8 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
     #[inline]
     fn first(&mut self) -> (TreeSlice<'a, N, L>, L::Summary) {
         debug_assert!(self.base_remaining > L::BaseMetric::zero());
+
+        println!("TO FIRST!!");
 
         // First, check if the current leaf node is the root. If it is we're
         // done.
@@ -1431,16 +1436,21 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
             mut advance,
         ) = M::last_unit(slice, slice_summary);
 
+        println!(
+            "slicing {slice:#?} at last unit gave an advance of {advance:?}"
+        );
+
+        let mut offset = root.base_measure()
+            - after
+            - self.yielded_in_leaf
+            - L::BaseMetric::measure(&summary)
+            - L::BaseMetric::measure(&start_summary);
+
         self.yielded_in_leaf = L::BaseMetric::measure(&advance);
         self.end_slice = rest;
         self.end_summary = rest_summary;
 
         advance += &summary;
-
-        let mut offset = root.base_measure()
-            - after
-            - self.yielded_in_leaf
-            - L::BaseMetric::measure(&summary);
 
         if L::BaseMetric::measure(&start_summary) > L::BaseMetric::zero() {
             summary += &start_summary;
@@ -1457,9 +1467,9 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
 
                 start_summary = end_summary.clone();
             } else {
-                let start = self.base_start + self.base_remaining;
+                let end = self.base_start + self.base_remaining;
 
-                let range = start..(start + L::BaseMetric::measure(&summary));
+                let range = (end - L::BaseMetric::measure(&summary))..(end);
 
                 let (deepest, range) =
                     tree_slice::deepest_node_containing_range(
@@ -1528,7 +1538,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
             {
                 let offset = L::BaseMetric::measure(&rest_summary);
 
-                self.yielded_in_leaf = L::BaseMetric::measure(&advance);
+                self.yielded_in_leaf += L::BaseMetric::measure(&advance);
                 self.end_slice = rest;
                 self.end_summary = rest_summary;
 
@@ -1562,7 +1572,11 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
 
             if self.base_remaining > L::BaseMetric::zero() {
                 if let Some((remainder, advance)) = self.remainder() {
-                    debug_assert_eq!(M::measure(&advance), M::zero());
+                    self.base_remaining -= L::BaseMetric::measure(&advance);
+
+                    println!("advance has {:?}", M::measure(&advance));
+
+                    println!("RETURNING REMAINDER: {remainder:#?}");
 
                     return (
                         Some(remainder),
@@ -1571,6 +1585,8 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
                 }
             }
         }
+
+        println!("units remaining: {:?}", self.units_remaining);
 
         let (tree_slice, advance) = if M::measure(&self.end_summary) > M::one()
         {
@@ -1585,6 +1601,8 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsBackward<'a, N, L, M> {
 
         self.base_remaining -= L::BaseMetric::measure(&advance);
         self.units_remaining -= M::measure(&advance);
+
+        println!("RETURNING: {tree_slice:#?}");
 
         (Some(tree_slice), L::BaseMetric::measure(&advance))
     }

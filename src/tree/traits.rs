@@ -73,22 +73,31 @@ pub trait Metric<L: Leaf>:
             std::any::type_name::<Self>()
         )
     }
+}
 
-    #[allow(unused_variables)]
+/// TODO: docs
+pub trait UnitMetric<L: Leaf>: Metric<L> {
+    /// TODO: docs
     #[allow(clippy::type_complexity)]
     fn first_unit<'a>(
         slice: &'a L::Slice,
         summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary, L::Summary, &'a L::Slice, L::Summary) {
-        unimplemented!();
-    }
+    ) -> (&'a L::Slice, L::Summary, L::Summary, &'a L::Slice, L::Summary);
+}
 
-    #[allow(unused_variables)]
+/// TODO: docs
+pub trait DoubleEndedUnitMetric<L: Leaf>: UnitMetric<L> {
+    /// TODO: docs
     #[allow(clippy::type_complexity)]
     fn last_unit<'a>(
         slice: &'a L::Slice,
         summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary, L::Summary) {
-        unimplemented!();
-    }
+    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary, L::Summary);
+
+    /// TODO: docs
+    #[allow(clippy::type_complexity)]
+    fn remainder<'a>(
+        slice: &'a L::Slice,
+        summary: &L::Summary,
+    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary, L::Summary);
 }

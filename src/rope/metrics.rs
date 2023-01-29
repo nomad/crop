@@ -2,7 +2,7 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use super::utils::*;
 use super::{ChunkSlice, ChunkSummary, RopeChunk};
-use crate::tree::{Metric, Summarize};
+use crate::tree::{DoubleEndedUnitMetric, Metric, Summarize, UnitMetric};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct ByteMetric(pub(super) usize);
@@ -126,7 +126,9 @@ impl Metric<RopeChunk> for RawLineMetric {
     ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
         split_slice_at_line_break(chunk, at, summary)
     }
+}
 
+impl UnitMetric<RopeChunk> for RawLineMetric {
     #[inline]
     fn first_unit<'a>(
         chunk: &'a ChunkSlice,
@@ -143,7 +145,9 @@ impl Metric<RopeChunk> for RawLineMetric {
 
         (first, first_summary, first_summary, rest, rest_summary)
     }
+}
 
+impl DoubleEndedUnitMetric<RopeChunk> for RawLineMetric {
     #[inline]
     fn last_unit<'a>(
         chunk: &'a ChunkSlice,
@@ -155,7 +159,8 @@ impl Metric<RopeChunk> for RawLineMetric {
         ChunkSummary,
         ChunkSummary,
     ) {
-        let mut last_summary = ChunkSummary::default();
+        let mut last_summary =
+            ChunkSummary { bytes: summary.bytes, line_breaks: 0 };
 
         for (idx, byte) in chunk.bytes().rev().enumerate() {
             if byte == b'\n' {
@@ -178,6 +183,20 @@ impl Metric<RopeChunk> for RawLineMetric {
         };
 
         (rest, rest_summary, last, last_summary, last_summary)
+    }
+
+    #[inline]
+    fn remainder<'a>(
+        _chunk: &'a ChunkSlice,
+        _summary: &ChunkSummary,
+    ) -> (
+        &'a ChunkSlice,
+        ChunkSummary,
+        &'a ChunkSlice,
+        ChunkSummary,
+        ChunkSummary,
+    ) {
+        todo!();
     }
 }
 
@@ -231,7 +250,9 @@ impl Metric<RopeChunk> for LineMetric {
     fn measure(summary: &ChunkSummary) -> Self {
         Self(summary.line_breaks)
     }
+}
 
+impl UnitMetric<RopeChunk> for LineMetric {
     #[inline]
     fn first_unit<'a>(
         chunk: &'a ChunkSlice,
@@ -260,11 +281,27 @@ impl Metric<RopeChunk> for LineMetric {
 
         (first, first_summary, advance, rest, rest_summary)
     }
+}
 
+impl DoubleEndedUnitMetric<RopeChunk> for LineMetric {
     #[inline]
     fn last_unit<'a>(
-        chunk: &'a ChunkSlice,
-        summary: &ChunkSummary,
+        _chunk: &'a ChunkSlice,
+        _summary: &ChunkSummary,
+    ) -> (
+        &'a ChunkSlice,
+        ChunkSummary,
+        &'a ChunkSlice,
+        ChunkSummary,
+        ChunkSummary,
+    ) {
+        todo!();
+    }
+
+    #[inline]
+    fn remainder<'a>(
+        _chunk: &'a ChunkSlice,
+        _summary: &ChunkSummary,
     ) -> (
         &'a ChunkSlice,
         ChunkSummary,
