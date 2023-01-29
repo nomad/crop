@@ -1,6 +1,6 @@
 use std::ops::RangeBounds;
 
-use super::iterators::{Bytes, Chars, Chunks, Lines, LinesRaw};
+use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
 use super::utils::*;
 use super::{RopeChunk, RopeChunkIter};
@@ -289,8 +289,8 @@ impl Rope {
 
     /// TODO: docs.
     #[inline]
-    pub fn lines_raw(&self) -> LinesRaw<'_> {
-        LinesRaw::from(self)
+    pub fn raw_lines(&self) -> RawLines<'_> {
+        RawLines::from(self)
     }
 
     /// Returns a new empty [`Rope`].

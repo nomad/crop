@@ -333,7 +333,7 @@ impl<'a> std::iter::FusedIterator for Chars<'a> {}
 
 /// An iterator over the raw lines of `Rope`s and `RopeSlice`s.
 #[derive(Clone)]
-pub struct LinesRaw<'a> {
+pub struct RawLines<'a> {
     units: Units<'a, { Rope::fanout() }, RopeChunk, RawLineMetric>,
 
     /// The number of lines which are yet to be yielded. We keep track of this
@@ -341,7 +341,7 @@ pub struct LinesRaw<'a> {
     lines_remaining: usize,
 }
 
-impl<'a> From<&'a Rope> for LinesRaw<'a> {
+impl<'a> From<&'a Rope> for RawLines<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
         Self {
@@ -351,7 +351,7 @@ impl<'a> From<&'a Rope> for LinesRaw<'a> {
     }
 }
 
-impl<'a> From<&'a RopeSlice<'a>> for LinesRaw<'a> {
+impl<'a> From<&'a RopeSlice<'a>> for RawLines<'a> {
     #[inline]
     fn from(slice: &'a RopeSlice<'a>) -> Self {
         Self {
@@ -361,7 +361,7 @@ impl<'a> From<&'a RopeSlice<'a>> for LinesRaw<'a> {
     }
 }
 
-impl<'a> Iterator for LinesRaw<'a> {
+impl<'a> Iterator for RawLines<'a> {
     type Item = RopeSlice<'a>;
 
     #[inline]
@@ -378,7 +378,7 @@ impl<'a> Iterator for LinesRaw<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for LinesRaw<'a> {
+impl<'a> DoubleEndedIterator for RawLines<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next_back()?;
@@ -387,14 +387,14 @@ impl<'a> DoubleEndedIterator for LinesRaw<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for LinesRaw<'a> {
+impl<'a> ExactSizeIterator for RawLines<'a> {
     #[inline]
     fn len(&self) -> usize {
         self.lines_remaining
     }
 }
 
-impl<'a> std::iter::FusedIterator for LinesRaw<'a> {}
+impl<'a> std::iter::FusedIterator for RawLines<'a> {}
 
 /// An iterator over the lines of `Rope`s and `RopeSlice`s.
 #[derive(Clone)]

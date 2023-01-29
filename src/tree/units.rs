@@ -378,14 +378,8 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
     #[inline]
     fn next_leaf_with_measure(
         &mut self,
-    ) -> (
-        &'a L::Slice,
-        &'a L::Summary,
-        &'a Arc<Node<N, L>>,
-        L::BaseMetric,
-        L::Summary,
-        usize,
-    ) {
+    ) -> (&'a Lnode<L>, &'a Arc<Node<N, L>>, L::BaseMetric, L::Summary, usize)
+    {
         debug_assert!(self.units_remaining > M::zero());
 
         let mut before = L::BaseMetric::zero();
@@ -448,28 +442,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
                     debug_assert!(leaf.measure::<M>() > M::zero());
 
                     self.leaf_node = node;
-
-                    let (slice, slice_summary) = {
-                        let contains_last_slice =
-                            L::BaseMetric::measure(&summary)
-                                + leaf.base_measure()
-                                > self.base_remaining;
-
-                        if contains_last_slice {
-                            self.last_slice.take().unwrap()
-                        } else {
-                            (leaf.as_slice(), leaf.summary())
-                        }
-                    };
-
-                    return (
-                        slice,
-                        slice_summary,
-                        inode,
-                        before,
-                        summary,
-                        leaf_count,
-                    );
+                    return (leaf, inode, before, summary, leaf_count);
                 },
             }
         }
@@ -507,6 +480,7 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
             }
         }
     }
+
     /// Yields the next unit in the iterating range. This is the function that
     /// gets called in the general case, i.e. when the next unit is not the
     /// last and it's not contained in `self.leaf_node`. The root of the
@@ -539,22 +513,26 @@ impl<'a, const N: usize, L: Leaf, M: Metric<L>> UnitsForward<'a, N, L, M> {
         let start_slice = self.start_slice;
         let start_summary = self.start_summary.clone();
 
-        let (
-            leaf,
-            leaf_summary,
-            mut root,
-            mut offset,
-            mut summary,
-            mut leaf_count,
-        ) = self.next_leaf_with_measure();
+        let (leaf, mut root, mut offset, mut summary, mut leaf_count) =
+            self.next_leaf_with_measure();
 
         offset += self.yielded_in_leaf;
-
         summary += &start_summary;
         leaf_count += 1;
 
+        let (slice, slice_summary) = {
+            let contains_last_slice = L::BaseMetric::measure(&summary)
+                + leaf.base_measure()
+                > self.base_remaining;
+
+            if contains_last_slice {
+                self.last_slice.take().unwrap()
+            } else {
+                (leaf.as_slice(), leaf.summary())
+            }
+        };
         let (mut end_slice, mut end_summary, mut advance, rest, rest_summary) =
-            M::first_unit(leaf, leaf_summary);
+            M::first_unit(slice, slice_summary);
 
         self.yielded_in_leaf = L::BaseMetric::measure(&advance);
         self.start_slice = rest;

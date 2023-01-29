@@ -16,21 +16,6 @@ fn lines_empty() {
 fn lines_over_random_slices() {
     let mut rng = rand::thread_rng();
 
-    // let s = TINY;
-    // let rope = Rope::from(s);
-
-    // let range = 551..584;
-
-    // let rope_slice = rope.byte_slice(range.clone());
-    // let str_slice = &s[range];
-
-    // for (idx, (rope_line, str_line)) in
-    //     rope_slice.lines().zip(str_slice.lines()).enumerate()
-    // {
-    //     println!("Failed on {}", idx + 1);
-    //     assert_eq!(rope_line, str_line);
-    // }
-
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let rope = Rope::from(s);
 
@@ -63,6 +48,76 @@ fn lines_over_random_slices() {
             //         assert_eq!(rope_line, str_line);
             //     }
             // }
+        }
+    }
+}
+
+#[test]
+fn raw_lines_over_random_slices() {
+    let mut rng = rand::thread_rng();
+
+    for s in [TINY, SMALL, MEDIUM, LARGE] {
+        let rope = Rope::from(s);
+
+        for _ in 0..100 {
+            let start = rng.gen_range(0..=rope.byte_len());
+            let end = rng.gen_range(start..=rope.byte_len());
+
+            let range = start..end;
+
+            let rope_slice = rope.byte_slice(range.clone());
+            let str_slice = &s[range.clone()];
+
+            // for (idx, (rope_line, str_line)) in
+            //     rope_slice.raw_lines().zip(str_slice.lines()).enumerate()
+            // {
+            //     let is_last = idx == rope_slice.line_len() - 1;
+
+            //     // TODO: use `RopeSlice::ends_with` once that's implemented to
+            //     // replace this monstrosity.
+            //     let str_line = if !is_last || str_slice.ends_with('\n') {
+            //         let mut l = str_line.to_owned();
+            //         l.push('\n');
+            //         std::borrow::Cow::Owned(l)
+            //     } else {
+            //         std::borrow::Cow::Borrowed(str_line)
+            //     };
+
+            //     if rope_line != str_line {
+            //         println!(
+            //             "Failed on line #{} in byte range: {range:?}",
+            //             idx + 1
+            //         );
+            //         assert_eq!(rope_line, str_line);
+            //     }
+            // }
+
+            for (idx, (rope_line, str_line)) in rope_slice
+                .raw_lines()
+                .rev()
+                .zip(str_slice.lines().rev())
+                .enumerate()
+            {
+                let is_last = idx == 0;
+
+                // TODO: use `RopeSlice::ends_with` once that's implemented to
+                // replace this monstrosity.
+                let str_line = if !is_last || str_slice.ends_with('\n') {
+                    let mut l = str_line.to_owned();
+                    l.push('\n');
+                    std::borrow::Cow::Owned(l)
+                } else {
+                    std::borrow::Cow::Borrowed(str_line)
+                };
+
+                if rope_line != str_line {
+                    println!(
+                        "Failed on line #{} in byte range: {range:?}",
+                        idx + 1
+                    );
+                    assert_eq!(rope_line, str_line);
+                }
+            }
         }
     }
 }
@@ -239,7 +294,7 @@ fn lines_raw() {
          other -> こんにちは chars.\r\nCan we iterate\nover this?\n\r\n\n??",
     );
 
-    let mut lines = r.lines_raw();
+    let mut lines = r.raw_lines();
 
     assert_eq!("Hey \r\n", lines.next().unwrap());
     assert_eq!("this contains\n", lines.next().unwrap());
@@ -262,7 +317,7 @@ fn lines_rau() {
         let rope = Rope::from(s);
 
         for (i, (rope_line, s_line)) in
-            rope.lines_raw().zip(s.lines()).enumerate()
+            rope.raw_lines().zip(s.lines()).enumerate()
         {
             if i != rope.line_len() - 1 || s.ends_with("\n") {
                 let mut line = s_line.to_owned();
@@ -275,53 +330,6 @@ fn lines_rau() {
     }
 }
 
-#[allow(unused_mut)]
-#[allow(unused_variables)]
-#[test]
-fn raw_lines_over_rope_slices() {
-    for s in [TINY, SMALL, MEDIUM, LARGE] {
-        let r = Rope::from(s);
-
-        for _ in 0..100 {
-            let start = rand::thread_rng().gen_range(0..=r.byte_len());
-            let end = rand::thread_rng().gen_range(start..=r.byte_len());
-
-            let slice = r.byte_slice(start..end);
-
-            let mut checked = 0;
-
-            for (i, (rope_line, mut s_line)) in
-                slice.lines_raw().zip(s[start..end].lines()).enumerate()
-            {
-                // TODO: use this once we have `Rope{Slice}::ends_with`.
-                //
-                // if rope_line.ends_with("\n") {
-                //     s_line = &s[checked..s_line.len() + 1];
-                // }
-                //
-                //  assert_eq!(s_line, rope_line);
-                //  checked += rope_line.byte_len();
-
-                if i != slice.line_len() - 1 || s[start..end].ends_with("\n") {
-                    let mut line = s_line.to_owned();
-                    line.push_str("\n");
-                    if line != rope_line {
-                        println!("i: {i}");
-                        println!("Byte range: {start}..{end}");
-                        panic!("{line:?} vs {rope_line:?}");
-                    }
-                } else {
-                    if s_line != rope_line {
-                        println!("i: {i}");
-                        println!("Byte range: {start}..{end}");
-                        panic!("{s_line:?} vs {rope_line:?}");
-                    }
-                }
-            }
-        }
-    }
-}
-
 #[test]
 fn lines_backward() {
     let r = Rope::from(
@@ -329,7 +337,7 @@ fn lines_backward() {
          other -> こんにちは chars.\r\nCan we iterate\nover this?\n\r\n\n??",
     );
 
-    let mut lines = r.lines_raw().rev();
+    let mut lines = r.raw_lines().rev();
 
     assert_eq!("??", lines.next().unwrap());
     assert_eq!("\n", lines.next().unwrap());
@@ -344,50 +352,4 @@ fn lines_backward() {
     assert_eq!("this contains\n", lines.next().unwrap());
     assert_eq!("Hey \r\n", lines.next().unwrap());
     assert_eq!(None, lines.next());
-}
-
-#[allow(unused_mut)]
-#[allow(unused_variables)]
-#[test]
-fn aaa_lines_over_rope_slices() {
-    for s in [TINY, SMALL, MEDIUM, LARGE] {
-        let r = Rope::from(s);
-
-        for _ in 0..100 {
-            let start = rand::thread_rng().gen_range(0..=r.byte_len());
-            let end = rand::thread_rng().gen_range(start..=r.byte_len());
-
-            let slice = r.byte_slice(start..end);
-
-            let mut checked = 0;
-
-            let mut i = slice.line_len();
-
-            let mut s_lines = s[start..end].lines().rev();
-            let mut rope_lines = slice.lines_raw().rev();
-
-            while i > 0 {
-                i -= 1;
-
-                let s_line = s_lines.next().unwrap();
-                let rope_line = rope_lines.next().unwrap();
-
-                if i != slice.line_len() - 1 || s[start..end].ends_with("\n") {
-                    let mut line = s_line.to_owned();
-                    line.push_str("\n");
-                    if line != rope_line {
-                        println!("i: {i}");
-                        println!("Byte range: {start}..{end}");
-                        panic!("{line:?} vs {rope_line:?}");
-                    }
-                } else {
-                    if s_line != rope_line {
-                        println!("i: {i}");
-                        println!("Byte range: {start}..{end}");
-                        panic!("{s_line:?} vs {rope_line:?}");
-                    }
-                }
-            }
-        }
-    }
 }
