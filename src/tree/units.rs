@@ -455,7 +455,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         }
     }
 
-    /// Returns the leaf node befire the current `leaf_node`, **without**
+    /// Returns the leaf node before the current `leaf_node`, **without**
     /// checking if there is one in the valid range of this iterator.
     ///
     /// Invariants: the returned [`Node`] is guaranteed to be a leaf node.
@@ -945,7 +945,7 @@ where
     fn from(
         tree_slice: &'a TreeSlice<'a, FANOUT, L>,
     ) -> UnitsBackward<'a, FANOUT, L, M> {
-        // println!("{tree_slice:#?}");
+        println!("{tree_slice:#?}");
 
         Self {
             is_initialized: false,
@@ -1024,6 +1024,43 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                     };
 
                     return;
+                },
+            }
+        }
+    }
+
+    /// Returns the leaf node before the current `leaf_node`, **without**
+    /// checking if there is one in the valid range of this iterator.
+    ///
+    /// Invariants: the returned [`Node`] is guaranteed to be a leaf node.
+    #[inline]
+    fn previous_leaf(&mut self) -> &'a Lnode<L> {
+        let mut node = loop {
+            let &mut (node, ref mut child_idx) =
+                self.stack.last_mut().unwrap();
+
+            // Safety: every node in the stack is an internal node.
+            let inode = unsafe { node.as_internal_unchecked() };
+
+            if *child_idx > 0 {
+                *child_idx -= 1;
+                break &inode.children()[*child_idx];
+            } else {
+                self.stack.pop();
+            }
+        };
+
+        loop {
+            match &**node {
+                Node::Internal(inode) => {
+                    self.stack.push((node, inode.children().len() - 1));
+                    node = inode.last();
+                    continue;
+                },
+
+                Node::Leaf(leaf) => {
+                    self.leaf_node = node;
+                    return leaf;
                 },
             }
         }
@@ -1187,12 +1224,6 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         let (_, _, end_slice, end_summary, mut advance) =
             M::last_unit(self.end_slice, &self.end_summary);
 
-        // println!(
-        //     "last unit of {:?} returned {end_slice:?} with advance \
-        //      {advance:?}",
-        //     self.end_slice
-        // );
-
         // First, check if the current leaf node is the root. If it is we're
         // done.
         if self.base_remaining == L::BaseMetric::measure(&advance) {
@@ -1212,8 +1243,30 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         }
 
         if L::BaseMetric::measure(&end_summary) == L::BaseMetric::zero() {
-            todo!();
-        }
+            let previous_leaf = self.previous_leaf();
+
+            self.base_remaining -= L::BaseMetric::measure(&advance);
+
+            let contains_first_slice =
+                previous_leaf.base_measure() > self.base_remaining;
+
+            (self.end_slice, self.end_summary) = if contains_first_slice {
+                let (slice, summary) = self.first_slice.take().unwrap();
+                (slice, summary.clone())
+            } else {
+                (previous_leaf.as_slice(), previous_leaf.summary().clone())
+            };
+
+            self.yielded_in_leaf = L::BaseMetric::zero();
+
+            let (first, first_advance) = self.first();
+
+            self.base_remaining += L::BaseMetric::measure(&advance);
+
+            advance += &first_advance;
+
+            return (first, advance);
+        };
 
         let (first_leaf, root, after, mut summary, leaf_count) =
             self.first_leaf();
@@ -1442,6 +1495,12 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             M::last_unit(self.end_slice, &self.end_summary);
 
         if L::BaseMetric::measure(&end_summary) == L::BaseMetric::zero() {
+            // TODO: go to the previous leaf, modify stack.
+            //
+            // If the previous leaf contains the first slice we need to return.
+            //
+            // If it doesn't the end_slice and end_summary are those of the
+            // leaf.
             todo!();
         }
 

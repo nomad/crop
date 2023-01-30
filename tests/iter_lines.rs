@@ -19,7 +19,8 @@ fn lines_over_random_slices() {
 
         let rope = Rope::from(s);
 
-        let range = 383..412;
+        let range = 564..584;
+        // let range = 574..584;
 
         let rope_slice = rope.byte_slice(range.clone());
         let str_slice = &s[range.clone()];
@@ -36,7 +37,7 @@ fn lines_over_random_slices() {
             }
         }
 
-        // panic!("AAAAAA");
+        panic!("AAAAAA");
     }
 
     let mut rng = rand::thread_rng();
