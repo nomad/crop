@@ -99,5 +99,5 @@ pub trait DoubleEndedUnitMetric<L: Leaf>: UnitMetric<L> {
     fn remainder<'a>(
         slice: &'a L::Slice,
         summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary, L::Summary);
+    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary);
 }

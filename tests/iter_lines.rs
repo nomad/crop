@@ -14,32 +14,6 @@ fn lines_empty() {
 
 #[test]
 fn lines_over_random_slices() {
-    {
-        let s = TINY;
-
-        let rope = Rope::from(s);
-
-        let range = 564..584;
-        // let range = 574..584;
-
-        let rope_slice = rope.byte_slice(range.clone());
-        let str_slice = &s[range.clone()];
-
-        for ((idx, rope_line), str_line) in
-            rope_slice.lines().enumerate().rev().zip(str_slice.lines().rev())
-        {
-            if rope_line != str_line {
-                println!(
-                    "Failed on line #{} in byte range: {range:?}",
-                    idx + 1
-                );
-                assert_eq!(rope_line, str_line);
-            }
-        }
-
-        panic!("AAAAAA");
-    }
-
     let mut rng = rand::thread_rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
@@ -54,19 +28,17 @@ fn lines_over_random_slices() {
             let rope_slice = rope.byte_slice(range.clone());
             let str_slice = &s[range.clone()];
 
-            // for (idx, (rope_line, str_line)) in
-            //     rope_slice.lines().zip(str_slice.lines()).enumerate()
-            // {
-            //     if rope_line != str_line {
-            //         println!(
-            //             "Failed on line #{} in byte range: {range:?}",
-            //             idx + 1
-            //         );
-            //         assert_eq!(rope_line, str_line);
-            //     }
-            // }
-
-            println!("{range:?}");
+            for (idx, (rope_line, str_line)) in
+                rope_slice.lines().zip(str_slice.lines()).enumerate()
+            {
+                if rope_line != str_line {
+                    println!(
+                        "Failed on line #{} in byte range: {range:?}",
+                        idx + 1
+                    );
+                    assert_eq!(rope_line, str_line);
+                }
+            }
 
             for ((idx, rope_line), str_line) in rope_slice
                 .lines()
@@ -87,7 +59,7 @@ fn lines_over_random_slices() {
 }
 
 #[test]
-fn raw_linez_over_random_slices() {
+fn raw_lines_over_random_slices() {
     let mut rng = rand::thread_rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {

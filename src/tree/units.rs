@@ -945,7 +945,7 @@ where
     fn from(
         tree_slice: &'a TreeSlice<'a, FANOUT, L>,
     ) -> UnitsBackward<'a, FANOUT, L, M> {
-        println!("{tree_slice:#?}");
+        // println!("{tree_slice:#?}");
 
         Self {
             is_initialized: false,
@@ -1250,11 +1250,13 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             let contains_first_slice =
                 previous_leaf.base_measure() > self.base_remaining;
 
-            (self.end_slice, self.end_summary) = if contains_first_slice {
+            if contains_first_slice {
                 let (slice, summary) = self.first_slice.take().unwrap();
-                (slice, summary.clone())
+                self.end_slice = slice;
+                self.end_summary = summary.clone();
             } else {
-                (previous_leaf.as_slice(), previous_leaf.summary().clone())
+                self.end_slice = previous_leaf.as_slice();
+                self.end_summary = previous_leaf.summary().clone();
             };
 
             self.yielded_in_leaf = L::BaseMetric::zero();
@@ -1491,17 +1493,60 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     fn previous_unit_in_range(&mut self) -> (TreeSlice<'a, N, L>, L::Summary) {
         debug_assert!(self.units_remaining > M::zero());
 
-        let (_, _, mut end_slice, mut end_summary, mut advance) =
+        let (_, _, end_slice, end_summary, mut advance) =
             M::last_unit(self.end_slice, &self.end_summary);
 
         if L::BaseMetric::measure(&end_summary) == L::BaseMetric::zero() {
-            // TODO: go to the previous leaf, modify stack.
-            //
-            // If the previous leaf contains the first slice we need to return.
-            //
-            // If it doesn't the end_slice and end_summary are those of the
-            // leaf.
-            todo!();
+            let previous_leaf = self.previous_leaf();
+
+            self.base_remaining -= L::BaseMetric::measure(&advance);
+
+            let contains_first_slice =
+                previous_leaf.base_measure() > self.base_remaining;
+
+            if contains_first_slice {
+                let (slice, summary) = self.first_slice.take().unwrap();
+                self.end_slice = slice;
+                self.end_summary = summary.clone();
+            } else {
+                self.end_slice = previous_leaf.as_slice();
+                self.end_summary = previous_leaf.summary().clone();
+            };
+
+            self.yielded_in_leaf = L::BaseMetric::zero();
+
+            let (slice, slice_advance) =
+                if let Some(remainder) = self.remainder() {
+                    remainder
+                } else {
+                    let (_, _, empty, empty_summary) =
+                        M::remainder(self.end_slice, &self.end_summary);
+
+                    debug_assert_eq!(
+                        L::BaseMetric::measure(&empty_summary),
+                        L::BaseMetric::zero()
+                    );
+
+                    (
+                        TreeSlice {
+                            root: self.leaf_node,
+                            offset: self.leaf_node.base_measure(),
+                            start_slice: empty,
+                            start_summary: empty_summary.clone(),
+                            end_slice: empty,
+                            end_summary: empty_summary.clone(),
+                            summary: empty_summary.clone(),
+                            leaf_count: 1,
+                        },
+                        L::Summary::default(),
+                    )
+                };
+
+            self.base_remaining += L::BaseMetric::measure(&advance);
+
+            advance += &slice_advance;
+
+            return (slice, advance);
         }
 
         let (leaf, mut root, after, mut summary, mut leaf_count) =
@@ -1514,7 +1559,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         leaf_count += 1;
 
         let (slice, slice_summary) = {
-            let contains_first_slice = L::BaseMetric::measure(&summary)
+            let contains_first_slice = L::BaseMetric::measure(&advance)
                 + leaf.base_measure()
                 > self.base_remaining;
 
@@ -1525,22 +1570,17 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             }
         };
 
-        let (
-            rest,
-            rest_summary,
-            mut start_slice,
-            mut start_summary,
-            start_advance,
-        ) = M::remainder(slice, slice_summary);
+        let (rest, rest_summary, mut start_slice, mut start_summary) =
+            M::remainder(slice, slice_summary);
 
-        advance += &start_advance;
+        advance += &start_summary;
 
         let mut offset = root.base_measure()
             - after
             - self.yielded_in_leaf
             - L::BaseMetric::measure(&advance);
 
-        self.yielded_in_leaf = L::BaseMetric::measure(&start_advance);
+        self.yielded_in_leaf = L::BaseMetric::measure(&start_summary);
         self.end_slice = rest;
         self.end_summary = rest_summary;
 
@@ -1622,13 +1662,13 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         debug_assert!(self.base_remaining > L::BaseMetric::zero());
 
         if M::measure(&self.end_summary) > M::zero() {
-            let (rest, rest_summary, slice, summary, advance) =
+            let (rest, rest_summary, slice, summary) =
                 M::remainder(self.end_slice, &self.end_summary);
 
-            if L::BaseMetric::measure(&advance) > L::BaseMetric::zero() {
+            if L::BaseMetric::measure(&summary) > L::BaseMetric::zero() {
                 let offset = L::BaseMetric::measure(&rest_summary);
 
-                self.yielded_in_leaf += L::BaseMetric::measure(&advance);
+                self.yielded_in_leaf += L::BaseMetric::measure(&summary);
                 self.end_slice = rest;
                 self.end_summary = rest_summary;
 
@@ -1640,10 +1680,10 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                         start_summary: summary.clone(),
                         end_slice: slice,
                         end_summary: summary.clone(),
-                        summary,
+                        summary: summary.clone(),
                         leaf_count: 1,
                     },
-                    advance,
+                    summary,
                 ))
             } else {
                 None
