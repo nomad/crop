@@ -14,46 +14,31 @@ fn lines_empty() {
 
 #[test]
 fn lines_over_random_slices() {
-    let mut rng = rand::thread_rng();
+    {
+        let s = TINY;
 
-    for s in [TINY, SMALL, MEDIUM, LARGE] {
         let rope = Rope::from(s);
 
-        for _ in 0..100 {
-            let start = rng.gen_range(0..=rope.byte_len());
-            let end = rng.gen_range(start..=rope.byte_len());
+        let range = 383..412;
 
-            let range = start..end;
+        let rope_slice = rope.byte_slice(range.clone());
+        let str_slice = &s[range.clone()];
 
-            let rope_slice = rope.byte_slice(range.clone());
-            let str_slice = &s[range.clone()];
-
-            for (idx, (rope_line, str_line)) in
-                rope_slice.lines().zip(str_slice.lines()).enumerate()
-            {
-                if rope_line != str_line {
-                    println!(
-                        "Failed on line #{} in byte range: {range:?}",
-                        idx + 1
-                    );
-                    assert_eq!(rope_line, str_line);
-                }
+        for ((idx, rope_line), str_line) in
+            rope_slice.lines().enumerate().rev().zip(str_slice.lines().rev())
+        {
+            if rope_line != str_line {
+                println!(
+                    "Failed on line #{} in byte range: {range:?}",
+                    idx + 1
+                );
+                assert_eq!(rope_line, str_line);
             }
-
-            // for (rope_line, str_line) in
-            //     rope_slice.lines().rev().zip(str_slice.lines().rev())
-            // {
-            //     if rope_line != str_line {
-            //         println!("Byte range: {range:?}");
-            //         assert_eq!(rope_line, str_line);
-            //     }
-            // }
         }
-    }
-}
 
-#[test]
-fn raw_lines_over_random_slices() {
+        // panic!("AAAAAA");
+    }
+
     let mut rng = rand::thread_rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
@@ -69,20 +54,8 @@ fn raw_lines_over_random_slices() {
             let str_slice = &s[range.clone()];
 
             // for (idx, (rope_line, str_line)) in
-            //     rope_slice.raw_lines().zip(str_slice.lines()).enumerate()
+            //     rope_slice.lines().zip(str_slice.lines()).enumerate()
             // {
-            //     let is_last = idx == rope_slice.line_len() - 1;
-
-            //     // TODO: use `RopeSlice::ends_with` once that's implemented to
-            //     // replace this monstrosity.
-            //     let str_line = if !is_last || str_slice.ends_with('\n') {
-            //         let mut l = str_line.to_owned();
-            //         l.push('\n');
-            //         std::borrow::Cow::Owned(l)
-            //     } else {
-            //         std::borrow::Cow::Borrowed(str_line)
-            //     };
-
             //     if rope_line != str_line {
             //         println!(
             //             "Failed on line #{} in byte range: {range:?}",
@@ -92,16 +65,74 @@ fn raw_lines_over_random_slices() {
             //     }
             // }
 
-            for (idx, (rope_line, str_line)) in rope_slice
-                .raw_lines()
+            println!("{range:?}");
+
+            for ((idx, rope_line), str_line) in rope_slice
+                .lines()
+                .enumerate()
                 .rev()
                 .zip(str_slice.lines().rev())
-                .enumerate()
             {
-                let is_last = idx == 0;
+                if rope_line != str_line {
+                    println!(
+                        "Failed on line #{} in byte range: {range:?}",
+                        idx + 1
+                    );
+                    assert_eq!(rope_line, str_line);
+                }
+            }
+        }
+    }
+}
 
-                // TODO: use `RopeSlice::ends_with` once that's implemented to
-                // replace this monstrosity.
+#[test]
+fn raw_linez_over_random_slices() {
+    let mut rng = rand::thread_rng();
+
+    for s in [TINY, SMALL, MEDIUM, LARGE] {
+        let rope = Rope::from(s);
+
+        for _ in 0..100 {
+            let start = rng.gen_range(0..=rope.byte_len());
+            let end = rng.gen_range(start..=rope.byte_len());
+
+            let range = start..end;
+
+            let rope_slice = rope.byte_slice(range.clone());
+            let str_slice = &s[range.clone()];
+
+            for (idx, (rope_line, str_line)) in
+                rope_slice.raw_lines().zip(str_slice.lines()).enumerate()
+            {
+                let is_last = idx == rope_slice.line_len() - 1;
+
+                // TODO: use `RopeSlice::ends_with` once that's implemented.
+                let str_line = if !is_last || str_slice.ends_with('\n') {
+                    let mut l = str_line.to_owned();
+                    l.push('\n');
+                    std::borrow::Cow::Owned(l)
+                } else {
+                    std::borrow::Cow::Borrowed(str_line)
+                };
+
+                if rope_line != str_line {
+                    println!(
+                        "Failed on line #{} in byte range: {range:?}",
+                        idx + 1
+                    );
+                    assert_eq!(rope_line, str_line);
+                }
+            }
+
+            for ((idx, rope_line), str_line) in rope_slice
+                .raw_lines()
+                .enumerate()
+                .rev()
+                .zip(str_slice.lines().rev())
+            {
+                let is_last = idx == rope_slice.line_len() - 1;
+
+                // TODO: use `RopeSlice::ends_with` once that's implemented.
                 let str_line = if !is_last || str_slice.ends_with('\n') {
                     let mut l = str_line.to_owned();
                     l.push('\n');

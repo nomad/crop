@@ -289,8 +289,8 @@ impl UnitMetric<RopeChunk> for LineMetric {
         let (mut first, mut first_summary, advance, rest, rest_summary) =
             RawLineMetric::first_unit(chunk, summary);
 
-        debug_assert_eq!(*first.as_bytes().last().unwrap(), b'\n');
-        debug_assert!(first_summary.line_breaks > 0);
+        debug_assert_eq!(*first.as_bytes().last().unwrap() as char, '\n');
+        debug_assert_eq!(first_summary.line_breaks, 1);
 
         let bytes_line_break = ((first.len() > 1
             && first.as_bytes()[first.len() - 2] == b'\r')
@@ -308,8 +308,8 @@ impl UnitMetric<RopeChunk> for LineMetric {
 impl DoubleEndedUnitMetric<RopeChunk> for LineMetric {
     #[inline]
     fn last_unit<'a>(
-        _chunk: &'a ChunkSlice,
-        _summary: &ChunkSummary,
+        chunk: &'a ChunkSlice,
+        summary: &ChunkSummary,
     ) -> (
         &'a ChunkSlice,
         ChunkSummary,
@@ -317,13 +317,34 @@ impl DoubleEndedUnitMetric<RopeChunk> for LineMetric {
         ChunkSummary,
         ChunkSummary,
     ) {
-        todo!();
+        let (rest, rest_summary, mut last, mut last_summary, advance) =
+            RawLineMetric::last_unit(chunk, summary);
+
+        debug_assert_eq!(last_summary, advance);
+
+        if last_summary.line_breaks == 0 {
+            return (rest, rest_summary, last, last_summary, advance);
+        }
+
+        debug_assert_eq!(*last.as_bytes().last().unwrap() as char, '\n');
+        debug_assert_eq!(last_summary.line_breaks, 1);
+
+        let bytes_line_break = ((last.len() > 1
+            && last.as_bytes()[last.len() - 2] == b'\r')
+            as usize)
+            + 1;
+
+        last = (&last[..last.len() - bytes_line_break]).into();
+        last_summary.bytes -= bytes_line_break;
+        last_summary.line_breaks = 0;
+
+        (rest, rest_summary, last, last_summary, advance)
     }
 
     #[inline]
     fn remainder<'a>(
-        _chunk: &'a ChunkSlice,
-        _summary: &ChunkSummary,
+        chunk: &'a ChunkSlice,
+        summary: &ChunkSummary,
     ) -> (
         &'a ChunkSlice,
         ChunkSummary,
@@ -331,7 +352,7 @@ impl DoubleEndedUnitMetric<RopeChunk> for LineMetric {
         ChunkSummary,
         ChunkSummary,
     ) {
-        todo!();
+        RawLineMetric::remainder(chunk, summary)
     }
 }
 

@@ -32,7 +32,29 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     pub(super) leaf_count: usize,
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> Clone for TreeSlice<'a, FANOUT, L> {
+// impl<const FANOUT: usize, L: Leaf> std::fmt::Debug
+//     for TreeSlice<'_, FANOUT, L>
+// {
+//     #[inline]
+//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//         if !f.alternate() {
+//             f.debug_struct("TreeSlice")
+//                 .field("root", &self.root)
+//                 .field("offset", &self.offset)
+//                 .field("summary", &self.summary)
+//                 .field("start_slice", &self.start_slice)
+//                 .field("start_summary", &self.start_summary)
+//                 .field("end_slice", &self.end_slice)
+//                 .field("end_summary", &self.end_summary)
+//                 .field("leaf_count", &self.leaf_count)
+//                 .finish()
+//         } else {
+//             pretty_print_tree_slice(self, &mut String::new(), "", 0, f)
+//         }
+//     }
+// }
+
+impl<const FANOUT: usize, L: Leaf> Clone for TreeSlice<'_, FANOUT, L> {
     #[inline]
     fn clone(&self) -> Self {
         TreeSlice {
@@ -402,4 +424,43 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
             }
         },
     }
+}
+
+/// Recursively prints a tree-like representation of a `TreeSlice`.
+///
+/// Called by the `Debug` impl when using the pretty-print modifier (i.e.
+/// `{:#?}`).
+#[inline]
+fn pretty_print_tree_slice<const N: usize, L: Leaf>(
+    inode: &TreeSlice<'_, N, L>,
+    shifts: &mut String,
+    ident: &str,
+    last_shift_byte_len: usize,
+    f: &mut std::fmt::Formatter,
+) -> std::fmt::Result {
+    writeln!(
+        f,
+        "{}{}{:?}",
+        &shifts[..shifts.len() - last_shift_byte_len],
+        ident,
+        inode.summary()
+    )?;
+
+    // for (i, child) in inode.children().iter().enumerate() {
+    //     let is_last = i + 1 == inode.children.len();
+    //     let ident = if is_last { "└── " } else { "├── " };
+    //     match &**child {
+    //         Node::Internal(inode) => {
+    //             let shift = if is_last { "    " } else { "│   " };
+    //             shifts.push_str(shift);
+    //             pretty_print_inode(inode, shifts, ident, shift.len(), f)?;
+    //             shifts.truncate(shifts.len() - shift.len());
+    //         },
+    //         Node::Leaf(leaf) => {
+    //             writeln!(f, "{}{}{:#?}", &shifts, ident, &leaf)?;
+    //         },
+    //     }
+    // }
+
+    Ok(())
 }
