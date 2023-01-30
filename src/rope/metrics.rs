@@ -187,8 +187,8 @@ impl DoubleEndedUnitMetric<RopeChunk> for RawLineMetric {
 
     #[inline]
     fn remainder<'a>(
-        _chunk: &'a ChunkSlice,
-        _summary: &ChunkSummary,
+        chunk: &'a ChunkSlice,
+        summary: &ChunkSummary,
     ) -> (
         &'a ChunkSlice,
         ChunkSummary,
@@ -196,7 +196,29 @@ impl DoubleEndedUnitMetric<RopeChunk> for RawLineMetric {
         ChunkSummary,
         ChunkSummary,
     ) {
-        todo!();
+        let mut remainder_summary =
+            ChunkSummary { bytes: summary.bytes, line_breaks: 0 };
+
+        let bytes = chunk.as_bytes().iter();
+
+        for (idx, &byte) in bytes.rev().enumerate() {
+            if byte == b'\n' {
+                remainder_summary.bytes = idx;
+                break;
+            }
+        }
+
+        let remainder =
+            chunk[summary.bytes - remainder_summary.bytes..].into();
+
+        let rest = chunk[..chunk.len() - remainder_summary.bytes].into();
+
+        let rest_summary = ChunkSummary {
+            bytes: summary.bytes - remainder_summary.bytes,
+            line_breaks: summary.line_breaks,
+        };
+
+        (rest, rest_summary, remainder, remainder_summary, remainder_summary)
     }
 }
 
