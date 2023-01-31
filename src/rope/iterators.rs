@@ -81,9 +81,11 @@ pub struct Bytes<'a> {
     /// The number of bytes of [`backward_chunk`] which are yet to be yielded.
     backward_byte_idx: usize,
 
-    /// The number of bytes which are yet to be yielded. We keep track of this
-    /// to implement [`ExactSizeIterator`].
-    bytes_remaining: usize,
+    /// The number of bytes that have been yielded so far.
+    bytes_yielded: usize,
+
+    /// The total number of bytes this iterator will yield.
+    bytes_total: usize,
 }
 
 impl<'a> From<&'a Rope> for Bytes<'a> {
@@ -95,7 +97,8 @@ impl<'a> From<&'a Rope> for Bytes<'a> {
             forward_byte_idx: 0,
             backward_chunk: &[],
             backward_byte_idx: 0,
-            bytes_remaining: rope.byte_len(),
+            bytes_yielded: 0,
+            bytes_total: rope.byte_len(),
         }
     }
 }
@@ -109,7 +112,8 @@ impl<'a> From<&'a RopeSlice<'a>> for Bytes<'a> {
             forward_byte_idx: 0,
             backward_chunk: &[],
             backward_byte_idx: 0,
-            bytes_remaining: slice.byte_len(),
+            bytes_yielded: 0,
+            bytes_total: slice.byte_len(),
         }
     }
 }
@@ -136,7 +140,7 @@ impl Iterator for Bytes<'_> {
                     let byte = self.backward_chunk[0];
                     self.backward_chunk = &self.backward_chunk[1..];
                     self.backward_byte_idx -= 1;
-                    self.bytes_remaining -= 1;
+                    self.bytes_yielded += 1;
                     return Some(byte);
                 }
             }
@@ -144,7 +148,7 @@ impl Iterator for Bytes<'_> {
 
         let byte = self.forward_chunk[self.forward_byte_idx];
         self.forward_byte_idx += 1;
-        self.bytes_remaining -= 1;
+        self.bytes_yielded += 1;
         Some(byte)
     }
 
@@ -174,7 +178,7 @@ impl DoubleEndedIterator for Bytes<'_> {
                     let byte_idx = self.forward_chunk.len() - 1;
                     let byte = self.forward_chunk[byte_idx];
                     self.forward_chunk = &self.forward_chunk[..byte_idx];
-                    self.bytes_remaining += 1;
+                    self.bytes_yielded += 1;
                     return Some(byte);
                 }
             }
@@ -182,7 +186,7 @@ impl DoubleEndedIterator for Bytes<'_> {
 
         self.backward_byte_idx -= 1;
         let byte = self.backward_chunk[self.backward_byte_idx];
-        self.bytes_remaining += 1;
+        self.bytes_yielded += 1;
         Some(byte)
     }
 }
@@ -190,7 +194,7 @@ impl DoubleEndedIterator for Bytes<'_> {
 impl ExactSizeIterator for Bytes<'_> {
     #[inline]
     fn len(&self) -> usize {
-        self.bytes_remaining
+        self.bytes_total - self.bytes_yielded
     }
 }
 
@@ -336,9 +340,11 @@ impl<'a> std::iter::FusedIterator for Chars<'a> {}
 pub struct RawLines<'a> {
     units: Units<'a, { Rope::fanout() }, RopeChunk, RawLineMetric>,
 
-    /// The number of lines which are yet to be yielded. We keep track of this
-    /// to implement [`ExactSizeIterator`].
-    lines_remaining: usize,
+    /// The number of lines that have been yielded so far.
+    lines_yielded: usize,
+
+    /// The total number of bytes this iterator will yield.
+    lines_total: usize,
 }
 
 impl<'a> From<&'a Rope> for RawLines<'a> {
@@ -346,7 +352,8 @@ impl<'a> From<&'a Rope> for RawLines<'a> {
     fn from(rope: &'a Rope) -> Self {
         Self {
             units: rope.tree().units::<RawLineMetric>(),
-            lines_remaining: rope.line_len(),
+            lines_yielded: 0,
+            lines_total: rope.line_len(),
         }
     }
 }
@@ -356,7 +363,8 @@ impl<'a> From<&'a RopeSlice<'a>> for RawLines<'a> {
     fn from(slice: &'a RopeSlice<'a>) -> Self {
         Self {
             units: slice.tree_slice.units::<RawLineMetric>(),
-            lines_remaining: slice.line_len(),
+            lines_yielded: 0,
+            lines_total: slice.line_len(),
         }
     }
 }
@@ -367,7 +375,7 @@ impl<'a> Iterator for RawLines<'a> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next()?;
-        self.lines_remaining -= 1;
+        self.lines_yielded += 1;
         Some(RopeSlice::from(tree_slice))
     }
 
@@ -382,7 +390,7 @@ impl<'a> DoubleEndedIterator for RawLines<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next_back()?;
-        self.lines_remaining -= 1;
+        self.lines_yielded += 1;
         Some(RopeSlice::from(tree_slice))
     }
 }
@@ -390,7 +398,7 @@ impl<'a> DoubleEndedIterator for RawLines<'a> {
 impl<'a> ExactSizeIterator for RawLines<'a> {
     #[inline]
     fn len(&self) -> usize {
-        self.lines_remaining
+        self.lines_total - self.lines_yielded
     }
 }
 
@@ -401,9 +409,11 @@ impl<'a> std::iter::FusedIterator for RawLines<'a> {}
 pub struct Lines<'a> {
     units: Units<'a, { Rope::fanout() }, RopeChunk, LineMetric>,
 
-    /// The number of lines which are yet to be yielded. We keep track of this
-    /// to implement [`ExactSizeIterator`].
-    lines_remaining: usize,
+    /// The number of lines that have been yielded so far.
+    lines_yielded: usize,
+
+    /// The total number of bytes this iterator will yield.
+    lines_total: usize,
 }
 
 impl<'a> From<&'a Rope> for Lines<'a> {
@@ -411,7 +421,8 @@ impl<'a> From<&'a Rope> for Lines<'a> {
     fn from(rope: &'a Rope) -> Self {
         Self {
             units: rope.tree().units::<LineMetric>(),
-            lines_remaining: rope.line_len(),
+            lines_yielded: 0,
+            lines_total: rope.line_len(),
         }
     }
 }
@@ -421,7 +432,8 @@ impl<'a> From<&'a RopeSlice<'a>> for Lines<'a> {
     fn from(slice: &'a RopeSlice<'a>) -> Self {
         Self {
             units: slice.tree_slice.units::<LineMetric>(),
-            lines_remaining: slice.line_len(),
+            lines_yielded: 0,
+            lines_total: slice.line_len(),
         }
     }
 }
@@ -432,7 +444,7 @@ impl<'a> Iterator for Lines<'a> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next()?;
-        self.lines_remaining -= 1;
+        self.lines_yielded += 1;
         Some(RopeSlice { tree_slice, last_byte_is_newline: false })
     }
 
@@ -447,7 +459,7 @@ impl<'a> DoubleEndedIterator for Lines<'a> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next_back()?;
-        self.lines_remaining -= 1;
+        self.lines_yielded += 1;
         Some(RopeSlice { tree_slice, last_byte_is_newline: false })
     }
 }
@@ -455,7 +467,7 @@ impl<'a> DoubleEndedIterator for Lines<'a> {
 impl<'a> ExactSizeIterator for Lines<'a> {
     #[inline]
     fn len(&self) -> usize {
-        self.lines_remaining
+        self.lines_total - self.lines_yielded
     }
 }
 

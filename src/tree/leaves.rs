@@ -16,8 +16,11 @@ pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
     /// Iterates over the leaves from back to front.
     backward: LeavesBackward<'a, FANOUT, L>,
 
-    /// The number of leaves which are yet to be yielded.
-    leaves_remaining: usize,
+    /// The number of leaves that have been yielded so far.
+    leaves_yielded: usize,
+
+    /// The total number of leaves this iterator will yield.
+    leaves_total: usize,
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> Clone for Leaves<'a, FANOUT, L> {
@@ -39,7 +42,8 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
         Self {
             forward: LeavesForward::from(tree),
             backward: LeavesBackward::from(tree),
-            leaves_remaining: tree.root.num_leaves(),
+            leaves_yielded: 0,
+            leaves_total: tree.root.num_leaves(),
         }
     }
 }
@@ -52,7 +56,8 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
         Self {
             forward: LeavesForward::from(slice),
             backward: LeavesBackward::from(slice),
-            leaves_remaining: slice.leaf_count(),
+            leaves_yielded: 0,
+            leaves_total: slice.leaf_count(),
         }
     }
 }
@@ -62,10 +67,10 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.leaves_remaining == 0 {
+        if self.leaves_yielded == self.leaves_total {
             None
         } else {
-            self.leaves_remaining -= 1;
+            self.leaves_yielded += 1;
             self.forward.next()
         }
     }
@@ -82,10 +87,10 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
 {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.leaves_remaining == 0 {
+        if self.leaves_yielded == self.leaves_total {
             None
         } else {
-            self.leaves_remaining -= 1;
+            self.leaves_yielded += 1;
             self.backward.previous()
         }
     }
@@ -96,7 +101,7 @@ impl<'a, const FANOUT: usize, L: Leaf> ExactSizeIterator
 {
     #[inline]
     fn len(&self) -> usize {
-        self.leaves_remaining
+        self.leaves_total - self.leaves_yielded
     }
 }
 
