@@ -16,20 +16,20 @@ pub struct RopeSlice<'a> {
 impl<'a> RopeSlice<'a> {
     /// TODO: docs
     #[inline]
-    pub fn byte(&self, byte_idx: usize) -> u8 {
-        if byte_idx >= self.byte_len() {
+    pub fn byte(&self, byte_index: usize) -> u8 {
+        if byte_index >= self.byte_len() {
             panic!(
                 "Trying to index past the end of the RopeSlice: the byte \
                  length is {} but the byte index is {}",
                 self.byte_len(),
-                byte_idx
+                byte_index
             );
         }
 
         let (chunk, ByteMetric(chunk_idx)) =
-            self.tree_slice.leaf_at_measure(ByteMetric(byte_idx));
+            self.tree_slice.leaf_at_measure(ByteMetric(byte_index));
 
-        chunk.as_bytes()[byte_idx - chunk_idx]
+        chunk.as_bytes()[byte_index - chunk_idx]
     }
 
     /// TODO: docs
@@ -40,20 +40,20 @@ impl<'a> RopeSlice<'a> {
 
     /// TODO: docs
     #[inline]
-    pub fn byte_of_line(&self, line_idx: usize) -> usize {
-        if line_idx >= self.line_len() {
+    pub fn byte_of_line(&self, line_index: usize) -> usize {
+        if line_index >= self.line_len() {
             panic!(
                 "Trying to index past the end of the RopeSlice: the line \
                  length is {} but the line index is {}",
                 self.line_len(),
-                line_idx
+                line_index
             );
         }
 
-        let ByteMetric(byte_idx) =
-            self.tree_slice.convert_measure(RawLineMetric(line_idx));
+        let ByteMetric(byte_index) =
+            self.tree_slice.convert_measure(RawLineMetric(line_index));
 
-        byte_idx
+        byte_index
     }
 
     /// TODO: docs
@@ -157,19 +157,19 @@ impl<'a> RopeSlice<'a> {
 
     /// TODO: docs
     #[inline]
-    pub fn line(&'a self, line_idx: usize) -> RopeSlice<'a> {
-        if line_idx >= self.line_len() {
+    pub fn line(&'a self, line_index: usize) -> RopeSlice<'a> {
+        if line_index >= self.line_len() {
             panic!(
                 "Trying to index past the end of the RopeSlice: the line \
                  length is {} but the line index is {}",
                 self.line_len(),
-                line_idx
+                line_index
             );
         }
 
         let mut tree_slice = self
             .tree_slice
-            .slice(RawLineMetric(line_idx)..RawLineMetric(line_idx + 1));
+            .slice(RawLineMetric(line_index)..RawLineMetric(line_index + 1));
 
         tree_slice_remove_trailing_line_break(&mut tree_slice);
 
@@ -196,10 +196,10 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        let RawLineMetric(line_idx) =
+        let RawLineMetric(line_index) =
             self.tree_slice.convert_measure(ByteMetric(byte_index));
 
-        line_idx
+        line_index
     }
 
     /// TODO: docs

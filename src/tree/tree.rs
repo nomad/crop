@@ -93,8 +93,9 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     {
         debug_assert!(
             from <= self.measure::<M1>() + M1::one(),
-            "Trying to get the leaf at {:?}, but this Tree is only {:?} long",
+            "Trying to convert {:?} into {}, but this Tree is only {:?} long",
             from,
+            std::any::type_name::<M2>(),
             self.measure::<M1>(),
         );
 
@@ -558,7 +559,10 @@ mod tests {
 
         #[inline]
         fn add(self, rhs: &Self) -> Self {
-            todo!();
+            Count {
+                count: self.count + rhs.count,
+                leaves: self.leaves + rhs.leaves,
+            }
         }
     }
 
@@ -567,7 +571,10 @@ mod tests {
 
         #[inline]
         fn sub(self, rhs: &Self) -> Self {
-            todo!();
+            Count {
+                count: self.count - rhs.count,
+                leaves: self.leaves - rhs.leaves,
+            }
         }
     }
 

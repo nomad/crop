@@ -32,28 +32,6 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     pub(super) leaf_count: usize,
 }
 
-// impl<const FANOUT: usize, L: Leaf> std::fmt::Debug
-//     for TreeSlice<'_, FANOUT, L>
-// {
-//     #[inline]
-//     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-//         if !f.alternate() {
-//             f.debug_struct("TreeSlice")
-//                 .field("root", &self.root)
-//                 .field("offset", &self.offset)
-//                 .field("summary", &self.summary)
-//                 .field("start_slice", &self.start_slice)
-//                 .field("start_summary", &self.start_summary)
-//                 .field("end_slice", &self.end_slice)
-//                 .field("end_summary", &self.end_summary)
-//                 .field("leaf_count", &self.leaf_count)
-//                 .finish()
-//         } else {
-//             pretty_print_tree_slice(self, &mut String::new(), "", 0, f)
-//         }
-//     }
-// }
-
 impl<const FANOUT: usize, L: Leaf> Clone for TreeSlice<'_, FANOUT, L> {
     #[inline]
     fn clone(&self) -> Self {
@@ -87,65 +65,20 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     {
         debug_assert!(
             from <= self.measure::<M1>() + M1::one(),
-            "Trying to get the leaf at {:?}, but this TreeSlice is only {:?} \
+            "Trying to convert {:?} into {}, but this TreeSlice is only {:?} \
              long",
             from,
+            std::any::type_name::<M2>(),
             self.measure::<M1>(),
         );
 
-        // let m2 = self.root.convert_measure(M1::measure(&self.offset) + m1);
-        // m2 - M2::measure(&self.offset)
-        todo!();
-
-        //let Node::Internal(inode) = &**self.root else {
-        //    let (slice, summary) = (self.start_slice, self.summary());
-        //    let (_, left_summary, _, _) = M1::split(slice, from, summary);
-        //    return M2::measure(&left_summary);
-        //};
-
-        //let mut measured = L::Summary::default();
-
-        //let mut base_measured = L::BaseMetric::zero();
-
-        //let mut children = inode.children().iter();
-
-        //let start = self.offset;
-
-        //while let Some(child) = children.next() {
-        //    measured += child.summary();
-
-        //    if L::BaseMetric::measure(&measured)
-        //        + L::BaseMetric::measure(child_summary)
-        //        > self.offset
-        //    {
-        //        let contains_m1 = M2::measure(&measured)
-        //            - M2::measure(&self.offset)
-        //            >= m1_offset;
-
-        //        if contains_m1 {
-        //            let m2 = child.convert_measure()
-        //        }
-
-        //        // How can we know if `from` is contained in the first child?
-        //        //
-        //        // I dont think there's a way.
-        //        //
-        //        //
-        //        // if M1::measure()
-
-        //        break;
-        //    } else {
-        //        measured += child_summary;
-        //    }
-        //}
-
-        //let end = self.offset + self.base_measure();
-
-        //// special cases
-        //// if M1 falls in the first child
-        //// if M1 falls in the last child
-
-        //todo!();
+        if from == M1::zero() {
+            M2::zero()
+        } else {
+            self.root
+                .convert_measure::<M1, M2>(M1::measure(&self.offset) + from)
+                - M2::measure(&self.offset)
+        }
     }
 
     /// Returns the `M`-measure of this slice's summary.
@@ -474,43 +407,4 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
             }
         },
     }
-}
-
-/// Recursively prints a tree-like representation of a `TreeSlice`.
-///
-/// Called by the `Debug` impl when using the pretty-print modifier (i.e.
-/// `{:#?}`).
-#[inline]
-fn pretty_print_tree_slice<const N: usize, L: Leaf>(
-    inode: &TreeSlice<'_, N, L>,
-    shifts: &mut String,
-    ident: &str,
-    last_shift_byte_len: usize,
-    f: &mut std::fmt::Formatter,
-) -> std::fmt::Result {
-    writeln!(
-        f,
-        "{}{}{:?}",
-        &shifts[..shifts.len() - last_shift_byte_len],
-        ident,
-        inode.summary()
-    )?;
-
-    // for (i, child) in inode.children().iter().enumerate() {
-    //     let is_last = i + 1 == inode.children.len();
-    //     let ident = if is_last { "└── " } else { "├── " };
-    //     match &**child {
-    //         Node::Internal(inode) => {
-    //             let shift = if is_last { "    " } else { "│   " };
-    //             shifts.push_str(shift);
-    //             pretty_print_inode(inode, shifts, ident, shift.len(), f)?;
-    //             shifts.truncate(shifts.len() - shift.len());
-    //         },
-    //         Node::Leaf(leaf) => {
-    //             writeln!(f, "{}{}{:#?}", &shifts, ident, &leaf)?;
-    //         },
-    //     }
-    // }
-
-    Ok(())
 }

@@ -41,20 +41,20 @@ impl Rope {
 
     /// TODO: docs.
     #[inline]
-    pub fn byte(&self, byte_idx: usize) -> u8 {
-        if byte_idx >= self.byte_len() {
+    pub fn byte(&self, byte_index: usize) -> u8 {
+        if byte_index >= self.byte_len() {
             panic!(
                 "Trying to index past the end of the Rope: the byte length \
                  is {} but the byte index is {}",
                 self.byte_len(),
-                byte_idx
+                byte_index
             );
         }
 
         let (chunk, ByteMetric(chunk_idx)) =
-            self.tree.leaf_at_measure(ByteMetric(byte_idx));
+            self.tree.leaf_at_measure(ByteMetric(byte_index));
 
-        chunk.as_bytes()[byte_idx - chunk_idx]
+        chunk.as_bytes()[byte_index - chunk_idx]
     }
 
     /// TODO: docs
@@ -65,20 +65,20 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
-    pub fn byte_of_line(&self, line_idx: usize) -> usize {
-        if line_idx >= self.line_len() {
+    pub fn byte_of_line(&self, line_index: usize) -> usize {
+        if line_index >= self.line_len() {
             panic!(
                 "Trying to index past the end of the Rope: the line length \
                  is {} but the line index is {}",
                 self.line_len(),
-                line_idx
+                line_index
             );
         }
 
-        let ByteMetric(byte_idx) =
-            self.tree.convert_measure(RawLineMetric(line_idx));
+        let ByteMetric(byte_index) =
+            self.tree.convert_measure(RawLineMetric(line_index));
 
-        byte_idx
+        byte_index
     }
 
     /// TODO: docs
@@ -143,11 +143,11 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
-    pub fn insert<T>(&mut self, byte_idx: usize, text: T)
+    pub fn insert<T>(&mut self, byte_index: usize, text: T)
     where
         T: AsRef<str>,
     {
-        self.replace(byte_idx..byte_idx, text)
+        self.replace(byte_index..byte_index, text)
     }
 
     /// TODO: docs
@@ -204,19 +204,19 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
-    pub fn line(&self, line_idx: usize) -> RopeSlice<'_> {
-        if line_idx >= self.line_len() {
+    pub fn line(&self, line_index: usize) -> RopeSlice<'_> {
+        if line_index >= self.line_len() {
             panic!(
                 "Trying to index past the end of the Rope: the line length \
                  is {} but the line index is {}",
                 self.line_len(),
-                line_idx
+                line_index
             );
         }
 
         let tree_slice = self
             .tree
-            .slice(RawLineMetric(line_idx)..RawLineMetric(line_idx + 1));
+            .slice(RawLineMetric(line_index)..RawLineMetric(line_index + 1));
 
         if tree_slice.summary().line_breaks == 1 {
             let tree_slice = tree_slice
@@ -242,20 +242,20 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
-    pub fn line_of_byte(&self, byte_idx: usize) -> usize {
-        if byte_idx >= self.byte_len() {
+    pub fn line_of_byte(&self, byte_index: usize) -> usize {
+        if byte_index >= self.byte_len() {
             panic!(
                 "Trying to index past the end of the Rope: the byte length \
                  is {} but the byte index is {}",
                 self.byte_len(),
-                byte_idx
+                byte_index
             );
         }
 
-        let RawLineMetric(line_idx) =
-            self.tree.convert_measure(ByteMetric(byte_idx));
+        let RawLineMetric(line_index) =
+            self.tree.convert_measure(ByteMetric(byte_index));
 
-        line_idx
+        line_index
     }
 
     /// TODO: docs

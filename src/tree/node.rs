@@ -99,7 +99,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         M1: Metric<L>,
         M2: Metric<L>,
     {
-        debug_assert!(from < M1::measure(self.summary()));
+        debug_assert!(from <= self.measure::<M1>() + M1::one());
 
         let mut m1 = M1::zero();
         let mut m2 = M2::zero();
@@ -110,13 +110,14 @@ impl<const N: usize, L: Leaf> Node<N, L> {
             match node {
                 Node::Internal(inode) => {
                     for child in inode.children() {
-                        let this = M1::measure(child.summary());
-                        if m1 + this > from {
+                        let child_m1 = child.measure::<M1>();
+
+                        if m1 + child_m1 >= from {
                             node = &**child;
                             continue 'outer;
                         } else {
-                            m1 += this;
-                            m2 += M2::measure(child.summary());
+                            m1 += child_m1;
+                            m2 += child.measure::<M2>();
                         }
                     }
                     unreachable!(
@@ -129,9 +130,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                     let (_, left_summary, _, _) =
                         M1::split(leaf.as_slice(), from - m1, leaf.summary());
 
-                    m2 += M2::measure(&left_summary);
-
-                    return m2;
+                    return m2 + M2::measure(&left_summary);
                 },
             }
         }
