@@ -71,14 +71,14 @@ pub struct Bytes<'a> {
     /// The chunk used when calling [`Bytes::next()`].
     forward_chunk: &'a [u8],
 
-    /// The number of bytes of [`forward_chunk`] that have already been
-    /// yielded.
+    /// The number of bytes of `forward_chunk` that have already been yielded.
     forward_byte_idx: usize,
 
     /// The chunk used when calling [`Bytes::next_back()`].
     backward_chunk: &'a [u8],
 
-    /// The number of bytes of [`backward_chunk`] which are yet to be yielded.
+    /// The number of bytes of `backward_chunk` which
+    /// are yet to be yielded.
     backward_byte_idx: usize,
 
     /// The number of bytes that have been yielded so far.
@@ -208,14 +208,14 @@ pub struct Chars<'a> {
     /// The chunk used when calling [`Chars::next()`].
     forward_chunk: &'a str,
 
-    /// The number of bytes of [`forward_chunk`] that have already been
+    /// The number of bytes of `forward_chunk` that have already been
     /// yielded.
     forward_byte_idx: usize,
 
     /// The chunk used when calling [`Chars::next_back()`].
     backward_chunk: &'a str,
 
-    /// The number of bytes of [`backward_chunk`] which are yet to be yielded.
+    /// The number of bytes of `backward_chunk` which are yet to be yielded.
     backward_byte_idx: usize,
 }
 
