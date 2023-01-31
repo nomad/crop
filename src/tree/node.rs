@@ -121,7 +121,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                     }
                     unreachable!(
                         "Didn't I tell you to do bounds checks before \
-                         callign this function?"
+                         calling this function?"
                     );
                 },
 

@@ -1,5 +1,5 @@
 use std::fmt::{self, Debug};
-use std::ops::{AddAssign, SubAssign};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 use std::str;
 
 use super::metrics::ByteMetric;
@@ -196,6 +196,30 @@ impl ToOwned for ChunkSlice {
 pub(super) struct ChunkSummary {
     pub(super) bytes: usize,
     pub(super) line_breaks: usize,
+}
+
+impl Add<&Self> for ChunkSummary {
+    type Output = Self;
+
+    #[inline]
+    fn add(self, rhs: &Self) -> Self {
+        ChunkSummary {
+            bytes: self.bytes + rhs.bytes,
+            line_breaks: self.line_breaks + rhs.line_breaks,
+        }
+    }
+}
+
+impl Sub<&Self> for ChunkSummary {
+    type Output = Self;
+
+    #[inline]
+    fn sub(self, rhs: &Self) -> Self {
+        ChunkSummary {
+            bytes: self.bytes - rhs.bytes,
+            line_breaks: self.line_breaks - rhs.line_breaks,
+        }
+    }
 }
 
 impl<'a> AddAssign<&'a Self> for ChunkSummary {

@@ -7,6 +7,8 @@ pub trait Summarize: Debug {
     type Summary: Debug
         + Default
         + Clone
+        + for<'a> Add<&'a Self::Summary, Output = Self::Summary>
+        + for<'a> Sub<&'a Self::Summary, Output = Self::Summary>
         + for<'a> AddAssign<&'a Self::Summary>
         + for<'a> SubAssign<&'a Self::Summary>;
 

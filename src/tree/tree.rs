@@ -91,13 +91,11 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M1: Metric<L>,
         M2: Metric<L>,
     {
-        // TODO: doesn't work for `LineMetric`
-
         debug_assert!(
-            from <= M1::measure(self.summary()),
-            "Trying to get the leaf at {:?}, but this tree is only {:?} long",
+            from <= self.measure::<M1>() + M1::one(),
+            "Trying to get the leaf at {:?}, but this Tree is only {:?} long",
             from,
-            M1::measure(self.summary()),
+            self.measure::<M1>(),
         );
 
         self.root.convert_measure(from)
@@ -294,16 +292,18 @@ mod from_treeslice {
             root.children().iter()
         };
 
+        let start = L::BaseMetric::measure(&slice.offset);
+
         while let Some(child) = children.next() {
             let this = child.base_measure();
 
-            if offset + this > slice.offset {
-                if slice.offset == L::BaseMetric::zero() {
+            if offset + this > start {
+                if start == L::BaseMetric::zero() {
                     root.push(Arc::clone(child));
                 } else {
                     let first = cut_first_rec(
                         child,
-                        slice.offset - offset,
+                        start - offset,
                         slice.start_slice,
                         slice.start_summary.clone(),
                         &mut invalid_first,
@@ -319,7 +319,7 @@ mod from_treeslice {
             }
         }
 
-        let end = slice.offset + slice.base_measure();
+        let end = start + slice.base_measure();
 
         while let Some(child) = children.next() {
             let this = child.base_measure();
@@ -542,7 +542,7 @@ mod from_treeslice {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::{AddAssign, SubAssign};
+    use std::ops::{Add, AddAssign, Sub, SubAssign};
 
     use super::*;
     use crate::tree::Summarize;
@@ -551,6 +551,24 @@ mod tests {
     pub struct Count {
         count: usize,
         leaves: usize,
+    }
+
+    impl Add<&Self> for Count {
+        type Output = Self;
+
+        #[inline]
+        fn add(self, rhs: &Self) -> Self {
+            todo!();
+        }
+    }
+
+    impl Sub<&Self> for Count {
+        type Output = Self;
+
+        #[inline]
+        fn sub(self, rhs: &Self) -> Self {
+            todo!();
+        }
     }
 
     impl<'a> AddAssign<&'a Self> for Count {

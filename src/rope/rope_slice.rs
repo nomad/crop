@@ -186,18 +186,18 @@ impl<'a> RopeSlice<'a> {
 
     /// TODO: docs
     #[inline]
-    pub fn line_of_byte(&self, byte_idx: usize) -> usize {
-        if byte_idx >= self.byte_len() {
+    pub fn line_of_byte(&self, byte_index: usize) -> usize {
+        if byte_index >= self.byte_len() {
             panic!(
                 "Trying to index past the end of the RopeSlice: the byte \
                  length is {} but the byte index is {}",
                 self.byte_len(),
-                byte_idx
+                byte_index
             );
         }
 
         let RawLineMetric(line_idx) =
-            self.tree_slice.convert_measure(ByteMetric(byte_idx));
+            self.tree_slice.convert_measure(ByteMetric(byte_index));
 
         line_idx
     }

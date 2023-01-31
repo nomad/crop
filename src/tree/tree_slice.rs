@@ -10,7 +10,7 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
 
     /// The summary between the left-most leaf of the root and the start of the
     /// slice.
-    pub(super) offset: L::BaseMetric,
+    pub(super) offset: L::Summary,
 
     /// The total summary of this slice.
     pub(super) summary: L::Summary,
@@ -58,6 +58,7 @@ impl<const FANOUT: usize, L: Leaf> Clone for TreeSlice<'_, FANOUT, L> {
     #[inline]
     fn clone(&self) -> Self {
         TreeSlice {
+            offset: self.offset.clone(),
             summary: self.summary.clone(),
             start_summary: self.start_summary.clone(),
             end_summary: self.end_summary.clone(),
@@ -84,11 +85,67 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         M1: Metric<L>,
         M2: Metric<L>,
     {
-        // let before = M1::measure(&self.before);
-        // let measure = self.root.convert_measure::<M1, M2>(from + before);
-        // measure - M2::measure(&self.before)
+        debug_assert!(
+            from <= self.measure::<M1>() + M1::one(),
+            "Trying to get the leaf at {:?}, but this TreeSlice is only {:?} \
+             long",
+            from,
+            self.measure::<M1>(),
+        );
 
+        // let m2 = self.root.convert_measure(M1::measure(&self.offset) + m1);
+        // m2 - M2::measure(&self.offset)
         todo!();
+
+        //let Node::Internal(inode) = &**self.root else {
+        //    let (slice, summary) = (self.start_slice, self.summary());
+        //    let (_, left_summary, _, _) = M1::split(slice, from, summary);
+        //    return M2::measure(&left_summary);
+        //};
+
+        //let mut measured = L::Summary::default();
+
+        //let mut base_measured = L::BaseMetric::zero();
+
+        //let mut children = inode.children().iter();
+
+        //let start = self.offset;
+
+        //while let Some(child) = children.next() {
+        //    measured += child.summary();
+
+        //    if L::BaseMetric::measure(&measured)
+        //        + L::BaseMetric::measure(child_summary)
+        //        > self.offset
+        //    {
+        //        let contains_m1 = M2::measure(&measured)
+        //            - M2::measure(&self.offset)
+        //            >= m1_offset;
+
+        //        if contains_m1 {
+        //            let m2 = child.convert_measure()
+        //        }
+
+        //        // How can we know if `from` is contained in the first child?
+        //        //
+        //        // I dont think there's a way.
+        //        //
+        //        //
+        //        // if M1::measure()
+
+        //        break;
+        //    } else {
+        //        measured += child_summary;
+        //    }
+        //}
+
+        //let end = self.offset + self.base_measure();
+
+        //// special cases
+        //// if M1 falls in the first child
+        //// if M1 falls in the last child
+
+        //todo!();
     }
 
     /// Returns the `M`-measure of this slice's summary.
@@ -183,7 +240,7 @@ where
         // bound on L::Slice.
         let mut tree_slice = Self {
             root,
-            offset: L::BaseMetric::zero(),
+            offset: L::Summary::default(),
             summary: L::Summary::default(),
             start_slice: Default::default(),
             start_summary: L::Summary::default(),
@@ -246,12 +303,7 @@ where
 }
 
 #[inline]
-pub(super) fn deepest_node_containing_range<
-    'a,
-    const N: usize,
-    L: Leaf,
-    M: Metric<L>,
->(
+fn deepest_node_containing_range<'a, const N: usize, L: Leaf, M: Metric<L>>(
     mut node: &'a Arc<Node<N, L>>,
     mut range: Range<M>,
 ) -> (&'a Arc<Node<N, L>>, Range<M>) {
@@ -321,8 +373,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                         )
                     } else {
                         // This child comes before the starting leaf.
-                        slice.offset +=
-                            L::BaseMetric::measure(child.summary());
+                        slice.offset += child.summary();
                         *measured += measure;
                     }
                 } else if *measured + measure >= range.end {
@@ -363,7 +414,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                                 leaf.summary(),
                             );
 
-                        slice.offset += L::BaseMetric::measure(&left_summary);
+                        slice.offset += &left_summary;
 
                         let (start_slice, start_summary, _, _) = M::split(
                             right_slice,
@@ -391,8 +442,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                                 leaf.summary(),
                             );
                         *measured += measure;
-                        slice.offset +=
-                            L::BaseMetric::measure(&before_summary);
+                        slice.offset += &before_summary;
                         slice.summary = start_summary.clone();
                         slice.start_slice = start_slice;
                         slice.start_summary = start_summary;
@@ -401,7 +451,7 @@ fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
                     }
                 } else {
                     // This leaf comes before the starting leaf.
-                    slice.offset += L::BaseMetric::measure(leaf.summary());
+                    slice.offset += leaf.summary();
                     *measured += measure;
                 }
             } else if *measured + measure >= range.end {
