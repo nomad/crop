@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::fmt::Debug;
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 
 /// TODO: docs
 pub trait Summarize: Debug {
@@ -58,22 +58,35 @@ pub trait Metric<L: Leaf>:
 
     /// TODO: docs
     fn measure(summary: &L::Summary) -> Self;
+}
 
-    /// Split the leaf slice at the given measure. This method should be
-    /// implemented only if it makes sense to take "part of a leaf".
-    #[allow(unused_variables)]
+/// TODO: docs
+pub trait SlicingMetric<L: Leaf>: Metric<L> {
+    /// TODO: docs
     #[allow(clippy::type_complexity)]
     fn split<'a>(
         slice: &'a L::Slice,
         at: Self,
         summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary) {
-        unimplemented!(
-            "Trying to split {slice:?} at {at:?}, but {} cannot be split by
-            {}",
-            std::any::type_name::<L>(),
-            std::any::type_name::<Self>()
-        )
+    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary);
+
+    /// TODO: docs
+    #[allow(clippy::type_complexity)]
+    fn take<'a>(
+        slice: &'a L::Slice,
+        range: Range<Self>,
+        summary: &L::Summary,
+    ) -> (L::Summary, &'a L::Slice, L::Summary) {
+        let (_, left_summary, right_slice, right_summary) =
+            Self::split(slice, range.start, summary);
+
+        let (slice, summary, _, _) = Self::split(
+            right_slice,
+            range.end - Self::measure(&left_summary),
+            &right_summary,
+        );
+
+        (left_summary, slice, summary)
     }
 }
 

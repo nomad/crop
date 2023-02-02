@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::{Inode, Leaf, Leaves, Lnode, Metric, Node, TreeSlice, Units};
+use super::*;
 
 /// TODO: docs
 #[derive(Default)]
@@ -88,7 +88,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     #[inline]
     pub fn convert_measure<M1, M2>(&self, from: M1) -> M2
     where
-        M1: Metric<L>,
+        M1: SlicingMetric<L>,
         M2: Metric<L>,
     {
         debug_assert!(
@@ -164,7 +164,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     #[inline]
     pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
     where
-        M: Metric<L>,
+        M: SlicingMetric<L>,
         for<'d> &'d L::Slice: Default,
     {
         debug_assert!(M::zero() <= range.start);

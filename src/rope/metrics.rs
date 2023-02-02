@@ -2,7 +2,7 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use super::utils::*;
 use super::{ChunkSlice, ChunkSummary, RopeChunk};
-use crate::tree::{DoubleEndedUnitMetric, Metric, Summarize, UnitMetric};
+use crate::tree::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct ByteMetric(pub(super) usize);
@@ -54,7 +54,9 @@ impl Metric<RopeChunk> for ByteMetric {
     fn measure(summary: &ChunkSummary) -> Self {
         Self(summary.bytes)
     }
+}
 
+impl SlicingMetric<RopeChunk> for ByteMetric {
     #[inline]
     fn split<'a>(
         chunk: &'a ChunkSlice,
@@ -117,7 +119,9 @@ impl Metric<RopeChunk> for RawLineMetric {
     fn measure(summary: &ChunkSummary) -> Self {
         Self(summary.line_breaks)
     }
+}
 
+impl SlicingMetric<RopeChunk> for RawLineMetric {
     #[inline]
     fn split<'a>(
         chunk: &'a ChunkSlice,

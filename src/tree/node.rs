@@ -1,4 +1,4 @@
-use super::{Inode, Leaf, Lnode, Metric};
+use super::{Inode, Leaf, Lnode, Metric, SlicingMetric};
 
 #[derive(Clone)]
 pub(super) enum Node<const N: usize, L: Leaf> {
@@ -96,7 +96,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     #[inline]
     pub fn convert_measure<M1, M2>(&self, from: M1) -> M2
     where
-        M1: Metric<L>,
+        M1: SlicingMetric<L>,
         M2: Metric<L>,
     {
         debug_assert!(from <= self.measure::<M1>() + M1::one());
