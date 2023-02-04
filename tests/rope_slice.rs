@@ -1,4 +1,4 @@
-use crop::{Rope, RopeSlice};
+use crop::Rope;
 use rand::Rng;
 
 mod common;
@@ -63,11 +63,7 @@ fn random_byte_slices() {
 
             str_slice = &str_slice[start..end];
 
-            rope_slice = {
-                let a = rope_slice.byte_slice(start..end);
-                unsafe { std::mem::transmute::<_, RopeSlice<'_>>(a) }
-            };
-
+            rope_slice = rope_slice.byte_slice(start..end);
             start = rng.gen_range(0..=rope_slice.byte_len());
             end = rng.gen_range(start..=rope_slice.byte_len());
         }
@@ -115,10 +111,7 @@ fn random_line_slices() {
             str_slice =
                 &s[line_offsets[offset + start]..line_offsets[offset + end]];
 
-            rope_slice = {
-                let a = rope_slice.line_slice(start..end);
-                unsafe { std::mem::transmute::<_, RopeSlice<'_>>(a) }
-            };
+            rope_slice = rope_slice.line_slice(start..end);
 
             offset += start;
         }

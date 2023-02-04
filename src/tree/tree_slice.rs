@@ -154,7 +154,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L>
 where
     for<'d> &'d L::Slice: Default,
 {
-    /// Note: doesn't do bounds checks.
+    /// NOTE: doesn't do any bounds checks on `range`.
     #[inline]
     pub(super) fn from_range_in_root<M>(
         root: &'a Arc<Node<FANOUT, L>>,
@@ -162,12 +162,61 @@ where
     ) -> Self
     where
         M: SlicingMetric<L>,
+        L::BaseMetric: SlicingMetric<L>,
     {
         debug_assert!(M::zero() <= range.start);
         debug_assert!(range.start <= range.end);
         debug_assert!(range.end <= root.measure::<M>() + M::one());
 
-        let (root, range, _) = deepest_node_containing_range(root, range);
+        if range.end <= root.measure::<M>() {
+            Self::slice_impl(root, range.start, range.end)
+        } else if range.start <= root.measure::<M>() {
+            Self::slice_impl(root, range.start, root.base_measure())
+        } else {
+            Self::slice_impl(root, root.base_measure(), root.base_measure())
+        }
+    }
+
+    /// NOTE: doesn't do any bounds checks on `range`.
+    #[inline]
+    pub fn slice<M>(self, mut range: Range<M>) -> TreeSlice<'a, FANOUT, L>
+    where
+        M: SlicingMetric<L>,
+        L::BaseMetric: SlicingMetric<L>,
+    {
+        debug_assert!(M::zero() <= range.start);
+        debug_assert!(range.start <= range.end);
+        debug_assert!(range.end <= self.measure::<M>() + M::one());
+
+        if range.start > M::zero() {
+            range.start += M::measure(&self.offset);
+            range.end += M::measure(&self.offset);
+            Self::from_range_in_root(self.root, range)
+        } else if range.end <= self.measure::<M>() {
+            let start = L::BaseMetric::measure(&self.offset);
+            let end = range.end + M::measure(&self.offset);
+            Self::slice_impl(self.root, start, end)
+        } else {
+            self.clone()
+        }
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn slice_impl<S, E>(
+        root: &'a Arc<Node<FANOUT, L>>,
+        start: S,
+        end: E,
+    ) -> TreeSlice<'a, FANOUT, L>
+    where
+        S: SlicingMetric<L>,
+        E: SlicingMetric<L>,
+    {
+        debug_assert!(S::zero() <= start);
+        debug_assert!(end <= root.measure::<E>());
+
+        let (root, start, end) =
+            deepest_node_containing_range(root, start, end);
 
         let mut slice = Self {
             root,
@@ -181,15 +230,7 @@ where
         };
 
         tree_slice_from_range_in_root(
-            &mut slice,
-            root,
-            range,
-            L::BaseMetric::zero(),
-            None,
-            None,
-            &mut L::Summary::default(),
-            &mut false,
-            &mut false,
+            &mut slice, root, start, end, &mut false, &mut false,
         );
 
         // There's a final edge case that can happen when the start and end of
@@ -207,65 +248,6 @@ where
         slice
     }
 
-    /// NOTE: doesn't do bound checks on `range`.
-    #[inline]
-    pub fn slice<M>(&'a self, range: Range<M>) -> TreeSlice<'a, FANOUT, L>
-    where
-        M: SlicingMetric<L>,
-    {
-        debug_assert!(M::zero() <= range.start);
-        debug_assert!(range.start <= range.end);
-        debug_assert!(range.end <= self.measure::<M>() + M::one());
-
-        let mut slice = Self::from_range_in_root(
-            self.root,
-            Range {
-                start: M::measure(&self.offset) + range.start,
-                end: M::measure(&self.offset) + range.end,
-            },
-        );
-
-        if range.start == M::zero() {
-            // TODO: this is wrong if the root has changed.
-            // TODO: this is wrong if num_leaves == 1
-
-            // NOTE: If the slice starts at M::zero() we need to fix the
-            // `offset`, the `start_slice` and the `start_summary` of the slice
-            // we got back from `Self::from_range_in_root`.
-            //
-            // To understand why let's consider the slice "bb\ncc" taken from
-            // the following Tree:
-            //
-            // Root
-            // ├── "aaa\n"
-            // ├── "bbb\n"
-            // └── "cccc"
-            //
-            // Slicing that slice in the `RawLineMetric(0)..RawLineMetric(1)`
-            // range should result in "bb\n", but the slice we get back from
-            // `from_range_in_root` is taken by slicing the **root** in the
-            // `RawLineMetric(1)..RawLineMetric(2)` range, which results in
-            // "bbb\n".
-            //
-            // To fix this we simply override the `start_slice` and
-            // `start_summary` fields with the ones of `self`, and also add the
-            // difference between the old and new `start_summary` to the
-            // slice's `offset`.
-
-            debug_assert!(
-                L::BaseMetric::measure(&slice.start_summary)
-                    >= L::BaseMetric::measure(&self.start_summary)
-            );
-
-            slice.offset += &slice.start_summary;
-            slice.offset -= &self.start_summary;
-            slice.start_slice = self.start_slice;
-            slice.start_summary = self.start_summary.clone();
-        }
-
-        slice
-    }
-
     /// TODO: docs
     #[inline]
     pub fn units<M>(&'a self) -> Units<'a, FANOUT, L, M>
@@ -276,103 +258,72 @@ where
     }
 }
 
+/// TODO: docs
 #[inline]
-fn deepest_node_containing_range<const N: usize, L: Leaf, M: Metric<L>>(
+fn deepest_node_containing_range<const N: usize, L, S, E>(
     mut node: &Arc<Node<N, L>>,
-    mut range: Range<M>,
-) -> (&Arc<Node<N, L>>, Range<M>, L::BaseMetric) {
-    let mut base_distance_from_original = L::BaseMetric::zero();
-
+    mut start: S,
+    mut end: E,
+) -> (&Arc<Node<N, L>>, S, E)
+where
+    L: Leaf,
+    S: Metric<L>,
+    E: Metric<L>,
+{
     'outer: loop {
         match &**node {
             Node::Internal(inode) => {
-                let mut base = L::BaseMetric::zero();
-                let mut measured = M::zero();
+                let mut measured = L::Summary::default();
 
                 for child in inode.children() {
                     let child_summary = child.summary();
 
-                    if measured <= range.start
-                        && measured + M::measure(&child_summary) >= range.end
+                    if S::measure(&measured) <= start
+                        && E::measure(&measured) + E::measure(&child_summary)
+                            >= end
                     {
                         node = child;
-                        range.start -= measured;
-                        range.end -= measured;
-                        base_distance_from_original += base;
+                        start -= S::measure(&measured);
+                        end -= E::measure(&measured);
                         continue 'outer;
                     }
 
-                    measured += M::measure(&child_summary);
-                    base += L::BaseMetric::measure(&child_summary);
+                    measured += &child_summary;
                 }
 
                 // If no child of this internal node fully contains the range
                 // then this node is the deepest one fully containing the
                 // range.
-                break (node, range, base_distance_from_original);
+                break (node, start, end);
             },
 
-            Node::Leaf(_) => break (node, range, base_distance_from_original),
+            Node::Leaf(_) => break (node, start, end),
         }
     }
 }
 
-// Can we modify `tree_slice_from_range_in_root` so that it also works
-// with `TreeSlice`s?
-//
-// Things to worry about:
-//
-// - keep track of the base measured;
-//
-// - once you get to the start leaf, need to be able to tell if you
-// should use the `start_slice` instead of the leaf;
-//
-// - once you get to the last leaf, need to be able to tell if you
-// should use the `start_slice` instead of the leaf;
-//
-// - we should use >= instead of >. If we go to slice the leaf and the right
-// summary is empty we need to get to the next leaf. That means the root might
-// change. This is real hard to deal with tbh.
-//
-// - needs to work if the end of the range is = measure + 1, in that
-// case you need to take until the end. If the two coincide you need to
-// panic.
-
-// TODO if first_slice is some the slice is smaller but the range.start is the
-// same. doesn't that fuck shit up?
-//
-// What if instead of passing the first and last slices we just act as if we're
-// slicing a Tree and then fix the start_slice, end_slice once we're done if
-// necessary.
-//
-// TODO: how do you detect if it's necessary?
-//
-// TODO: how do you fix it?
-//
-// Tbh this would be a lot better since that complexity would remain in
-// `TreeSlice::slice` (which is where it belongs) and this function would stay
-// more like it was before.
+// - TODO: if we go to slice the first leaf and the right summary is empty we
+// need to get to the next leaf. That means the root might change. This is real
+// hard to deal with tbh.
 
 #[inline]
-fn tree_slice_from_range_in_root<
-    'a,
-    const N: usize,
-    L: Leaf,
-    M: SlicingMetric<L>,
->(
+fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
     slice: &mut TreeSlice<'a, N, L>,
     node: &'a Arc<Node<N, L>>,
-    range: Range<M>,
-    take_after_offset: L::BaseMetric,
-    first_slice: Option<(&'a L::Slice, &'a L::Summary)>,
-    last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
-    measured: &mut L::Summary, // cant we use slice.(offset + summary?)
+    start: S,
+    end: E,
     found_first_slice: &mut bool,
     done: &mut bool,
-) {
+) where
+    L: Leaf,
+    S: SlicingMetric<L>,
+    E: SlicingMetric<L>,
+{
     match &**node {
         Node::Internal(inode) => {
             for child in inode.children() {
+                // If the slice has been completed there's nothing left to do,
+                // simply unwind the call stack.
                 if *done {
                     return;
                 }
@@ -380,54 +331,45 @@ fn tree_slice_from_range_in_root<
                 let child_summary = child.summary();
 
                 if !*found_first_slice {
-                    let a = M::measure(&slice.offset)
-                        + M::measure(&child_summary)
-                        // why > ?
-                        // this doesn't work w/ the LineMetric
-                        > range.start;
-
-                    let b = L::BaseMetric::measure(&slice.offset)
-                        + L::BaseMetric::measure(&child_summary)
-                        > take_after_offset;
-
-                    if a && b {
+                    if S::measure(&slice.offset) + S::measure(&child_summary)
+                        >= start
+                    {
+                        // This child contains the starting slice somewhere in
+                        // its subtree. Run this function again with this child
+                        // as the node.
                         tree_slice_from_range_in_root(
                             slice,
                             child,
-                            Range { ..*&range },
-                            take_after_offset,
-                            first_slice,
-                            last_slice,
-                            measured,
+                            start,
+                            end,
                             found_first_slice,
                             done,
                         );
                     } else {
+                        // This child comes before the starting leaf.
                         slice.offset += child_summary;
-                        *measured += child_summary;
                     }
-                }
-                // TODO: docs
-                else if M::measure(&*measured) + M::measure(&child_summary)
-                    >= range.end
+                } else if E::measure(&slice.offset)
+                    + E::measure(&slice.summary)
+                    + E::measure(&child_summary)
+                    >= end
                 {
+                    // This child contains the ending leaf somewhere in its
+                    // subtree. Run this function again with this child as the
+                    // node.
                     tree_slice_from_range_in_root(
                         slice,
                         child,
-                        Range { ..*&range },
-                        take_after_offset,
-                        first_slice,
-                        last_slice,
-                        measured,
+                        start,
+                        end,
                         found_first_slice,
                         done,
                     );
-                }
-                // TODO: docs
-                else {
+                } else {
+                    // This is a node fully contained between the starting and
+                    // the ending slices.
                     slice.summary += child_summary;
                     slice.leaf_count += child.num_leaves();
-                    *measured += child_summary;
                 }
             }
         },
@@ -436,35 +378,29 @@ fn tree_slice_from_range_in_root<
             let leaf_summary = leaf.summary();
 
             if !*found_first_slice {
-                let a = M::measure(&slice.offset)
-                        + M::measure(&leaf_summary)
-                        // why > ?
-                        // this doesn't work w/ the LineMetric
-                        >= range.start;
+                let contains_first_slice = S::measure(&slice.offset)
+                    + S::measure(&leaf_summary)
+                    >= start;
 
-                let b = L::BaseMetric::measure(&slice.offset)
-                    + L::BaseMetric::measure(&leaf_summary)
-                    > take_after_offset;
+                if contains_first_slice {
+                    let contains_last_slice = E::measure(&slice.offset)
+                        + E::measure(leaf_summary)
+                        >= end;
 
-                if a && b {
-                    let (to_slice, summary) = if let Some(first) = first_slice
-                    {
-                        first
-                    } else {
-                        (leaf.as_slice(), leaf.summary())
-                    };
+                    if contains_last_slice {
+                        // The end of the range is also contained in this leaf
+                        // so the final slice only spans this single leaf.
+                        let start = start - S::measure(&slice.offset);
 
-                    // TODO: docs
-                    if M::measure(measured) + M::measure(leaf_summary)
-                        >= range.end
-                    {
-                        let range = Range {
-                            start: range.start - M::measure(measured),
-                            end: range.end - M::measure(measured),
-                        };
+                        let (_, left_summary, right_slice, right_summary) =
+                            S::split(leaf.as_slice(), start, leaf.summary());
 
-                        let (left_summary, start_slice, start_summary) =
-                            M::take(to_slice, range, summary);
+                        let end = end
+                            - E::measure(&slice.offset)
+                            - E::measure(&left_summary);
+
+                        let (start_slice, start_summary, _, _) =
+                            E::split(right_slice, end, &right_summary);
 
                         slice.offset += &left_summary;
                         slice.start_slice = start_slice;
@@ -475,14 +411,14 @@ fn tree_slice_from_range_in_root<
                         slice.leaf_count = 1;
 
                         *done = true;
-                    }
-                    // TODO: docs
-                    else {
+                    } else {
+                        // This leaf contains the starting slice but not the
+                        // ending one.
                         let (_, right_summary, start_slice, start_summary) =
-                            M::split(
-                                to_slice,
-                                range.start - M::measure(measured),
-                                summary,
+                            S::split(
+                                leaf.as_slice(),
+                                start - S::measure(&slice.offset),
+                                leaf.summary(),
                             );
 
                         debug_assert!(
@@ -496,190 +432,46 @@ fn tree_slice_from_range_in_root<
                         slice.start_summary = start_summary;
                         slice.leaf_count = 1;
 
-                        *measured += leaf_summary;
                         *found_first_slice = true;
                     }
-                }
-                // TODO: docs
-                else {
-                    slice.offset += leaf_summary;
-                    *measured += leaf_summary;
-                }
-            }
-            // TODO: docs
-            else if M::measure(&*measured) + M::measure(&leaf_summary)
-                >= range.end
-            {
-                let (to_slice, summary) = if let Some(last) = last_slice {
-                    last
                 } else {
-                    (leaf.as_slice(), leaf.summary())
-                };
-
-                let (end_slice, end_summary, _, _) = M::split(
-                    to_slice,
-                    range.end - M::measure(measured),
-                    summary,
-                );
-
-                debug_assert!(
-                    L::BaseMetric::measure(&end_summary)
-                        > L::BaseMetric::zero()
-                );
-
-                slice.summary += &end_summary;
-                slice.end_slice = end_slice;
-                slice.end_summary = end_summary;
-                slice.leaf_count += 1;
-
-                *done = true;
-            }
-            // TODO: docs
-            else {
-                slice.summary += leaf_summary;
-                slice.leaf_count += 1;
-                *measured += leaf_summary;
-            }
-        },
-    }
-}
-
-#[inline]
-fn tree_slice_from_range_in_root_rec<'a, const N: usize, L, M>(
-    node: &'a Arc<Node<N, L>>,
-    range: Range<M>,
-    measured: &mut M,
-    slice: &mut TreeSlice<'a, N, L>,
-    found_start: &mut bool,
-    done: &mut bool,
-) where
-    L: Leaf,
-    M: SlicingMetric<L>,
-{
-    match &**node {
-        Node::Internal(inode) => {
-            for child in inode.children() {
-                // If the slice has been completed there's nothing left to do,
-                // simply unwind the call stack.
-                if *done {
-                    return;
-                }
-
-                let measure = M::measure(child.summary());
-
-                if !*found_start {
-                    if *measured + measure > range.start {
-                        // This child contains the starting slice somewhere in
-                        // its subtree. Run this function again with this child
-                        // as the node.
-                        tree_slice_from_range_in_root_rec(
-                            child,
-                            Range { start: range.start, end: range.end },
-                            measured,
-                            slice,
-                            found_start,
-                            done,
-                        )
-                    } else {
-                        // This child comes before the starting leaf.
-                        slice.offset += child.summary();
-                        *measured += measure;
-                    }
-                } else if *measured + measure >= range.end {
-                    // This child contains the ending leaf somewhere in its
-                    // subtree. Run this function again with this child as the
-                    // node.
-                    tree_slice_from_range_in_root_rec(
-                        child,
-                        Range { start: range.start, end: range.end },
-                        measured,
-                        slice,
-                        found_start,
-                        done,
-                    )
-                } else {
-                    // This is a node fully contained between the starting and
-                    // the ending slices.
-                    slice.summary += child.summary();
-                    slice.leaf_count += child.num_leaves();
-                    *measured += measure;
-                }
-            }
-        },
-
-        Node::Leaf(leaf) => {
-            let measure = M::measure(leaf.summary());
-
-            if !*found_start {
-                if *measured + measure > range.start {
-                    if measure >= range.end - *measured {
-                        // The end of the range is also contained in this leaf
-                        // so the final slice only spans this single leaf.
-
-                        let (_, left_summary, right_slice, right_summary) =
-                            M::split(
-                                leaf.as_slice(),
-                                range.start - *measured,
-                                leaf.summary(),
-                            );
-
-                        slice.offset += &left_summary;
-
-                        let (start_slice, start_summary, _, _) = M::split(
-                            right_slice,
-                            range.end - *measured - M::measure(&left_summary),
-                            &right_summary,
-                        );
-
-                        slice.summary = start_summary.clone();
-
-                        slice.start_slice = start_slice;
-                        slice.start_summary = start_summary.clone();
-
-                        slice.end_slice = start_slice;
-                        slice.end_summary = start_summary;
-
-                        slice.leaf_count = 1;
-                        *done = true;
-                    } else {
-                        // This leaf contains the starting slice but not the
-                        // ending one.
-                        let (_, before_summary, start_slice, start_summary) =
-                            M::split(
-                                leaf.as_slice(),
-                                range.start - *measured,
-                                leaf.summary(),
-                            );
-                        *measured += measure;
-                        slice.offset += &before_summary;
-                        slice.summary = start_summary.clone();
-                        slice.start_slice = start_slice;
-                        slice.start_summary = start_summary;
-                        slice.leaf_count = 1;
-                        *found_start = true;
-                    }
-                } else {
+                    // TODO: can we even get here?
                     // This leaf comes before the starting leaf.
-                    slice.offset += leaf.summary();
-                    *measured += measure;
+                    slice.offset += leaf_summary;
                 }
-            } else if *measured + measure >= range.end {
-                // This leaf contains the ending slice.
-                let (end_slice, end_summary, _, _) = M::split(
-                    leaf.as_slice(),
-                    range.end - *measured,
-                    leaf.summary(),
-                );
-                slice.summary += &end_summary;
-                slice.end_slice = end_slice;
-                slice.end_summary = end_summary;
-                slice.leaf_count += 1;
-                *done = true;
             } else {
+                let measured =
+                    E::measure(&slice.offset) + E::measure(&slice.summary);
+
+                let contains_last_slice =
+                    measured + E::measure(leaf_summary) >= end;
+
+                if contains_last_slice {
+                    // This leaf contains the ending slice.
+                    let (end_slice, end_summary, _, _) = E::split(
+                        leaf.as_slice(),
+                        end - measured,
+                        leaf.summary(),
+                    );
+
+                    debug_assert!(
+                        L::BaseMetric::measure(&end_summary)
+                            > L::BaseMetric::zero()
+                    );
+
+                    slice.summary += &end_summary;
+                    slice.end_slice = end_slice;
+                    slice.end_summary = end_summary;
+                    slice.leaf_count += 1;
+
+                    *done = true;
+                }
                 // This is a leaf between the starting and the ending slices.
-                slice.summary += leaf.summary();
-                slice.leaf_count += 1;
-                *measured += measure;
+                else {
+                    // TODO: can we even get here?
+                    slice.summary += leaf_summary;
+                    slice.leaf_count += 1;
+                }
             }
         },
     }

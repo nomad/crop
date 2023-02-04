@@ -165,6 +165,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
     where
         M: SlicingMetric<L>,
+        L::BaseMetric: SlicingMetric<L>,
         for<'d> &'d L::Slice: Default,
     {
         debug_assert!(M::zero() <= range.start);

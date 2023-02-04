@@ -58,7 +58,7 @@ impl<'a> RopeSlice<'a> {
 
     /// TODO: docs
     #[inline]
-    pub fn byte_slice<R>(&'a self, byte_range: R) -> RopeSlice<'a>
+    pub fn byte_slice<R>(self, byte_range: R) -> RopeSlice<'a>
     where
         R: RangeBounds<usize>,
     {
@@ -204,7 +204,7 @@ impl<'a> RopeSlice<'a> {
 
     /// TODO: docs
     #[inline]
-    pub fn line_slice<R>(&'a self, line_range: R) -> RopeSlice<'a>
+    pub fn line_slice<R>(self, line_range: R) -> RopeSlice<'a>
     where
         R: RangeBounds<usize>,
     {
