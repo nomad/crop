@@ -131,7 +131,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
     #[inline]
     pub(super) fn root(&self) -> &Arc<Node<FANOUT, L>> {
-        &self.root
+        self.root
     }
 
     #[inline]
@@ -197,7 +197,7 @@ where
             let end = range.end + M::measure(&self.offset);
             Self::slice_impl(self.root, start, end)
         } else {
-            self.clone()
+            self
         }
     }
 
@@ -279,7 +279,7 @@ where
                     let child_summary = child.summary();
 
                     if S::measure(&measured) <= start
-                        && E::measure(&measured) + E::measure(&child_summary)
+                        && E::measure(&measured) + E::measure(child_summary)
                             >= end
                     {
                         node = child;
@@ -288,7 +288,7 @@ where
                         continue 'outer;
                     }
 
-                    measured += &child_summary;
+                    measured += child_summary;
                 }
 
                 // If no child of this internal node fully contains the range
@@ -331,7 +331,7 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                 let child_summary = child.summary();
 
                 if !*found_first_slice {
-                    if S::measure(&slice.offset) + S::measure(&child_summary)
+                    if S::measure(&slice.offset) + S::measure(child_summary)
                         >= start
                     {
                         // This child contains the starting slice somewhere in
@@ -351,7 +351,7 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                     }
                 } else if E::measure(&slice.offset)
                     + E::measure(&slice.summary)
-                    + E::measure(&child_summary)
+                    + E::measure(child_summary)
                     >= end
                 {
                     // This child contains the ending leaf somewhere in its
@@ -379,7 +379,7 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
 
             if !*found_first_slice {
                 let contains_first_slice = S::measure(&slice.offset)
-                    + S::measure(&leaf_summary)
+                    + S::measure(leaf_summary)
                     >= start;
 
                 if contains_first_slice {

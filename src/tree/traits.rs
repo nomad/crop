@@ -31,6 +31,7 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized + Clone {
 
     /// TODO: docs
     #[allow(unused_variables)]
+    #[allow(clippy::type_complexity)]
     fn balance_slices<'a>(
         first: (&'a Self::Slice, &'a Self::Summary),
         second: (&'a Self::Slice, &'a Self::Summary),

@@ -296,7 +296,7 @@ mod from_treeslice {
 
         let start = L::BaseMetric::measure(&slice.offset);
 
-        while let Some(child) = children.next() {
+        for child in children.by_ref() {
             let this = child.base_measure();
 
             if offset + this > start {
@@ -323,7 +323,7 @@ mod from_treeslice {
 
         let end = start + slice.base_measure();
 
-        while let Some(child) = children.next() {
+        for child in children {
             let this = child.base_measure();
 
             if offset + this >= end {

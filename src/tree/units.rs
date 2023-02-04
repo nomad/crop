@@ -388,6 +388,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     /// Note: after calling this function the path will contain the path from
     /// the root down to the internal node containing `Leaf`, and
     /// `self.leaf_node` will be set to `Leaf`.
+    #[allow(clippy::type_complexity)]
     #[inline]
     fn next_leaf_with_measure(
         &mut self,
@@ -614,6 +615,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     /// [1]: UnitsForward::next_leaf_with_measure()
     /// [2]: UnitsForward::last_slice
     /// [3]: UnitsForward::leaf_node
+    #[allow(clippy::type_complexity)]
     #[inline]
     fn last_leaf(
         &self,
@@ -1104,6 +1106,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     /// [1]: UnitsBackward::previous_leaf_with_measure()
     /// [2]: UnitsBackward::first_slice
     /// [3]: UnitsBackward::leaf_node
+    #[allow(clippy::type_complexity)]
     #[inline]
     fn first_leaf(
         &self,
@@ -1398,6 +1401,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     /// Note: after calling this function the path will contain the path from
     /// the root down to the internal node containing `Leaf`, and
     /// `self.leaf_node` will be set to `Leaf`.
+    #[allow(clippy::type_complexity)]
     #[inline]
     fn previous_leaf_with_measure(
         &mut self,
@@ -1571,7 +1575,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                             start_summary: empty_summary.clone(),
                             end_slice: empty,
                             end_summary: empty_summary.clone(),
-                            summary: empty_summary.clone(),
+                            summary: empty_summary,
                             leaf_count: 1,
                         },
                         L::Summary::default(),
@@ -1770,10 +1774,10 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 }
 
 #[inline]
-fn deepest_node_containing_range<'a, const N: usize, L: Leaf, M: Metric<L>>(
-    mut node: &'a Arc<Node<N, L>>,
+fn deepest_node_containing_range<const N: usize, L: Leaf, M: Metric<L>>(
+    mut node: &Arc<Node<N, L>>,
     mut range: std::ops::Range<M>,
-) -> (&'a Arc<Node<N, L>>, L::Summary) {
+) -> (&Arc<Node<N, L>>, L::Summary) {
     'outer: loop {
         match &**node {
             Node::Internal(inode) => {

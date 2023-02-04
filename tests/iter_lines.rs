@@ -323,9 +323,9 @@ fn lines_rau() {
         for (i, (rope_line, s_line)) in
             rope.raw_lines().zip(s.lines()).enumerate()
         {
-            if i != rope.line_len() - 1 || s.ends_with("\n") {
+            if i != rope.line_len() - 1 || s.ends_with('\n') {
                 let mut line = s_line.to_owned();
-                line.push_str("\n");
+                line.push('\n');
                 assert_eq!(line, rope_line);
             } else {
                 assert_eq!(s_line, rope_line);

@@ -15,31 +15,31 @@ fn random_byte_slices() {
     let range = 153..562;
     let ss = &ss[range.clone()];
     println!("{ss:?}");
-    let rs = rs.byte_slice(range.clone());
+    let rs = rs.byte_slice(range);
     assert_eq!(ss, rs);
 
     let range = 276..384;
     let ss = &ss[range.clone()];
     println!("{ss:?}");
-    let rs = rs.byte_slice(range.clone());
+    let rs = rs.byte_slice(range);
     assert_eq!(ss, rs);
 
     let range = 7..11;
     let ss = &ss[range.clone()];
     println!("{ss:?}");
-    let rs = rs.byte_slice(range.clone());
+    let rs = rs.byte_slice(range);
     assert_eq!(ss, rs);
 
     let range = 3..4;
     let ss = &ss[range.clone()];
     println!("{ss:?}");
-    let rs = rs.byte_slice(range.clone());
+    let rs = rs.byte_slice(range);
     assert_eq!(ss, rs);
 
     let range = 0..1;
     let ss = &ss[range.clone()];
     println!("{ss:?}");
-    let rs = rs.byte_slice(range.clone());
+    let rs = rs.byte_slice(range);
     assert_eq!(ss, rs);
 
     if true {

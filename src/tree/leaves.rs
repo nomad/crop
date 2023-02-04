@@ -198,6 +198,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
 }
 
 impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
+    #[allow(clippy::type_complexity)]
     #[inline]
     fn initialize(
         &mut self,
@@ -438,6 +439,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
 }
 
 impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
+    #[allow(clippy::type_complexity)]
     #[inline]
     fn initialize(
         &mut self,

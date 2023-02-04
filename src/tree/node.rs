@@ -27,8 +27,8 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
             }
         } else {
             match self {
-                Self::Internal(inode) => write!(f, "{:#?}", inode),
-                Self::Leaf(leaf) => write!(f, "{:#?}", leaf),
+                Self::Internal(inode) => write!(f, "{inode:#?}"),
+                Self::Leaf(leaf) => write!(f, "{leaf:#?}"),
             }
         }
     }

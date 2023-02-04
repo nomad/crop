@@ -115,7 +115,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
         L: Default,
     {
         if self.stack.is_empty() {
-            if self.leaves.len() == 0 {
+            if self.leaves.is_empty() {
                 // No internal nodes on the stack and no leaves, this means
                 // that `append` has never been called and we're building an
                 // empty Tree. This is why we need the `Default` bound on `L`.

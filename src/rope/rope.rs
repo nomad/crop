@@ -31,11 +31,11 @@ impl Rope {
         let mut chunks = self.chunks().peekable();
 
         if let Some(first) = chunks.next() {
-            assert_valid_chunk(first, chunks.peek().map(|s| *s), true);
+            assert_valid_chunk(first, chunks.peek().copied(), true);
         }
 
         while let Some(chunk) = chunks.next() {
-            assert_valid_chunk(chunk, chunks.peek().map(|s| *s), false);
+            assert_valid_chunk(chunk, chunks.peek().copied(), false);
         }
     }
 
