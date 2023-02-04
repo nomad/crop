@@ -272,6 +272,19 @@ impl Metric<RopeChunk> for LineMetric {
     }
 }
 
+impl SlicingMetric<RopeChunk> for LineMetric {
+    #[inline]
+    fn split<'a>(
+        chunk: &'a ChunkSlice,
+        LineMetric(at): Self,
+        summary: &ChunkSummary,
+    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
+        debug_assert_eq!(at, 1);
+        let _ = RawLineMetric::split(chunk, RawLineMetric(at), summary);
+        todo!();
+    }
+}
+
 impl UnitMetric<RopeChunk> for LineMetric {
     #[inline]
     fn first_unit<'a>(

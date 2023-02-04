@@ -2,8 +2,8 @@ use std::fmt::Write;
 use std::ops::{Bound, RangeBounds};
 
 use super::iterators::Chunks;
-use super::{ChunkSlice, ChunkSummary, Rope, RopeChunk};
-use crate::tree::{Summarize, TreeSlice};
+use super::{ChunkSlice, ChunkSummary, RopeChunk};
+use crate::tree::Summarize;
 
 #[allow(dead_code)]
 pub(super) fn assert_valid_chunk(
@@ -378,15 +378,6 @@ pub(super) fn rope_chunk_append<'a>(
     }
 
     (&text[..bytes_to_add], &text[bytes_to_add..])
-}
-
-/// TODO: docs
-#[inline]
-pub(super) fn tree_slice_remove_trailing_line_break(
-    slice: &mut TreeSlice<'_, { Rope::fanout() }, RopeChunk>,
-) {
-    debug_assert!(matches!(slice.summary().line_breaks, 0 | 1));
-    todo!();
 }
 
 /// Splits a chunk at the `line_break`-th line break (0-indexed), returning the
