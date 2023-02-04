@@ -1,7 +1,7 @@
 use std::ops::RangeBounds;
 
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
-use super::metrics::{ByteMetric, LineMetric, RawLineMetric};
+use super::metrics::{ByteMetric, RawLineMetric};
 use super::utils::*;
 use super::{RopeChunk, RopeChunkIter};
 use crate::tree::Tree;
@@ -214,9 +214,16 @@ impl Rope {
             );
         }
 
-        let tree_slice = self
+        let mut tree_slice = self
             .tree
-            .slice(LineMetric(line_index)..LineMetric(line_index + 1));
+            .slice(RawLineMetric(line_index)..RawLineMetric(line_index + 1));
+
+        if tree_slice.summary().line_breaks == 1 {
+            let byte_end = tree_slice.summary().bytes
+                - bytes_line_break(tree_slice.end_slice());
+
+            tree_slice = tree_slice.slice(ByteMetric(0)..ByteMetric(byte_end));
+        }
 
         RopeSlice { tree_slice, last_byte_is_newline: false }
     }

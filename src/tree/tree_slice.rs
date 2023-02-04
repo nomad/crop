@@ -109,12 +109,21 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
             M::measure(self.summary()),
         );
 
-        // let before = M::measure(&self.before);
-        // let (slice, mut measure) = self.root.leaf_at_measure(measure + before);
-        // measure -= before;
-        // (slice, measure)
-
-        todo!();
+        if measure <= M::measure(&self.start_summary) {
+            (self.start_slice, M::zero())
+        } else {
+            let all_minus_last =
+                M::measure(&self.summary) - M::measure(&self.end_summary);
+            if measure <= all_minus_last {
+                let (leaf, mut offset) = self
+                    .root
+                    .leaf_at_measure(M::measure(&self.offset) + measure);
+                offset -= M::measure(&self.offset);
+                (leaf, offset)
+            } else {
+                (self.end_slice, all_minus_last)
+            }
+        }
     }
 
     /// TODO: docs
@@ -194,8 +203,12 @@ where
             Self::from_range_in_root(self.root, range)
         } else if range.end <= self.measure::<M>() {
             let start = L::BaseMetric::measure(&self.offset);
-            let end = range.end + M::measure(&self.offset);
-            Self::slice_impl(self.root, start, end)
+            if range.end > M::zero() {
+                let end = M::measure(&self.offset) + range.end;
+                Self::slice_impl(self.root, start, end)
+            } else {
+                Self::slice_impl(self.root, start, start)
+            }
         } else {
             self
         }
@@ -229,21 +242,27 @@ where
             leaf_count: 0,
         };
 
+        let mut recompute_root = false;
+
         tree_slice_from_range_in_root(
-            &mut slice, root, start, end, &mut false, &mut false,
+            &mut slice,
+            root,
+            start,
+            end,
+            &mut false,
+            &mut recompute_root,
+            &mut false,
         );
 
-        // There's a final edge case that can happen when the start and end of
-        // the range coincide (so the slice has zero measure) and the start of
-        // the range lies "between" the end of a leaf and the start of the
-        // next one.
-        //
-        // In this case the root is the leaf *preceding* the start of the range
-        // and all other metadata are set correctly, *except* the number of
-        // leaves which never gets modified and is still set as zero.
-        if slice.leaf_count == 0 {
-            slice.leaf_count = 1;
+        if recompute_root {
+            let start = L::BaseMetric::measure(&slice.offset);
+            let end = start + L::BaseMetric::measure(&slice.summary);
+            let (root, offset) = deepest_a_name(slice.root, start, end);
+            slice.root = root;
+            slice.offset -= &offset;
         }
+
+        // println!("{slice:#?}");
 
         slice
     }
@@ -278,26 +297,32 @@ where
                 for child in inode.children() {
                     let child_summary = child.summary();
 
-                    if S::measure(&measured) <= start
-                        && E::measure(&measured) + E::measure(child_summary)
-                            >= end
-                    {
-                        node = child;
-                        start -= S::measure(&measured);
-                        end -= E::measure(&measured);
-                        continue 'outer;
-                    }
+                    let contains_first_slice = S::measure(&measured)
+                        + S::measure(&child_summary)
+                        >= start;
 
-                    measured += child_summary;
+                    if contains_first_slice {
+                        let contains_last_slice = E::measure(&measured)
+                            + E::measure(&child_summary)
+                            >= end;
+
+                        if contains_last_slice {
+                            node = child;
+                            start -= S::measure(&measured);
+                            end -= E::measure(&measured);
+                            continue 'outer;
+                        } else {
+                            return (node, start, end);
+                        }
+                    } else {
+                        measured += child_summary;
+                    }
                 }
 
-                // If no child of this internal node fully contains the range
-                // then this node is the deepest one fully containing the
-                // range.
-                break (node, start, end);
+                unreachable!();
             },
 
-            Node::Leaf(_) => break (node, start, end),
+            Node::Leaf(_) => return (node, start, end),
         }
     }
 }
@@ -306,6 +331,13 @@ where
 // need to get to the next leaf. That means the root might change. This is real
 // hard to deal with tbh.
 
+// Edge cases to consider:
+//
+// 1: start_slice is empty and doesn't contain last slice, e.g.
+// "hello\n" "hello\n" -> raw_line_slice(1..2) -> "hello\n"
+//
+// 2: both combined, e.g. "foo\n" "\n" -> line_slice(0..2)
+
 #[inline]
 fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
     slice: &mut TreeSlice<'a, N, L>,
@@ -313,6 +345,7 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
     start: S,
     end: E,
     found_first_slice: &mut bool,
+    recompute_root: &mut bool,
     done: &mut bool,
 ) where
     L: Leaf,
@@ -343,6 +376,7 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                             start,
                             end,
                             found_first_slice,
+                            recompute_root,
                             done,
                         );
                     } else {
@@ -363,6 +397,7 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                         start,
                         end,
                         found_first_slice,
+                        recompute_root,
                         done,
                     );
                 } else {
@@ -421,10 +456,13 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                                 leaf.summary(),
                             );
 
-                        debug_assert!(
-                            L::BaseMetric::measure(&start_summary)
-                                > L::BaseMetric::zero()
-                        );
+                        if L::BaseMetric::measure(&start_summary)
+                            == L::BaseMetric::zero()
+                        {
+                            slice.offset += leaf.summary();
+                            *recompute_root = true;
+                            return;
+                        }
 
                         slice.offset += &right_summary;
                         slice.summary += &start_summary;
@@ -474,5 +512,51 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                 }
             }
         },
+    }
+}
+
+#[inline]
+fn deepest_a_name<const N: usize, L>(
+    mut node: &Arc<Node<N, L>>,
+    mut start: L::BaseMetric,
+    mut end: L::BaseMetric,
+) -> (&Arc<Node<N, L>>, L::Summary)
+where
+    L: Leaf,
+{
+    let mut offset = L::Summary::default();
+
+    'outer: loop {
+        match &**node {
+            Node::Internal(inode) => {
+                let mut measured = L::Summary::default();
+
+                for child in inode.children() {
+                    let child_summary = child.summary();
+
+                    let contains_first_slice =
+                        L::BaseMetric::measure(&measured) <= start;
+
+                    let contains_last_slice =
+                        L::BaseMetric::measure(&measured)
+                            + L::BaseMetric::measure(&child_summary)
+                            >= end;
+
+                    if contains_first_slice && contains_last_slice {
+                        node = child;
+                        start -= L::BaseMetric::measure(&measured);
+                        end -= L::BaseMetric::measure(&measured);
+                        offset += &measured;
+                        continue 'outer;
+                    } else {
+                        measured += child_summary;
+                    }
+                }
+
+                return (node, offset);
+            },
+
+            Node::Leaf(_) => return (node, offset),
+        }
     }
 }

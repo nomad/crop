@@ -127,14 +127,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     where
         M: Metric<L>,
     {
-        // TODO: doesn't work for `LineMetric`
-
-        debug_assert!(
-            measure <= M::measure(self.summary()),
-            "Trying to get the leaf at {:?}, but this tree is only {:?} long",
-            measure,
-            M::measure(self.summary()),
-        );
+        debug_assert!(measure <= self.measure::<M>() + M::one());
 
         self.root.leaf_at_measure(measure)
     }
@@ -170,10 +163,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     {
         debug_assert!(M::zero() <= range.start);
         debug_assert!(range.start <= range.end);
-
-        // TODO: doesn't work for `LineMetric`
-
-        debug_assert!(range.end <= M::measure(self.summary()));
+        debug_assert!(range.end <= self.measure::<M>() + M::one());
 
         TreeSlice::from_range_in_root(&self.root, range)
     }

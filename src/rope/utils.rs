@@ -155,6 +155,13 @@ pub(super) fn balance_right_with_left(
     ((left.to_owned(), left_summary), (right, right_summary))
 }
 
+/// TODO: docs
+#[inline]
+pub(super) fn bytes_line_break(s: &str) -> usize {
+    debug_assert!(!s.is_empty() && *s.as_bytes().last().unwrap() == b'\n');
+    1 + (s.len() > 1 && s.as_bytes()[s.len() - 2] == b'\r') as usize
+}
+
 /// Checks equality between the chunks yielded by iterating over a [`Chunks`]
 /// and a string slice.
 ///

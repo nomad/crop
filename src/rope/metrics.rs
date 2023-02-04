@@ -272,19 +272,6 @@ impl Metric<RopeChunk> for LineMetric {
     }
 }
 
-impl SlicingMetric<RopeChunk> for LineMetric {
-    #[inline]
-    fn split<'a>(
-        chunk: &'a ChunkSlice,
-        LineMetric(at): Self,
-        summary: &ChunkSummary,
-    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
-        debug_assert_eq!(at, 1);
-        let _ = RawLineMetric::split(chunk, RawLineMetric(at), summary);
-        todo!();
-    }
-}
-
 impl UnitMetric<RopeChunk> for LineMetric {
     #[inline]
     fn first_unit<'a>(
@@ -303,10 +290,7 @@ impl UnitMetric<RopeChunk> for LineMetric {
         debug_assert_eq!(*first.as_bytes().last().unwrap() as char, '\n');
         debug_assert_eq!(first_summary.line_breaks, 1);
 
-        let bytes_line_break = ((first.len() > 1
-            && first.as_bytes()[first.len() - 2] == b'\r')
-            as usize)
-            + 1;
+        let bytes_line_break = bytes_line_break(first);
 
         first = (&first[..first.len() - bytes_line_break]).into();
         first_summary.bytes -= bytes_line_break;

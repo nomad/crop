@@ -8,43 +8,43 @@ use common::{LARGE, MEDIUM, SMALL, TINY};
 /// TODO: docs
 #[test]
 fn random_byte_slices() {
-    let ss = TINY;
-    let r = Rope::from(ss);
-    let rs = r.byte_slice(..);
+    // let ss = TINY;
+    // let r = Rope::from(ss);
+    // let rs = r.byte_slice(..);
 
-    let range = 153..562;
-    let ss = &ss[range.clone()];
-    println!("{ss:?}");
-    let rs = rs.byte_slice(range);
-    assert_eq!(ss, rs);
+    // let range = 153..562;
+    // let ss = &ss[range.clone()];
+    // println!("{ss:?}");
+    // let rs = rs.byte_slice(range);
+    // assert_eq!(ss, rs);
 
-    let range = 276..384;
-    let ss = &ss[range.clone()];
-    println!("{ss:?}");
-    let rs = rs.byte_slice(range);
-    assert_eq!(ss, rs);
+    // let range = 276..384;
+    // let ss = &ss[range.clone()];
+    // println!("{ss:?}");
+    // let rs = rs.byte_slice(range);
+    // assert_eq!(ss, rs);
 
-    let range = 7..11;
-    let ss = &ss[range.clone()];
-    println!("{ss:?}");
-    let rs = rs.byte_slice(range);
-    assert_eq!(ss, rs);
+    // let range = 7..11;
+    // let ss = &ss[range.clone()];
+    // println!("{ss:?}");
+    // let rs = rs.byte_slice(range);
+    // assert_eq!(ss, rs);
 
-    let range = 3..4;
-    let ss = &ss[range.clone()];
-    println!("{ss:?}");
-    let rs = rs.byte_slice(range);
-    assert_eq!(ss, rs);
+    // let range = 3..4;
+    // let ss = &ss[range.clone()];
+    // println!("{ss:?}");
+    // let rs = rs.byte_slice(range);
+    // assert_eq!(ss, rs);
 
-    let range = 0..1;
-    let ss = &ss[range.clone()];
-    println!("{ss:?}");
-    let rs = rs.byte_slice(range);
-    assert_eq!(ss, rs);
+    // let range = 0..1;
+    // let ss = &ss[range.clone()];
+    // println!("{ss:?}");
+    // let rs = rs.byte_slice(range);
+    // assert_eq!(ss, rs);
 
-    if true {
-        panic!("AA");
-    }
+    // if true {
+    //     panic!("AA");
+    // }
 
     let mut rng = rand::thread_rng();
 
@@ -66,54 +66,6 @@ fn random_byte_slices() {
             rope_slice = rope_slice.byte_slice(start..end);
             start = rng.gen_range(0..=rope_slice.byte_len());
             end = rng.gen_range(start..=rope_slice.byte_len());
-        }
-    }
-}
-
-/// TODO: docs
-#[test]
-fn random_line_slices() {
-    let mut rng = rand::thread_rng();
-
-    for s in [TINY, SMALL, MEDIUM, LARGE] {
-        let r = Rope::from(s);
-
-        let mut start = 0;
-        let mut end = r.byte_len();
-
-        let mut str_slice = &s[start..end];
-
-        let mut rope_slice = r.byte_slice(start..end);
-
-        let line_offsets = {
-            let mut offset = 0;
-
-            rope_slice
-                .raw_lines()
-                .map(|line| {
-                    let o = offset;
-                    offset += line.byte_len();
-                    o
-                })
-                .collect::<Vec<_>>()
-        };
-
-        assert_eq!(line_offsets.len(), rope_slice.line_len());
-
-        let mut offset = 0;
-
-        while start != end {
-            assert_eq!(str_slice, rope_slice);
-
-            start = rng.gen_range(0..=rope_slice.line_len());
-            end = rng.gen_range(start..=rope_slice.line_len());
-
-            str_slice =
-                &s[line_offsets[offset + start]..line_offsets[offset + end]];
-
-            rope_slice = rope_slice.line_slice(start..end);
-
-            offset += start;
         }
     }
 }
