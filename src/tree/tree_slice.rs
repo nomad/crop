@@ -256,13 +256,16 @@ where
 
         if recompute_root {
             let start = L::BaseMetric::measure(&slice.offset);
-            let end = start + L::BaseMetric::measure(&slice.summary);
-            let (root, offset) = deepest_a_name(slice.root, start, end);
+
+            let (root, offset) = deepest_node_containing_base_range_greedy(
+                slice.root,
+                start,
+                start + L::BaseMetric::measure(&slice.summary),
+            );
+
             slice.root = root;
             slice.offset -= &offset;
         }
-
-        // println!("{slice:#?}");
 
         slice
     }
@@ -298,12 +301,12 @@ where
                     let child_summary = child.summary();
 
                     let contains_first_slice = S::measure(&measured)
-                        + S::measure(&child_summary)
+                        + S::measure(child_summary)
                         >= start;
 
                     if contains_first_slice {
                         let contains_last_slice = E::measure(&measured)
-                            + E::measure(&child_summary)
+                            + E::measure(child_summary)
                             >= end;
 
                         if contains_last_slice {
@@ -327,17 +330,54 @@ where
     }
 }
 
-// - TODO: if we go to slice the first leaf and the right summary is empty we
-// need to get to the next leaf. That means the root might change. This is real
-// hard to deal with tbh.
+/// TODO: docs
+#[inline]
+pub(super) fn deepest_node_containing_base_range_greedy<const N: usize, L>(
+    mut node: &Arc<Node<N, L>>,
+    mut start: L::BaseMetric,
+    mut end: L::BaseMetric,
+) -> (&Arc<Node<N, L>>, L::Summary)
+where
+    L: Leaf,
+{
+    let mut offset = L::Summary::default();
 
-// Edge cases to consider:
-//
-// 1: start_slice is empty and doesn't contain last slice, e.g.
-// "hello\n" "hello\n" -> raw_line_slice(1..2) -> "hello\n"
-//
-// 2: both combined, e.g. "foo\n" "\n" -> line_slice(0..2)
+    'outer: loop {
+        match &**node {
+            Node::Internal(inode) => {
+                let mut measured = L::Summary::default();
 
+                for child in inode.children() {
+                    let child_summary = child.summary();
+
+                    let contains_first_slice =
+                        L::BaseMetric::measure(&measured) <= start;
+
+                    let contains_last_slice =
+                        L::BaseMetric::measure(&measured)
+                            + L::BaseMetric::measure(child_summary)
+                            >= end;
+
+                    if contains_first_slice && contains_last_slice {
+                        node = child;
+                        start -= L::BaseMetric::measure(&measured);
+                        end -= L::BaseMetric::measure(&measured);
+                        offset += &measured;
+                        continue 'outer;
+                    } else {
+                        measured += child_summary;
+                    }
+                }
+
+                return (node, offset);
+            },
+
+            Node::Leaf(_) => return (node, offset),
+        }
+    }
+}
+
+/// TODO: docs
 #[inline]
 fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
     slice: &mut TreeSlice<'a, N, L>,
@@ -512,51 +552,5 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                 }
             }
         },
-    }
-}
-
-#[inline]
-fn deepest_a_name<const N: usize, L>(
-    mut node: &Arc<Node<N, L>>,
-    mut start: L::BaseMetric,
-    mut end: L::BaseMetric,
-) -> (&Arc<Node<N, L>>, L::Summary)
-where
-    L: Leaf,
-{
-    let mut offset = L::Summary::default();
-
-    'outer: loop {
-        match &**node {
-            Node::Internal(inode) => {
-                let mut measured = L::Summary::default();
-
-                for child in inode.children() {
-                    let child_summary = child.summary();
-
-                    let contains_first_slice =
-                        L::BaseMetric::measure(&measured) <= start;
-
-                    let contains_last_slice =
-                        L::BaseMetric::measure(&measured)
-                            + L::BaseMetric::measure(&child_summary)
-                            >= end;
-
-                    if contains_first_slice && contains_last_slice {
-                        node = child;
-                        start -= L::BaseMetric::measure(&measured);
-                        end -= L::BaseMetric::measure(&measured);
-                        offset += &measured;
-                        continue 'outer;
-                    } else {
-                        measured += child_summary;
-                    }
-                }
-
-                return (node, offset);
-            },
-
-            Node::Leaf(_) => return (node, offset),
-        }
     }
 }

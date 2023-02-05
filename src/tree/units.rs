@@ -571,12 +571,18 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
                 end_summary = start_summary.clone();
             } else {
-                let start = self.base_start + self.base_yielded;
+                let start = L::BaseMetric::measure(&offset);
 
-                let range = start..(start + L::BaseMetric::measure(&summary));
+                let (new_root, remove_offset) =
+                    tree_slice::deepest_node_containing_base_range_greedy(
+                        root,
+                        start,
+                        start + L::BaseMetric::measure(&summary),
+                    );
 
-                (root, offset) =
-                    deepest_node_containing_range(self.path[0].0, range);
+                root = new_root;
+
+                offset -= &remove_offset;
 
                 // Safety: `previous_leaf` is guaranteed to be a leaf node by
                 // `Self::previous_leaf()`.
@@ -1643,12 +1649,18 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
                 start_summary = end_summary.clone();
             } else {
-                let end = self.base_start + self.base_remaining;
+                let start = L::BaseMetric::measure(&offset);
 
-                let range = (end - L::BaseMetric::measure(&summary))..(end);
+                let (new_root, remove_offset) =
+                    tree_slice::deepest_node_containing_base_range_greedy(
+                        root,
+                        start,
+                        start + L::BaseMetric::measure(&summary),
+                    );
 
-                (root, offset) =
-                    deepest_node_containing_range(self.path[0].0, range);
+                root = new_root;
+
+                offset -= &remove_offset;
 
                 // Safety: `next_leaf` is guaranteed to be a leaf node by
                 // `Self::next_leaf()`.
@@ -1770,42 +1782,5 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         self.units_remaining -= M::one();
 
         (Some(tree_slice), L::BaseMetric::measure(&advance))
-    }
-}
-
-#[inline]
-fn deepest_node_containing_range<const N: usize, L: Leaf, M: Metric<L>>(
-    mut node: &Arc<Node<N, L>>,
-    mut range: std::ops::Range<M>,
-) -> (&Arc<Node<N, L>>, L::Summary) {
-    'outer: loop {
-        match &**node {
-            Node::Internal(inode) => {
-                let mut measured = M::zero();
-
-                for child in inode.children() {
-                    let this = M::measure(child.summary());
-                    if measured <= range.start && measured + this >= range.end
-                    {
-                        node = child;
-                        range.start -= measured;
-                        range.end -= measured;
-                        continue 'outer;
-                    }
-                    measured += this;
-                }
-
-                todo!();
-
-                // If no child of this internal node fully contains the range
-                // then this node is the deepest one fully containing the
-                // range.
-                //
-                // break (node, range);
-            },
-
-            // Node::Leaf(_) => break (node, range),
-            Node::Leaf(_) => todo!(),
-        }
     }
 }
