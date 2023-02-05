@@ -603,7 +603,7 @@ mod tests {
     #[test]
     fn leaves_forward() {
         for n in 1..256 {
-            let tree = Tree::<2, usize>::from_leaves(0..n);
+            let tree = Tree::<4, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
             let mut i = 0;
             while let Some((leaf, _)) = leaves.next() {
@@ -620,7 +620,7 @@ mod tests {
     #[test]
     fn leaves_backward() {
         for n in 1..256 {
-            let tree = Tree::<2, usize>::from_leaves(0..n);
+            let tree = Tree::<4, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
             let mut i = n;
             while let Some((leaf, _)) = leaves.next_back() {
@@ -639,7 +639,7 @@ mod tests {
         let mut rng = thread_rng();
 
         for n in 1..256 {
-            let tree = Tree::<2, usize>::from_leaves(0..n);
+            let tree = Tree::<4, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
             let i = rng.gen_range(0..=n);
             for j in 0..i {

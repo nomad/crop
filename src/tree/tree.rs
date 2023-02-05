@@ -143,24 +143,35 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         while nodes.len() > FANOUT {
             let capacity =
                 nodes.len() / FANOUT + ((nodes.len() % FANOUT != 0) as usize);
+
             let mut new_nodes = Vec::with_capacity(capacity);
 
             let mut iter = nodes.into_iter();
-            loop {
-                match iter.next_chunk::<FANOUT>() {
-                    Ok(chunk) => {
-                        let inode = Inode::from_children(chunk);
-                        new_nodes.push(Arc::new(Node::Internal(inode)));
-                    },
 
-                    Err(last_chunk) => {
-                        if last_chunk.len() > 0 {
-                            let inode = Inode::from_children(last_chunk);
-                            new_nodes.push(Arc::new(Node::Internal(inode)));
-                        }
-                        break;
-                    },
-                }
+            // TODO: use this once
+            // https://github.com/rust-lang/rust/issues/98326 gets stabilized.
+            //
+            // loop {
+            //     match iter.next_chunk::<FANOUT>() {
+            //         Ok(chunk) => {
+            //             let inode = Inode::from_children(chunk);
+            //             new_nodes.push(Arc::new(Node::Internal(inode)));
+            //         },
+
+            //         Err(last_chunk) => {
+            //             if last_chunk.len() > 0 {
+            //                 let inode = Inode::from_children(last_chunk);
+            //                 new_nodes.push(Arc::new(Node::Internal(inode)));
+            //             }
+            //             break;
+            //         },
+            //     }
+            // }
+
+            while iter.len() > 0 {
+                let children = iter.by_ref().take(FANOUT);
+                let inode = Inode::from_children(children);
+                new_nodes.push(Arc::new(Node::Internal(inode)));
             }
 
             nodes = new_nodes;
