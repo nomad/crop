@@ -11,7 +11,7 @@ pub struct Chunks<'a> {
 impl<'a> From<&'a Rope> for Chunks<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
-        let mut leaves = rope.tree().leaves();
+        let mut leaves = rope.tree.leaves();
         if rope.byte_len() == 0 {
             let _ = leaves.next();
         }
@@ -351,7 +351,7 @@ impl<'a> From<&'a Rope> for RawLines<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
         Self {
-            units: rope.tree().units::<RawLineMetric>(),
+            units: rope.tree.units::<RawLineMetric>(),
             lines_yielded: 0,
             lines_total: rope.line_len(),
         }
@@ -420,7 +420,7 @@ impl<'a> From<&'a Rope> for Lines<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
         Self {
-            units: rope.tree().units::<LineMetric>(),
+            units: rope.tree.units::<LineMetric>(),
             lines_yielded: 0,
             lines_total: rope.line_len(),
         }

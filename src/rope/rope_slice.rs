@@ -26,10 +26,15 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        let (chunk, ByteMetric(chunk_idx)) =
+        let (mut chunk, ByteMetric(mut chunk_byte_offset)) =
             self.tree_slice.leaf_at_measure(ByteMetric(byte_index));
 
-        chunk.as_bytes()[byte_index - chunk_idx]
+        if chunk.len() == byte_index - chunk_byte_offset {
+            (chunk, ByteMetric(chunk_byte_offset)) =
+                self.tree_slice.leaf_at_measure(ByteMetric(byte_index + 1));
+        }
+
+        chunk.as_bytes()[byte_index - chunk_byte_offset]
     }
 
     /// TODO: docs
@@ -74,7 +79,7 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        Self::from(self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)))
+        self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)).into()
     }
 
     /// Returns an iterator over the bytes of this [`RopeSlice`].
@@ -115,10 +120,10 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        let (chunk, ByteMetric(chunk_idx)) =
+        let (chunk, ByteMetric(chunk_byte_offset)) =
             self.tree_slice.leaf_at_measure(ByteMetric(byte_offset));
 
-        chunk.is_char_boundary(byte_offset - chunk_idx)
+        chunk.is_char_boundary(byte_offset - chunk_byte_offset)
     }
 
     /// Returns `true` if the `RopeSlice`'s byte length is zero.
@@ -178,6 +183,8 @@ impl<'a> RopeSlice<'a> {
             tree_slice = tree_slice.slice(ByteMetric(0)..ByteMetric(byte_end));
         }
 
+        debug_assert_eq!(0, tree_slice.summary().line_breaks);
+
         Self { tree_slice, last_byte_is_newline: false }
     }
 
@@ -225,9 +232,7 @@ impl<'a> RopeSlice<'a> {
             );
         }
 
-        Self::from(
-            self.tree_slice.slice(RawLineMetric(start)..RawLineMetric(end)),
-        )
+        self.tree_slice.slice(RawLineMetric(start)..RawLineMetric(end)).into()
     }
 
     /// Returns an iterator over the lines of this [`RopeSlice`].
@@ -247,7 +252,6 @@ impl<'a> From<TreeSlice<'a, { Rope::fanout() }, RopeChunk>> for RopeSlice<'a> {
     #[inline]
     fn from(tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>) -> Self {
         Self {
-            // TODO: make sure the last slice is never empty.
             last_byte_is_newline: last_byte_is_newline(tree_slice.end_slice()),
             tree_slice,
         }

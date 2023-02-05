@@ -94,12 +94,12 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub fn convert_measure<M1, M2>(&self, from: M1) -> M2
+    pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: SlicingMetric<L>,
         M2: Metric<L>,
     {
-        debug_assert!(from <= self.measure::<M1>() + M1::one());
+        debug_assert!(up_to <= self.measure::<M1>() + M1::one());
 
         let mut m1 = M1::zero();
         let mut m2 = M2::zero();
@@ -112,7 +112,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                     for child in inode.children() {
                         let child_m1 = child.measure::<M1>();
 
-                        if m1 + child_m1 >= from {
+                        if m1 + child_m1 >= up_to {
                             node = &**child;
                             continue 'outer;
                         } else {
@@ -120,15 +120,13 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                             m2 += child.measure::<M2>();
                         }
                     }
-                    unreachable!(
-                        "Didn't I tell you to do bounds checks before \
-                         calling this function?"
-                    );
+
+                    unreachable!();
                 },
 
                 Node::Leaf(leaf) => {
                     let (_, left_summary, _, _) =
-                        M1::split(leaf.as_slice(), from - m1, leaf.summary());
+                        M1::split(leaf.as_slice(), up_to - m1, leaf.summary());
 
                     return m2 + M2::measure(&left_summary);
                 },
@@ -194,7 +192,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     where
         M: Metric<L>,
     {
-        debug_assert!(measure < M::measure(self.summary()));
+        debug_assert!(measure <= self.measure::<M>() + M::one());
 
         let mut measured = M::zero();
 
@@ -204,18 +202,17 @@ impl<const N: usize, L: Leaf> Node<N, L> {
             match node {
                 Node::Internal(inode) => {
                     for child in inode.children() {
-                        let this = M::measure(child.summary());
-                        if measure < measured + this {
+                        let child_measure = child.measure::<M>();
+
+                        if measured + child_measure >= measure {
                             node = &**child;
                             continue 'outer;
                         } else {
-                            measured += this;
+                            measured += child_measure;
                         }
                     }
-                    unreachable!(
-                        "Didn't I tell you to do bounds checks before \
-                         calling this function?"
-                    );
+
+                    unreachable!();
                 },
 
                 Node::Leaf(leaf) => {

@@ -86,20 +86,14 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     }
 
     #[inline]
-    pub fn convert_measure<M1, M2>(&self, from: M1) -> M2
+    pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: SlicingMetric<L>,
         M2: Metric<L>,
     {
-        debug_assert!(
-            from <= self.measure::<M1>() + M1::one(),
-            "Trying to convert {:?} into {}, but this Tree is only {:?} long",
-            from,
-            std::any::type_name::<M2>(),
-            self.measure::<M1>(),
-        );
+        debug_assert!(up_to <= self.measure::<M1>() + M1::one(),);
 
-        self.root.convert_measure(from)
+        self.root.convert_measure(up_to)
     }
 
     /// # Panics

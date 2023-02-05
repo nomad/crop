@@ -51,10 +51,15 @@ impl Rope {
             );
         }
 
-        let (chunk, ByteMetric(chunk_idx)) =
+        let (mut chunk, ByteMetric(mut chunk_byte_offset)) =
             self.tree.leaf_at_measure(ByteMetric(byte_index));
 
-        chunk.as_bytes()[byte_index - chunk_idx]
+        if chunk.len() == byte_index - chunk_byte_offset {
+            (chunk, ByteMetric(chunk_byte_offset)) =
+                self.tree.leaf_at_measure(ByteMetric(byte_index + 1));
+        }
+
+        chunk.as_bytes()[byte_index - chunk_byte_offset]
     }
 
     /// TODO: docs
@@ -99,7 +104,7 @@ impl Rope {
             );
         }
 
-        RopeSlice::from(self.tree.slice(ByteMetric(start)..ByteMetric(end)))
+        self.tree.slice(ByteMetric(start)..ByteMetric(end)).into()
     }
 
     /// Returns an iterator over the bytes of this [`Rope`].
@@ -225,6 +230,8 @@ impl Rope {
             tree_slice = tree_slice.slice(ByteMetric(0)..ByteMetric(byte_end));
         }
 
+        debug_assert_eq!(0, tree_slice.summary().line_breaks);
+
         RopeSlice { tree_slice, last_byte_is_newline: false }
     }
 
@@ -272,9 +279,7 @@ impl Rope {
             );
         }
 
-        RopeSlice::from(
-            self.tree.slice(RawLineMetric(start)..RawLineMetric(end)),
-        )
+        self.tree.slice(RawLineMetric(start)..RawLineMetric(end)).into()
     }
 
     /// Returns an iterator over the lines of this [`Rope`].
@@ -315,11 +320,6 @@ impl Rope {
         }
 
         todo!()
-    }
-
-    #[inline]
-    pub(super) fn tree(&self) -> &Tree<ROPE_FANOUT, RopeChunk> {
-        &self.tree
     }
 }
 

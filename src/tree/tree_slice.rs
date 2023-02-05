@@ -102,19 +102,15 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     where
         M: Metric<L>,
     {
-        debug_assert!(
-            measure < M::measure(self.summary()),
-            "Trying to get the leaf at {:?}, but this tree is only {:?} long",
-            measure,
-            M::measure(self.summary()),
-        );
+        debug_assert!(measure <= self.measure::<M>() + M::one());
 
-        if measure <= M::measure(&self.start_summary) {
+        if M::measure(&self.start_summary) >= measure {
             (self.start_slice, M::zero())
         } else {
             let all_minus_last =
                 M::measure(&self.summary) - M::measure(&self.end_summary);
-            if measure <= all_minus_last {
+
+            if all_minus_last >= measure {
                 let (leaf, mut offset) = self
                     .root
                     .leaf_at_measure(M::measure(&self.offset) + measure);

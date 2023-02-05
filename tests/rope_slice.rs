@@ -3,49 +3,12 @@ use rand::Rng;
 
 mod common;
 
-use common::{LARGE, MEDIUM, SMALL, TINY};
+use common::{CURSED_LIPSUM, LARGE, MEDIUM, SMALL, TINY};
 
-/// TODO: docs
+/// Tests that repeatedly byte-slicing a RopeSlice always matches the
+/// equivalent str slice.
 #[test]
-fn random_byte_slices() {
-    // let ss = TINY;
-    // let r = Rope::from(ss);
-    // let rs = r.byte_slice(..);
-
-    // let range = 153..562;
-    // let ss = &ss[range.clone()];
-    // println!("{ss:?}");
-    // let rs = rs.byte_slice(range);
-    // assert_eq!(ss, rs);
-
-    // let range = 276..384;
-    // let ss = &ss[range.clone()];
-    // println!("{ss:?}");
-    // let rs = rs.byte_slice(range);
-    // assert_eq!(ss, rs);
-
-    // let range = 7..11;
-    // let ss = &ss[range.clone()];
-    // println!("{ss:?}");
-    // let rs = rs.byte_slice(range);
-    // assert_eq!(ss, rs);
-
-    // let range = 3..4;
-    // let ss = &ss[range.clone()];
-    // println!("{ss:?}");
-    // let rs = rs.byte_slice(range);
-    // assert_eq!(ss, rs);
-
-    // let range = 0..1;
-    // let ss = &ss[range.clone()];
-    // println!("{ss:?}");
-    // let rs = rs.byte_slice(range);
-    // assert_eq!(ss, rs);
-
-    // if true {
-    //     panic!("AA");
-    // }
-
+fn byte_slice_random() {
     let mut rng = rand::thread_rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
@@ -57,21 +20,90 @@ fn random_byte_slices() {
         let mut str_slice = &s[start..end];
         let mut rope_slice = r.byte_slice(start..end);
 
+        let mut ranges = Vec::new();
+
         while start != end {
-            println!("start: {start}, end: {end}");
-            assert_eq!(str_slice, rope_slice);
-
-            str_slice = &str_slice[start..end];
-
-            rope_slice = rope_slice.byte_slice(start..end);
+            ranges.push(start..end);
+            if str_slice != rope_slice {
+                println!("byte ranges: {ranges:?}");
+                assert_eq!(str_slice, rope_slice);
+            }
             start = rng.gen_range(0..=rope_slice.byte_len());
             end = rng.gen_range(start..=rope_slice.byte_len());
+            str_slice = &str_slice[start..end];
+            rope_slice = rope_slice.byte_slice(start..end);
         }
     }
 }
 
+/// Tests `RopeSlice::byte()` on a bunch of random RopeSlices over different
+/// texts.
 #[test]
-fn line_offset_of_byte_over_random_slices() {
+fn byte_random() {
+    let mut rng = rand::thread_rng();
+
+    for s in [TINY, SMALL, MEDIUM, LARGE] {
+        let r = Rope::from(s);
+
+        for _ in 0..10 {
+            let start = rng.gen_range(0..=r.byte_len());
+            let end = rng.gen_range(start..=r.byte_len());
+
+            let str_slice = &s[start..end];
+            let rope_slice = r.byte_slice(start..end);
+
+            for (idx, byte) in str_slice.bytes().enumerate() {
+                if byte != rope_slice.byte(idx) {
+                    println!(
+                        "byte index: {idx}, byte range: {:?}",
+                        start..end
+                    );
+                    assert_eq!(byte, rope_slice.byte(idx));
+                }
+            }
+        }
+    }
+}
+
+/// Tests `RopeSlice::is_char_boundary()` on a bunch of random RopeSlices over
+/// different texts.
+#[test]
+fn is_char_boundary_random() {
+    let mut rng = rand::thread_rng();
+
+    for s in [CURSED_LIPSUM, TINY, SMALL, MEDIUM, LARGE] {
+        let r = Rope::from(s);
+
+        for _ in 0..10 {
+            let start = rng.gen_range(0..=r.byte_len());
+            let end = rng.gen_range(start..=r.byte_len());
+
+            if !(s.is_char_boundary(start) && s.is_char_boundary(end)) {
+                continue;
+            }
+
+            let str_slice = &s[start..end];
+            let rope_slice = r.byte_slice(start..end);
+
+            for byte_idx in 0..rope_slice.byte_len() {
+                if str_slice.is_char_boundary(byte_idx)
+                    != rope_slice.is_char_boundary(byte_idx)
+                {
+                    println!("byte range: {:?}", start..end);
+                    assert_eq!(
+                        str_slice.is_char_boundary(byte_idx),
+                        rope_slice.is_char_boundary(byte_idx)
+                    );
+                }
+            }
+        }
+    }
+}
+
+/// Tests `crop::RopeSlice::line_of_byte()` against Ropey's
+/// `ropey::RopeSlice::byte_to_line()`.
+#[test]
+fn line_of_byte_random() {
     let mut rng = rand::thread_rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
@@ -92,10 +124,8 @@ fn line_offset_of_byte_over_random_slices() {
                 let ropey_line_offset = ropey_slice.byte_to_line(byte_index);
 
                 if crop_line_offset != ropey_line_offset {
-                    println!(
-                        "Failed on byte index {byte_index} in byte range: \
-                         {range:?}",
-                    );
+                    println!("byte index: {byte_index}");
+                    println!("byte range: {:?}", start..end);
                     assert_eq!(crop_line_offset, ropey_line_offset)
                 }
             }
@@ -103,8 +133,10 @@ fn line_offset_of_byte_over_random_slices() {
     }
 }
 
+/// Tests `crop::RopeSlice::byte_of_line()` against Ropey's
+/// `ropey::RopeSlice::line_to_byte()`.
 #[test]
-fn byte_offset_of_line_over_random_slices() {
+fn byte_of_line_random() {
     let mut rng = rand::thread_rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
@@ -125,10 +157,8 @@ fn byte_offset_of_line_over_random_slices() {
                 let ropey_byte_offset = ropey_slice.line_to_byte(line_index);
 
                 if crop_byte_offset != ropey_byte_offset {
-                    println!(
-                        "Failed on line index {line_index} in byte range: \
-                         {range:?}",
-                    );
+                    println!("line index: {line_index}");
+                    println!("byte range: {range:?}");
                     assert_eq!(crop_byte_offset, ropey_byte_offset)
                 }
             }
