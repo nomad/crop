@@ -63,6 +63,9 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
             from_treeslice::into_tree_root(slice)
         };
 
+        #[cfg(debug_assertions)]
+        (Tree { root: Arc::clone(&root) }).assert_invariants();
+
         Tree { root }
     }
 }

@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::{Leaf, Leaves, Metric, Node, SlicingMetric, Units};
+use super::{Leaf, Leaves, Metric, Node, SlicingMetric, Summarize, Units};
 
 #[derive(Debug)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
@@ -51,6 +51,46 @@ impl<'a, const FANOUT: usize, L: Leaf> Copy for TreeSlice<'a, FANOUT, L> where
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
+    #[doc(hidden)]
+    pub fn assert_invariants(&self) {
+        match &**self.root {
+            Node::Internal(_) => {
+                assert!(self.leaf_count > 1);
+
+                assert_eq!(self.start_slice.summarize(), self.start_summary);
+
+                assert_eq!(self.end_slice.summarize(), self.end_summary);
+
+                assert!(
+                    L::BaseMetric::measure(&self.start_summary)
+                        > L::BaseMetric::zero()
+                );
+
+                assert!(
+                    L::BaseMetric::measure(&self.end_summary)
+                        > L::BaseMetric::zero()
+                );
+
+                if self.leaf_count == 2 {
+                    assert_eq!(
+                        self.summary,
+                        self.start_summary.clone() + &self.end_summary
+                    );
+                }
+
+                // TODO: make sure that the first and last slices are under
+                // different children of the root.
+            },
+
+            Node::Leaf(leaf) => {
+                assert_eq!(1, self.leaf_count);
+                assert_eq!(self.start_summary, self.summary);
+                assert_eq!(self.summary, self.end_summary);
+                assert!(leaf.base_measure() >= self.base_measure());
+            },
+        }
+    }
+
     /// Returns the base measure of this slice's summary.
     #[inline]
     pub fn base_measure(&self) -> L::BaseMetric {
@@ -262,6 +302,9 @@ where
             slice.root = root;
             slice.offset -= &offset;
         }
+
+        #[cfg(debug_assertions)]
+        slice.assert_invariants();
 
         slice
     }
