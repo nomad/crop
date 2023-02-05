@@ -60,7 +60,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
                 first
             }
         } else {
-            from_treeslice::into_tree_root(slice)
+            return from_treeslice::into_tree_root(slice);
         };
 
         #[cfg(debug_assertions)]
@@ -71,6 +71,10 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
 }
 
 impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
+    /*
+      Public methods
+    */
+
     /// Checks that all the internal nodes in the Tree contain between `FANOUT
     /// / 2` and `FANOUT` children. The root is the only internal node that's
     /// allowed to have as few as 2 children. Doesn't do any checks on leaf
@@ -88,6 +92,14 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         }
     }
 
+    /// Returns the base measure of this `Tree` obtaining by summing up the
+    /// base measures of all its leaves.
+    #[inline]
+    pub fn base_measure(&self) -> L::BaseMetric {
+        self.measure::<L::BaseMetric>()
+    }
+
+    /// Returns the `M2`-measure of all the leaves before `up_to`..
     #[inline]
     pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
@@ -95,24 +107,74 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M2: Metric<L>,
     {
         debug_assert!(up_to <= self.measure::<M1>() + M1::one(),);
-
         self.root.convert_measure(up_to)
     }
 
-    /// # Panics
-    ///
-    /// This function will panic if the iterator is empty.
+    /// TODO: docs
     #[inline]
     pub fn from_leaves<I>(leaves: I) -> Self
     where
         I: IntoIterator<Item = L>,
-        I::IntoIter: ExactSizeIterator,
+        L: Default,
     {
-        Self {
-            root: Arc::new(Node::from_leaves(
-                leaves.into_iter().map(Lnode::from),
-            )),
+        let mut leaves = leaves.into_iter();
+
+        let Some(first) = leaves.next() else { return Self::default() };
+        let first = Arc::new(Node::Leaf(Lnode::from(first)));
+
+        let mut nodes = match leaves.next() {
+            Some(second) => {
+                let second = Arc::new(Node::Leaf(Lnode::from(second)));
+                let (lo, hi) = leaves.size_hint();
+                let mut nodes = Vec::with_capacity(2 + hi.unwrap_or(lo));
+                nodes.push(first);
+                nodes.push(second);
+                nodes.extend(
+                    leaves.map(Lnode::from).map(Node::Leaf).map(Arc::new),
+                );
+                nodes
+            },
+
+            None => {
+                return Self { root: first };
+            },
+        };
+
+        while nodes.len() > FANOUT {
+            let capacity =
+                nodes.len() / FANOUT + ((nodes.len() % FANOUT != 0) as usize);
+            let mut new_nodes = Vec::with_capacity(capacity);
+
+            let mut iter = nodes.into_iter();
+            loop {
+                match iter.next_chunk::<FANOUT>() {
+                    Ok(chunk) => {
+                        let inode = Inode::from_children(chunk);
+                        new_nodes.push(Arc::new(Node::Internal(inode)));
+                    },
+
+                    Err(last_chunk) => {
+                        if last_chunk.len() > 0 {
+                            let inode = Inode::from_children(last_chunk);
+                            new_nodes.push(Arc::new(Node::Internal(inode)));
+                        }
+                        break;
+                    },
+                }
+            }
+
+            nodes = new_nodes;
         }
+
+        let mut root = Inode::from_children(nodes);
+
+        root.balance_right_side();
+
+        let mut tree = Self { root: Arc::new(Node::Internal(root)) };
+
+        tree.pull_up_root();
+
+        tree
     }
 
     /// Returns the leaf at `measure` (0-indexed) together with its `M` offset.
@@ -129,25 +191,17 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         self.root.leaf_at_measure(measure)
     }
 
-    #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
-        self.measure::<L::BaseMetric>()
-    }
-
-    #[inline]
-    pub fn measure<M: Metric<L>>(&self) -> M {
-        M::measure(self.summary())
-    }
-
-    /// Returns an iterator over the leaves of this tree.
+    /// Returns an iterator over the leaves of this `Tree`.
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
         Leaves::from(self)
     }
 
+    /// Returns the `M`-measure of this `Tree` obtaining by summing up the
+    /// `M`-measures of all its leaves.
     #[inline]
-    pub(super) fn root(&self) -> &Arc<Node<FANOUT, L>> {
-        &self.root
+    pub fn measure<M: Metric<L>>(&self) -> M {
+        M::measure(self.summary())
     }
 
     /// TODO: docs
@@ -180,6 +234,41 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     {
         Units::from(self)
     }
+
+    /*
+      Private methods
+    */
+
+    /// Continuously replaces the root with its first child as long as the root
+    /// is an internal node with a single child.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the root has a strong counter > 1.
+    #[inline]
+    pub(super) fn pull_up_root(&mut self) {
+        let root = &mut self.root;
+
+        while let Node::Internal(i) = Arc::get_mut(root).unwrap() {
+            if i.children().len() == 1 {
+                let child = unsafe {
+                    i.children
+                        .drain(..)
+                        .next()
+                        // SAFETY: there is exactly 1 child.
+                        .unwrap_unchecked()
+                };
+                *root = child;
+            } else {
+                break;
+            }
+        }
+    }
+
+    #[inline]
+    pub(super) fn root(&self) -> &Arc<Node<FANOUT, L>> {
+        &self.root
+    }
 }
 
 mod from_treeslice {
@@ -194,27 +283,27 @@ mod from_treeslice {
     #[inline]
     pub(super) fn into_tree_root<const N: usize, L: Leaf>(
         slice: TreeSlice<'_, N, L>,
-    ) -> Arc<Node<N, L>> {
+    ) -> Tree<N, L> {
         debug_assert!(slice.leaf_count() >= 3);
 
         let (root, invalid_in_first, invalid_in_last) = cut_tree_slice(slice);
 
-        let mut root = Arc::new(Node::Internal(root));
+        let mut tree = Tree { root: Arc::new(Node::Internal(root)) };
 
         if invalid_in_first > 0 {
             {
                 // Safety : `root` was just enclosed in a `Node::Internal`
                 // variant.
                 let root = unsafe {
-                    Arc::get_mut(&mut root)
+                    Arc::get_mut(&mut tree.root)
                         .unwrap()
                         .as_mut_internal_unchecked()
                 };
 
-                balance_first_rec(root);
+                root.balance_left_side();
             }
 
-            pull_up_singular(&mut root);
+            tree.pull_up_root();
         }
 
         if invalid_in_last > 0 {
@@ -225,18 +314,21 @@ mod from_treeslice {
                 // should have already been handled before calling this
                 // function.
                 let root = unsafe {
-                    Arc::get_mut(&mut root)
+                    Arc::get_mut(&mut tree.root)
                         .unwrap()
                         .as_mut_internal_unchecked()
                 };
 
-                balance_last_rec(root);
+                root.balance_right_side();
             }
 
-            pull_up_singular(&mut root);
+            tree.pull_up_root();
         }
 
-        root
+        #[cfg(debug_assertions)]
+        tree.assert_invariants();
+
+        tree
     }
 
     /// Returns a `(Root, InvalidFirst, InvalidLast)` tuple where:
@@ -462,69 +554,6 @@ mod from_treeslice {
 
                 Arc::new(Node::Leaf(lnode))
             },
-        }
-    }
-
-    /// Recursively balances the first child all the way down to the deepest
-    /// inode.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `Arc` enclosing the first child has a strong counter > 1.
-    #[inline]
-    fn balance_first_rec<const N: usize, L: Leaf>(inode: &mut Inode<N, L>) {
-        inode.balance_first_child_with_second();
-
-        if let Node::Internal(first) = Arc::get_mut(inode.first_mut()).unwrap()
-        {
-            balance_first_rec(first);
-
-            if !first.has_enough_children() && inode.children().len() > 1 {
-                inode.balance_first_child_with_second();
-            }
-        }
-    }
-
-    /// Recursively balances the last child all the way down to the deepest
-    /// inode.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `Arc` enclosing the last child has a strong counter > 1.
-    #[inline]
-    fn balance_last_rec<const N: usize, L: Leaf>(inode: &mut Inode<N, L>) {
-        inode.balance_last_child_with_penultimate();
-
-        if let Node::Internal(last) = Arc::get_mut(inode.last_mut()).unwrap() {
-            balance_last_rec(last);
-
-            if !last.has_enough_children() && inode.children().len() > 1 {
-                inode.balance_last_child_with_penultimate();
-            }
-        }
-    }
-
-    /// Continuously replaces the root with its first child as long as the root
-    /// is an internal node with a single child.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `Arc` enclosing the root has a strong counter > 1.
-    #[inline]
-    fn pull_up_singular<const N: usize, L: Leaf>(root: &mut Arc<Node<N, L>>) {
-        while let Node::Internal(i) = Arc::get_mut(root).unwrap() {
-            if i.children().len() == 1 {
-                let child = unsafe {
-                    i.children
-                        .drain(..)
-                        .next()
-                        // SAFETY: there is exactly 1 child.
-                        .unwrap_unchecked()
-                };
-                *root = child;
-            } else {
-                break;
-            }
         }
     }
 }

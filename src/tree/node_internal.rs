@@ -275,6 +275,43 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
     }
 
+    /// Recursively balances the first child all the way down to the deepest
+    /// inode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the first child has a strong counter > 1.
+    pub(super) fn balance_left_side(&mut self) {
+        self.balance_first_child_with_second();
+
+        if let Node::Internal(first) = Arc::get_mut(self.first_mut()).unwrap()
+        {
+            first.balance_left_side();
+
+            if !first.has_enough_children() && self.children().len() > 1 {
+                self.balance_first_child_with_second();
+            }
+        }
+    }
+
+    /// Recursively balances the last child all the way down to the deepest
+    /// inode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the last child has a strong counter > 1.
+    pub(super) fn balance_right_side(&mut self) {
+        self.balance_last_child_with_penultimate();
+
+        if let Node::Internal(last) = Arc::get_mut(self.last_mut()).unwrap() {
+            last.balance_right_side();
+
+            if !last.has_enough_children() && self.children().len() > 1 {
+                self.balance_last_child_with_penultimate();
+            }
+        }
+    }
+
     #[inline]
     pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
         &self.children
@@ -422,45 +459,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
 
         Self { children, depth, num_leaves, summary }
-    }
-
-    #[inline]
-    pub(super) fn from_leaves<I>(leaves: I) -> Self
-    where
-        I: IntoIterator<Item = Lnode<L>>,
-    {
-        let mut nodes = leaves
-            .into_iter()
-            .map(Node::Leaf)
-            .map(Arc::new)
-            .collect::<Vec<_>>();
-
-        while nodes.len() > N {
-            let capacity = nodes.len() / N + ((nodes.len() % N != 0) as usize);
-            let mut new_nodes = Vec::with_capacity(capacity);
-
-            let mut iter = nodes.into_iter();
-            loop {
-                match iter.next_chunk::<N>() {
-                    Ok(chunk) => {
-                        let inode = Self::from_children(chunk);
-                        new_nodes.push(Arc::new(Node::Internal(inode)));
-                    },
-
-                    Err(last_chunk) => {
-                        if last_chunk.len() > 0 {
-                            let inode = Self::from_children(last_chunk);
-                            new_nodes.push(Arc::new(Node::Internal(inode)));
-                        }
-                        break;
-                    },
-                }
-            }
-
-            nodes = new_nodes;
-        }
-
-        Self::from_children(nodes)
     }
 
     #[inline]

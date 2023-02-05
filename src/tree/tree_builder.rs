@@ -163,7 +163,22 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
             root = Arc::new(Node::Internal(Inode::from_children(stack_level)));
         }
 
-        Tree { root }
+        {
+            // SAFETY: the only way the root can be a leaf node is if
+            // the stack is empty and `self.leaves` contains a single leaf,
+            // and that case has already been handled.
+            let root = unsafe {
+                Arc::get_mut(&mut root).unwrap().as_mut_internal_unchecked()
+            };
+
+            root.balance_right_side();
+        }
+
+        let mut tree = Tree { root };
+
+        tree.pull_up_root();
+
+        tree
     }
 
     #[allow(dead_code)]

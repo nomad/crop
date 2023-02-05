@@ -143,29 +143,6 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub fn from_leaves<I>(leaves: I) -> Self
-    where
-        I: IntoIterator<Item = Lnode<L>>,
-        I::IntoIter: ExactSizeIterator,
-    {
-        let mut leaves = leaves.into_iter();
-
-        if leaves.len() == 0 {
-            panic!(
-                "Cannot construct a Node<{}, {}> from an empty iterator",
-                N,
-                std::any::type_name::<L>(),
-            )
-        }
-
-        if leaves.len() == 1 {
-            return Self::Leaf(leaves.next().unwrap());
-        }
-
-        Self::Internal(Inode::from_leaves(leaves))
-    }
-
-    #[inline]
     pub(super) fn is_valid(&self) -> bool {
         match self {
             Node::Internal(inode) => inode.has_enough_children(),
