@@ -155,26 +155,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
             let mut iter = nodes.into_iter();
 
-            // TODO: use this once
-            // https://github.com/rust-lang/rust/issues/98326 gets stabilized.
-            //
-            // loop {
-            //     match iter.next_chunk::<FANOUT>() {
-            //         Ok(chunk) => {
-            //             let inode = Inode::from_children(chunk);
-            //             new_nodes.push(Arc::new(Node::Internal(inode)));
-            //         },
-
-            //         Err(last_chunk) => {
-            //             if last_chunk.len() > 0 {
-            //                 let inode = Inode::from_children(last_chunk);
-            //                 new_nodes.push(Arc::new(Node::Internal(inode)));
-            //             }
-            //             break;
-            //         },
-            //     }
-            // }
-
             while iter.len() > 0 {
                 let children = iter.by_ref().take(FANOUT);
                 let inode = Inode::from_children(children);
@@ -209,15 +189,15 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         self.root.leaf_at_measure(measure)
     }
 
+    #[inline]
+    pub fn leaf_count(&self) -> usize {
+        self.root.leaf_count()
+    }
+
     /// Returns an iterator over the leaves of this `Tree`.
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
         Leaves::from(self)
-    }
-
-    #[inline]
-    pub fn leaf_count(&self) -> usize {
-        self.root.leaf_count()
     }
 
     /// Returns the `M`-measure of this `Tree` obtaining by summing up the
@@ -227,7 +207,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M::measure(self.summary())
     }
 
-    /// TODO: docs
+    /// Returns a slice of the `Tree` in the range of the given metric.
     #[inline]
     pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
     where
@@ -242,13 +222,12 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         TreeSlice::from_range_in_root(&self.root, range)
     }
 
-    /// TODO: docs
     #[inline]
     pub fn summary(&self) -> &L::Summary {
         self.root.summary()
     }
 
-    /// TODO: docs
+    /// Returns an iterator over the `M`-units of this `Tree`.
     #[inline]
     pub fn units<M>(&self) -> Units<'_, FANOUT, L, M>
     where
