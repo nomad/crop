@@ -255,7 +255,15 @@ where
         }
     }
 
-    /// TODO: docs
+    /// Returns the `TreeSlice` obtained by slicing `root` between `start` and
+    /// `end`.
+    ///
+    /// NOTE: `start` and `end` are specified using different metrics so
+    /// there's no way to tell if `start` actually precedes `end` without
+    /// going through the nodes (which this function doesn't do).
+    ///
+    /// It's the caller's responsibility to guarantee this, this function
+    /// may panic or return an incorrect or invalid `TreeSlice` otherwise.
     #[inline]
     fn slice_impl<S, E>(
         root: &'a Arc<Node<FANOUT, L>>,
@@ -314,7 +322,7 @@ where
         slice
     }
 
-    /// TODO: docs
+    /// Returns an iterator over the `M`-units of this `TreeSlice`.
     #[inline]
     pub fn units<M>(&'a self) -> Units<'a, FANOUT, L, M>
     where
@@ -510,11 +518,8 @@ fn build_slice<'a, const N: usize, L, S, E>(
                 debug_assert!({
                     // If we haven't yet found the first slice this leaf must
                     // contain it.
-                    let contains_first_slice = S::measure(&slice.offset)
-                        + S::measure(leaf_summary)
-                        >= start;
-
-                    contains_first_slice
+                    S::measure(&slice.offset) + S::measure(leaf_summary)
+                        >= start
                 });
 
                 if contains_last_slice {
