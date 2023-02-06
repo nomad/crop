@@ -2,7 +2,6 @@ use std::sync::Arc;
 
 use super::{Leaf, Lnode, Metric, Node};
 
-/// Invariants: guaranteed to contain at least one child node.
 #[derive(Clone)]
 pub(super) struct Inode<const N: usize, L: Leaf> {
     pub(super) children: Vec<Arc<Node<N, L>>>,
@@ -23,18 +22,6 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Inode<N, L> {
                 .finish()
         } else {
             pretty_print_inode(self, &mut String::new(), "", 0, f)
-        }
-    }
-}
-
-impl<const N: usize, L: Leaf> Default for Inode<N, L> {
-    #[inline]
-    fn default() -> Self {
-        Self {
-            children: Vec::with_capacity(N),
-            depth: 1,
-            leaf_count: 0,
-            summary: Default::default(),
         }
     }
 }
@@ -205,8 +192,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         match (&**penultimate, Arc::get_mut(last).unwrap()) {
             (Node::Internal(penultimate), Node::Internal(last)) => {
-                // TODO: try to do the opposite, move last to penultimate.
-                //
                 // Move all the penultimate child's children over to the last
                 // child, then remove the penultimate child.
                 if penultimate.children().len() + last.children().len()
@@ -313,37 +298,13 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
+    pub fn base_measure(&self) -> L::BaseMetric {
+        self.measure::<L::BaseMetric>()
+    }
+
+    #[inline]
     pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
         &self.children
-    }
-
-    #[inline]
-    pub(super) fn has_enough_children(&self) -> bool {
-        self.children().len() >= Self::min_children()
-    }
-
-    #[inline]
-    pub(super) fn two_mut(
-        &mut self,
-        first_idx: usize,
-        second_idx: usize,
-    ) -> (&mut Arc<Node<N, L>>, &mut Arc<Node<N, L>>) {
-        debug_assert!(first_idx < second_idx);
-        debug_assert!(second_idx < self.children.len());
-
-        let split_at = first_idx + 1;
-        let (first, second) = self.children.split_at_mut(split_at);
-        (&mut first[first_idx], &mut second[second_idx - split_at])
-    }
-
-    #[inline]
-    pub(super) fn insert(&mut self, idx: usize, child: Arc<Node<N, L>>) {
-        debug_assert!(!self.is_full());
-        debug_assert_eq!(child.depth() + 1, self.depth());
-
-        self.leaf_count += child.leaf_count();
-        self.summary += child.summary();
-        self.children.insert(idx, child);
     }
 
     #[inline]
@@ -353,91 +314,33 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     #[inline]
     pub(super) fn empty() -> Self {
-        Self::default()
+        Self {
+            children: Vec::with_capacity(N),
+            depth: 1,
+            leaf_count: 0,
+            summary: Default::default(),
+        }
     }
 
-    /// Returns a reference to the first child of this internal node.
     #[inline]
     pub(super) fn first(&self) -> &Arc<Node<N, L>> {
         &self.children[0]
     }
 
-    /// Returns a mutable reference to the first child of this internal node.
     #[inline]
     pub(super) fn first_mut(&mut self) -> &mut Arc<Node<N, L>> {
         &mut self.children[0]
     }
 
-    /// Returns a reference to the last child of this internal node.
-    #[allow(dead_code)]
-    #[inline]
-    pub(super) fn last(&self) -> &Arc<Node<N, L>> {
-        let last_idx = self.children.len() - 1;
-        &self.children[last_idx]
-    }
-
-    /// Returns a mutable reference to the last child of this internal node.
-    #[inline]
-    pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
-        let last_idx = self.children.len() - 1;
-        &mut self.children[last_idx]
-    }
-
-    #[allow(dead_code)]
-    #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
-        self.measure::<L::BaseMetric>()
-    }
-
-    #[inline]
-    pub fn measure<M: Metric<L>>(&self) -> M {
-        M::measure(self.summary())
-    }
-
-    #[inline]
-    pub(super) const fn max_children() -> usize {
-        N
-    }
-
-    #[inline]
-    pub(super) const fn min_children() -> usize {
-        N / 2
-    }
-
-    #[inline]
-    pub(super) fn leaf_count(&self) -> usize {
-        self.leaf_count
-    }
-
-    #[inline]
-    fn is_empty(&self) -> bool {
-        self.children.len() == 0
-    }
-
-    #[inline]
-    fn is_full(&self) -> bool {
-        self.children.len() == N
-    }
-
-    /// Adds a node to the children, updating self's summary with the summary
-    /// coming from the new node.
-    #[inline]
-    pub(super) fn push(&mut self, child: Arc<Node<N, L>>) {
-        if self.is_empty() {
-            self.depth = child.depth() + 1;
-        }
-
-        debug_assert!(!self.is_full());
-        debug_assert_eq!(child.depth() + 1, self.depth());
-
-        self.leaf_count += child.leaf_count();
-        self.summary += child.summary();
-        self.children.push(child);
-    }
-
+    /// Creates a new internal node from its children.
+    ///
+    /// NOTE: this function assumes that `children` yields less than
+    /// `Self::max_children()` nodes and that all the nodes have the same
+    /// depth.
+    ///
     /// # Panics
     ///
-    /// This function will panic if the iterator yields more than `N` items.
+    /// Will panic if `children` yields zero nodes.
     #[inline]
     pub(super) fn from_children<I>(children: I) -> Self
     where
@@ -462,8 +365,105 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
+    pub(super) fn has_enough_children(&self) -> bool {
+        self.children().len() >= Self::min_children()
+    }
+
+    #[inline]
+    fn insert(&mut self, idx: usize, child: Arc<Node<N, L>>) {
+        debug_assert!(!self.is_full());
+        debug_assert_eq!(child.depth() + 1, self.depth());
+
+        self.leaf_count += child.leaf_count();
+        self.summary += child.summary();
+        self.children.insert(idx, child);
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.children.len() == 0
+    }
+
+    #[inline]
+    fn is_full(&self) -> bool {
+        self.children.len() == N
+    }
+
+    /// Returns a reference to the last child of this internal node.
+    #[allow(dead_code)]
+    #[inline]
+    pub(super) fn last(&self) -> &Arc<Node<N, L>> {
+        let last_idx = self.children.len() - 1;
+        &self.children[last_idx]
+    }
+
+    /// Returns a mutable reference to the last child of this internal node.
+    #[inline]
+    pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
+        let last_idx = self.children.len() - 1;
+        &mut self.children[last_idx]
+    }
+
+    #[inline]
+    pub(super) fn leaf_count(&self) -> usize {
+        self.leaf_count
+    }
+
+    #[inline]
+    pub(super) const fn max_children() -> usize {
+        N
+    }
+
+    #[inline]
+    pub fn measure<M: Metric<L>>(&self) -> M {
+        M::measure(self.summary())
+    }
+
+    #[inline]
+    pub(super) const fn min_children() -> usize {
+        N / 2
+    }
+
+    /// Adds a node to the children, updating self's summary with the summary
+    /// coming from the new node.
+    #[inline]
+    pub(super) fn push(&mut self, child: Arc<Node<N, L>>) {
+        if self.is_empty() {
+            self.depth = child.depth() + 1;
+        }
+
+        debug_assert!(!self.is_full());
+        debug_assert_eq!(child.depth() + 1, self.depth());
+
+        self.leaf_count += child.leaf_count();
+        self.summary += child.summary();
+        self.children.push(child);
+    }
+
+    #[inline]
     pub(super) fn summary(&self) -> &L::Summary {
         &self.summary
+    }
+
+    /// Returns mutable references to the child nodes at `first_idx` and
+    /// `second_idx`, respectively.
+    ///
+    /// # Panics
+    ///
+    /// Will panic if `first_idx >= second_idx`  and if
+    /// `second_idx >= self.children.len()`.
+    #[inline]
+    fn two_mut(
+        &mut self,
+        first_idx: usize,
+        second_idx: usize,
+    ) -> (&mut Arc<Node<N, L>>, &mut Arc<Node<N, L>>) {
+        debug_assert!(first_idx < second_idx);
+        debug_assert!(second_idx < self.children.len());
+
+        let split_at = first_idx + 1;
+        let (first, second) = self.children.split_at_mut(split_at);
+        (&mut first[first_idx], &mut second[second_idx - split_at])
     }
 }
 
