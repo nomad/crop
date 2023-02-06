@@ -285,7 +285,7 @@ where
 
         let mut recompute_root = false;
 
-        tree_slice_from_range_in_root(
+        build_slice(
             &mut slice,
             root,
             start,
@@ -423,7 +423,7 @@ where
 
 /// TODO: docs
 #[inline]
-fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
+fn build_slice<'a, const N: usize, L, S, E>(
     slice: &mut TreeSlice<'a, N, L>,
     node: &'a Arc<Node<N, L>>,
     start: S,
@@ -454,7 +454,7 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                         // This child contains the starting slice somewhere in
                         // its subtree. Run this function again with this child
                         // as the node.
-                        tree_slice_from_range_in_root(
+                        build_slice(
                             slice,
                             child,
                             start,
@@ -475,7 +475,7 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                     // This child contains the ending leaf somewhere in its
                     // subtree. Run this function again with this child as the
                     // node.
-                    tree_slice_from_range_in_root(
+                    build_slice(
                         slice,
                         child,
                         start,
@@ -496,104 +496,99 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
         Node::Leaf(leaf) => {
             let leaf_summary = leaf.summary();
 
+            // This leaf must contain either the first slice, the last slice or
+            // both.
+
+            let contains_last_slice = E::measure(&slice.offset)
+                + E::measure(&slice.summary)
+                + E::measure(leaf_summary)
+                >= end;
+
             if !*found_first_slice {
-                let contains_first_slice = S::measure(&slice.offset)
-                    + S::measure(leaf_summary)
-                    >= start;
+                debug_assert_eq!(L::Summary::default(), slice.summary);
 
-                if contains_first_slice {
-                    let contains_last_slice = E::measure(&slice.offset)
-                        + E::measure(leaf_summary)
-                        >= end;
+                debug_assert!({
+                    // If we haven't yet found the first slice this leaf must
+                    // contain it.
+                    let contains_first_slice = S::measure(&slice.offset)
+                        + S::measure(leaf_summary)
+                        >= start;
 
-                    if contains_last_slice {
-                        // The end of the range is also contained in this leaf
-                        // so the final slice only spans this single leaf.
-                        let start = start - S::measure(&slice.offset);
-
-                        let (_, left_summary, right_slice, right_summary) =
-                            S::split(leaf.as_slice(), start, leaf.summary());
-
-                        let end = end
-                            - E::measure(&slice.offset)
-                            - E::measure(&left_summary);
-
-                        let (start_slice, start_summary, _, _) =
-                            E::split(right_slice, end, &right_summary);
-
-                        slice.offset += &left_summary;
-                        slice.first_slice = start_slice;
-                        slice.first_summary = start_summary.clone();
-                        slice.last_slice = start_slice;
-                        slice.last_summary = start_summary.clone();
-                        slice.summary = start_summary;
-                        slice.leaf_count = 1;
-
-                        *done = true;
-                    } else {
-                        // This leaf contains the starting slice but not the
-                        // ending one.
-                        let (_, right_summary, start_slice, start_summary) =
-                            S::split(
-                                leaf.as_slice(),
-                                start - S::measure(&slice.offset),
-                                leaf.summary(),
-                            );
-
-                        if L::BaseMetric::measure(&start_summary)
-                            == L::BaseMetric::zero()
-                        {
-                            slice.offset += leaf.summary();
-                            *recompute_root = true;
-                            return;
-                        }
-
-                        slice.offset += &right_summary;
-                        slice.summary += &start_summary;
-                        slice.first_slice = start_slice;
-                        slice.first_summary = start_summary;
-                        slice.leaf_count = 1;
-
-                        *found_first_slice = true;
-                    }
-                } else {
-                    // TODO: can we even get here?
-                    // This leaf comes before the starting leaf.
-                    slice.offset += leaf_summary;
-                }
-            } else {
-                let measured =
-                    E::measure(&slice.offset) + E::measure(&slice.summary);
-
-                let contains_last_slice =
-                    measured + E::measure(leaf_summary) >= end;
+                    contains_first_slice
+                });
 
                 if contains_last_slice {
-                    // This leaf contains the ending slice.
-                    let (end_slice, end_summary, _, _) = E::split(
-                        leaf.as_slice(),
-                        end - measured,
-                        leaf.summary(),
-                    );
+                    // The end of the range is also contained in this leaf
+                    // so the final slice only spans this single leaf.
+                    let start = start - S::measure(&slice.offset);
 
-                    debug_assert!(
-                        L::BaseMetric::measure(&end_summary)
-                            > L::BaseMetric::zero()
-                    );
+                    let (_, left_summary, right_slice, right_summary) =
+                        S::split(leaf.as_slice(), start, leaf.summary());
 
-                    slice.summary += &end_summary;
-                    slice.last_slice = end_slice;
-                    slice.last_summary = end_summary;
-                    slice.leaf_count += 1;
+                    let end = end
+                        - E::measure(&slice.offset)
+                        - E::measure(&left_summary);
+
+                    let (start_slice, start_summary, _, _) =
+                        E::split(right_slice, end, &right_summary);
+
+                    slice.offset += &left_summary;
+                    slice.first_slice = start_slice;
+                    slice.first_summary = start_summary.clone();
+                    slice.last_slice = start_slice;
+                    slice.last_summary = start_summary.clone();
+                    slice.summary = start_summary;
+                    slice.leaf_count = 1;
 
                     *done = true;
+                } else {
+                    // This leaf contains the starting slice but not the
+                    // ending one.
+                    let (_, right_summary, start_slice, start_summary) =
+                        S::split(
+                            leaf.as_slice(),
+                            start - S::measure(&slice.offset),
+                            leaf.summary(),
+                        );
+
+                    if L::BaseMetric::measure(&start_summary)
+                        == L::BaseMetric::zero()
+                    {
+                        slice.offset += leaf.summary();
+                        *recompute_root = true;
+                        return;
+                    }
+
+                    slice.offset += &right_summary;
+                    slice.summary += &start_summary;
+                    slice.first_slice = start_slice;
+                    slice.first_summary = start_summary;
+                    slice.leaf_count = 1;
+
+                    *found_first_slice = true;
                 }
-                // This is a leaf between the starting and the ending slices.
-                else {
-                    // TODO: can we even get here?
-                    slice.summary += leaf_summary;
-                    slice.leaf_count += 1;
-                }
+            } else {
+                debug_assert!(contains_last_slice);
+
+                let end = end
+                    - E::measure(&slice.offset)
+                    - E::measure(&slice.summary);
+
+                // This leaf contains the ending slice.
+                let (end_slice, end_summary, _, _) =
+                    E::split(leaf.as_slice(), end, leaf.summary());
+
+                debug_assert!(
+                    L::BaseMetric::measure(&end_summary)
+                        > L::BaseMetric::zero()
+                );
+
+                slice.summary += &end_summary;
+                slice.last_slice = end_slice;
+                slice.last_summary = end_summary;
+                slice.leaf_count += 1;
+
+                *done = true;
             }
         },
     }
