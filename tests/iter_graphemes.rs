@@ -1,7 +1,17 @@
+#[cfg(feature = "graphemes")]
 use std::borrow::Cow;
 
+#[cfg(feature = "graphemes")]
 use crop::Rope;
 
+// TODO: remove the `#[ignore]`s once
+// https://github.com/unicode-rs/unicode-segmentation/issues/115 gets
+// addressed.
+
+/// ```
+/// Root
+/// └── "abcd"
+/// ```
 #[cfg(feature = "graphemes")]
 #[test]
 fn graphemes_iter_ascii() {
@@ -16,12 +26,16 @@ fn graphemes_iter_ascii() {
     assert_eq!(None, graphemes.next());
 }
 
+/// ```
+/// Root
+/// ├── "🇷"
+/// ├── "🇸"
+/// ├── "🇮"
+/// └── "🇴"
+#[ignore]
 #[cfg(feature = "graphemes")]
 #[test]
 fn graphemes_iter_two_flags() {
-    // Each flag is made by 2 4-byte codepoints, for a total of 16 bytes. Since
-    // 8 > ROPE_CHUNK_MAX_BYTES in test mode we should get owned strings.
-
     let r = Rope::from("🇷🇸🇮🇴");
 
     let mut graphemes = r.graphemes();
@@ -31,12 +45,75 @@ fn graphemes_iter_two_flags() {
         graphemes.next().unwrap()
     );
 
-    // assert_eq!(
-    //     Cow::<str>::Owned(String::from("🇮🇴")),
-    //     graphemes.next().unwrap()
-    // );
+    assert_eq!(
+        Cow::<str>::Owned(String::from("🇮🇴")),
+        graphemes.next().unwrap()
+    );
 
-    // assert_eq!(None, graphemes.next());
+    assert_eq!(None, graphemes.next());
+}
+
+#[ignore]
+#[cfg(feature = "graphemes")]
+#[test]
+fn graphemes_iter_flags() {
+    let r = Rope::from("🇬🇧🇯🇵🇺🇸🇫🇷🇷🇺🇨🇳🇩🇪🇪🇸🇬🇧🇯🇵🇺🇸🇫🇷🇷🇺🇨🇳🇩🇪🇪🇸🇬🇧🇯🇵🇺🇸🇫🇷🇷🇺🇨🇳🇩🇪🇪🇸");
+
+    let mut graphemes = r.graphemes();
+
+    assert_eq!("🇬🇧", graphemes.next().unwrap());
+    assert_eq!("🇯🇵", graphemes.next().unwrap());
+    assert_eq!("🇺🇸", graphemes.next().unwrap());
+    assert_eq!("🇫🇷", graphemes.next().unwrap());
+    assert_eq!("🇷🇺", graphemes.next().unwrap());
+    assert_eq!("🇨🇳", graphemes.next().unwrap());
+    assert_eq!("🇩🇪", graphemes.next().unwrap());
+    assert_eq!("🇪🇸", graphemes.next().unwrap());
+    assert_eq!("🇬🇧", graphemes.next().unwrap());
+    assert_eq!("🇯🇵", graphemes.next().unwrap());
+    assert_eq!("🇺🇸", graphemes.next().unwrap());
+    assert_eq!("🇫🇷", graphemes.next().unwrap());
+    assert_eq!("🇷🇺", graphemes.next().unwrap());
+    assert_eq!("🇨🇳", graphemes.next().unwrap());
+    assert_eq!("🇩🇪", graphemes.next().unwrap());
+    assert_eq!("🇪🇸", graphemes.next().unwrap());
+    assert_eq!("🇬🇧", graphemes.next().unwrap());
+    assert_eq!("🇯🇵", graphemes.next().unwrap());
+    assert_eq!("🇺🇸", graphemes.next().unwrap());
+    assert_eq!("🇫🇷", graphemes.next().unwrap());
+    assert_eq!("🇷🇺", graphemes.next().unwrap());
+    assert_eq!("🇨🇳", graphemes.next().unwrap());
+    assert_eq!("🇩🇪", graphemes.next().unwrap());
+    assert_eq!("🇪🇸", graphemes.next().unwrap());
+    assert_eq!(None, graphemes.next());
+
+    let mut graphemes = r.graphemes().rev();
+
+    assert_eq!("🇪🇸", graphemes.next().unwrap());
+    assert_eq!("🇩🇪", graphemes.next().unwrap());
+    assert_eq!("🇨🇳", graphemes.next().unwrap());
+    assert_eq!("🇷🇺", graphemes.next().unwrap());
+    assert_eq!("🇫🇷", graphemes.next().unwrap());
+    assert_eq!("🇺🇸", graphemes.next().unwrap());
+    assert_eq!("🇯🇵", graphemes.next().unwrap());
+    assert_eq!("🇬🇧", graphemes.next().unwrap());
+    assert_eq!("🇪🇸", graphemes.next().unwrap());
+    assert_eq!("🇩🇪", graphemes.next().unwrap());
+    assert_eq!("🇨🇳", graphemes.next().unwrap());
+    assert_eq!("🇷🇺", graphemes.next().unwrap());
+    assert_eq!("🇫🇷", graphemes.next().unwrap());
+    assert_eq!("🇺🇸", graphemes.next().unwrap());
+    assert_eq!("🇯🇵", graphemes.next().unwrap());
+    assert_eq!("🇬🇧", graphemes.next().unwrap());
+    assert_eq!("🇪🇸", graphemes.next().unwrap());
+    assert_eq!("🇩🇪", graphemes.next().unwrap());
+    assert_eq!("🇨🇳", graphemes.next().unwrap());
+    assert_eq!("🇷🇺", graphemes.next().unwrap());
+    assert_eq!("🇫🇷", graphemes.next().unwrap());
+    assert_eq!("🇺🇸", graphemes.next().unwrap());
+    assert_eq!("🇯🇵", graphemes.next().unwrap());
+    assert_eq!("🇬🇧", graphemes.next().unwrap());
+    assert_eq!(None, graphemes.next());
 }
 
 #[cfg(feature = "graphemes")]
@@ -63,8 +140,8 @@ fn graphemes_is_boundary_two_flags() {
 }
 
 #[cfg(feature = "graphemes")]
-#[test]
 #[should_panic]
+#[test]
 fn graphemes_is_boundary_out_of_bounds() {
     let r = Rope::from("🇷🇸🇮🇴");
     assert!(r.is_grapheme_boundary(17));

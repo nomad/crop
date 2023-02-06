@@ -499,10 +499,16 @@ mod graphemes {
         forward_chunk: &'a str,
 
         /// TODO: docs
-        forward_byte_offset: usize,
+        forward_offset: usize,
 
         /// TODO: docs
-        _backward_cursor: GraphemeCursor,
+        backward_cursor: GraphemeCursor,
+
+        /// TODO: docs
+        backward_chunk: &'a str,
+
+        /// TODO: docs
+        backward_offset: usize,
     }
 
     impl<'a> From<&'a Rope> for Graphemes<'a> {
@@ -514,9 +520,11 @@ mod graphemes {
                 chunks: rope.chunks(),
                 slice: rope.byte_slice(..),
                 forward_cursor: GraphemeCursor::new(0, len, true),
+                forward_offset: 0,
                 forward_chunk: "",
-                forward_byte_offset: 0,
-                _backward_cursor: GraphemeCursor::new(len, len, true),
+                backward_cursor: GraphemeCursor::new(len, len, true),
+                backward_chunk: "",
+                backward_offset: len,
             }
         }
     }
@@ -530,9 +538,11 @@ mod graphemes {
                 chunks: slice.chunks(),
                 slice: *slice,
                 forward_cursor: GraphemeCursor::new(0, len, true),
+                forward_offset: 0,
                 forward_chunk: "",
-                forward_byte_offset: 0,
-                _backward_cursor: GraphemeCursor::new(len, len, true),
+                backward_cursor: GraphemeCursor::new(len, len, true),
+                backward_chunk: "",
+                backward_offset: len,
             }
         }
     }
@@ -543,48 +553,55 @@ mod graphemes {
         #[inline]
         fn next(&mut self) -> Option<Self::Item> {
             debug_assert_eq!(
-                self.forward_byte_offset,
+                self.forward_offset,
                 self.forward_cursor.cur_cursor()
             );
 
-            // NOTE: `self.forward_chunk` can never be empty when calling
-            // `GraphemeCursor::next_boundary()` or that'll panic.
+            let mut using_backward_chunk = false;
 
             if self.forward_chunk.is_empty() {
-                self.forward_chunk = self.chunks.next()?;
+                self.forward_chunk = if let Some(next) = self.chunks.next() {
+                    next
+                } else if !self.backward_chunk.is_empty() {
+                    debug_assert!(
+                        self.backward_cursor.cur_cursor()
+                            > self.forward_cursor.cur_cursor()
+                    );
+                    using_backward_chunk = true;
+                    self.backward_chunk
+                } else {
+                    return None;
+                }
             }
 
-            let byte_start = self.forward_byte_offset;
+            let byte_start = self.forward_offset;
 
             let mut grapheme = Cow::Borrowed("");
 
             loop {
-                match self.forward_cursor.next_boundary(
-                    self.forward_chunk,
-                    self.forward_byte_offset,
-                ) {
-                    Ok(Some(byte_end)) => {
-                        debug_assert!(byte_end >= self.forward_byte_offset);
+                // NOTE: the chunk passed to `GraphemeCursor::next_boundary()`
+                // can't be empty or it'll panic.
 
+                match self
+                    .forward_cursor
+                    .next_boundary(self.forward_chunk, self.forward_offset)
+                {
+                    Ok(Some(byte_end)) => {
                         // This is stupid.
-                        if byte_end == self.forward_byte_offset {
+                        if byte_end == self.forward_offset {
                             debug_assert!(byte_end > byte_start);
 
-                            let mut grapheme =
-                                String::with_capacity(byte_end - byte_start);
-
-                            let slice =
-                                self.slice.byte_slice(byte_start..byte_end);
-
-                            for chunk in slice.chunks() {
-                                grapheme.push_str(chunk);
-                            }
-
-                            return Some(Cow::Owned(grapheme));
+                            return Some(Cow::Owned(
+                                self.slice
+                                    .byte_slice(byte_start..byte_end)
+                                    .to_string(),
+                            ));
                         }
 
+                        debug_assert!(byte_end > self.forward_offset);
+
                         let grapheme_end = &self.forward_chunk
-                            [..byte_end - self.forward_byte_offset];
+                            [..byte_end - self.forward_offset];
 
                         match &mut grapheme {
                             Cow::Borrowed(gr) if gr.is_empty() => {
@@ -602,16 +619,14 @@ mod graphemes {
                             },
                         }
 
-                        self.forward_byte_offset += grapheme_end.len();
+                        self.forward_offset += grapheme_end.len();
 
                         self.forward_chunk =
-                            if self.forward_chunk.len() > grapheme_end.len() {
-                                &self.forward_chunk[grapheme_end.len()..]
-                            } else if let Some(chunk) = self.chunks.next() {
-                                chunk
-                            } else {
-                                ""
-                            };
+                            &self.forward_chunk[grapheme_end.len()..];
+
+                        if using_backward_chunk {
+                            self.backward_chunk = self.forward_chunk;
+                        }
 
                         return Some(grapheme);
                     },
@@ -621,7 +636,7 @@ mod graphemes {
                     Err(GraphemeIncomplete::NextChunk) => {
                         match &mut grapheme {
                             Cow::Borrowed(gr) if gr.is_empty() => {
-                                *gr = self.forward_chunk
+                                *gr = self.forward_chunk;
                             },
 
                             Cow::Borrowed(gr) => {
@@ -633,9 +648,21 @@ mod graphemes {
                             Cow::Owned(gr) => gr.push_str(self.forward_chunk),
                         }
 
-                        self.forward_byte_offset += self.forward_chunk.len();
+                        self.forward_offset += self.forward_chunk.len();
 
-                        self.forward_chunk = self.chunks.next()?;
+                        self.forward_chunk =
+                            if let Some(next) = self.chunks.next() {
+                                next
+                            } else if !self.backward_chunk.is_empty() {
+                                debug_assert!(
+                                    self.backward_cursor.cur_cursor()
+                                        > self.forward_cursor.cur_cursor()
+                                );
+                                using_backward_chunk = true;
+                                self.backward_chunk
+                            } else {
+                                return None;
+                            }
                     },
 
                     // This is stupid.
@@ -652,14 +679,169 @@ mod graphemes {
                 }
             }
         }
-    }
 
-    impl<'a> DoubleEndedIterator for Graphemes<'a> {
         #[inline]
-        fn next_back(&mut self) -> Option<Self::Item> {
-            todo!()
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let hi = self.backward_cursor.cur_cursor()
+                - self.forward_cursor.cur_cursor();
+            let lo = (hi != 0) as usize;
+            (lo, Some(hi))
         }
     }
 
-    impl<'a> std::iter::FusedIterator for Graphemes<'a> {}
+    impl DoubleEndedIterator for Graphemes<'_> {
+        #[inline]
+        fn next_back(&mut self) -> Option<Self::Item> {
+            debug_assert_eq!(
+                self.backward_offset,
+                self.backward_cursor.cur_cursor()
+            );
+
+            let mut using_forward_chunk = false;
+
+            if self.backward_chunk.is_empty() {
+                self.backward_chunk =
+                    if let Some(prev) = self.chunks.next_back() {
+                        prev
+                    } else if !self.forward_chunk.is_empty() {
+                        debug_assert!(
+                            self.backward_cursor.cur_cursor()
+                                > self.forward_cursor.cur_cursor()
+                        );
+                        using_forward_chunk = true;
+                        self.forward_chunk
+                    } else {
+                        return None;
+                    }
+            }
+
+            let byte_end = self.backward_cursor.cur_cursor();
+
+            let mut grapheme = Cow::Borrowed("");
+
+            loop {
+                // NOTE: the chunk passed to `GraphemeCursor::next_boundary()`
+                // can't be empty or it'll panic.
+
+                match self.backward_cursor.prev_boundary(
+                    self.backward_chunk,
+                    self.backward_cursor.cur_cursor()
+                        - self.backward_chunk.len(),
+                ) {
+                    Ok(Some(byte_start)) => {
+                        if byte_start == self.backward_offset {
+                            debug_assert!(byte_end > byte_start);
+
+                            return Some(Cow::Owned(
+                                self.slice
+                                    .byte_slice(byte_start..byte_end)
+                                    .to_string(),
+                            ));
+                        }
+
+                        debug_assert!(byte_start < self.backward_offset);
+
+                        let grapheme_start = {
+                            let start_len = self.backward_offset - byte_start;
+                            let chunk_len = self.backward_chunk.len();
+                            &self.backward_chunk[(chunk_len - start_len)..]
+                        };
+
+                        match &mut grapheme {
+                            Cow::Borrowed(gr) if gr.is_empty() => {
+                                *gr = grapheme_start;
+                            },
+
+                            Cow::Borrowed(gr) => {
+                                let mut new = String::with_capacity(
+                                    grapheme_start.len() + gr.len(),
+                                );
+                                new.push_str(grapheme_start);
+                                new.push_str(gr);
+                                grapheme = Cow::Owned(new);
+                            },
+
+                            Cow::Owned(gr) => {
+                                let mut new = String::with_capacity(
+                                    grapheme_start.len() + gr.len(),
+                                );
+                                new.push_str(grapheme_start);
+                                new.push_str(&*gr);
+                                *gr = new;
+                            },
+                        }
+
+                        self.backward_offset -= grapheme_start.len();
+
+                        self.backward_chunk =
+                            &self.backward_chunk[..self.backward_chunk.len()
+                                - grapheme_start.len()];
+
+                        if using_forward_chunk {
+                            self.forward_chunk = self.backward_chunk;
+                        }
+
+                        return Some(grapheme);
+                    },
+
+                    Ok(None) => return None,
+
+                    Err(GraphemeIncomplete::PrevChunk) => {
+                        match &mut grapheme {
+                            Cow::Borrowed(gr) if gr.is_empty() => {
+                                *gr = self.backward_chunk;
+                            },
+
+                            Cow::Borrowed(gr) => {
+                                let mut new = String::with_capacity(
+                                    self.backward_chunk.len() + gr.len(),
+                                );
+                                new.push_str(self.backward_chunk);
+                                new.push_str(gr);
+                                grapheme = Cow::Owned(new);
+                            },
+
+                            Cow::Owned(gr) => {
+                                let mut new = String::with_capacity(
+                                    self.backward_chunk.len() + gr.len(),
+                                );
+                                new.push_str(self.backward_chunk);
+                                new.push_str(gr);
+                                *gr = new;
+                            },
+                        }
+
+                        self.backward_offset -= self.backward_chunk.len();
+
+                        self.backward_chunk =
+                            if let Some(prev) = self.chunks.next_back() {
+                                prev
+                            } else if !self.forward_chunk.is_empty() {
+                                debug_assert!(
+                                    self.backward_cursor.cur_cursor()
+                                        > self.forward_cursor.cur_cursor()
+                                );
+                                using_forward_chunk = true;
+                                self.forward_chunk
+                            } else {
+                                return None;
+                            }
+                    },
+
+                    Err(GraphemeIncomplete::PreContext(byte_idx)) => {
+                        let slice = self.slice.byte_slice(..byte_idx);
+                        let chunk = slice.chunks().next_back().unwrap();
+                        self.backward_cursor
+                            .provide_context(chunk, byte_idx - chunk.len());
+                    },
+
+                    Err(_) => {
+                        unreachable!();
+                    },
+                }
+            }
+        }
+    }
+
+    impl std::iter::FusedIterator for Graphemes<'_> {}
 }
