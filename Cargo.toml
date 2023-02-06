@@ -15,6 +15,7 @@ simd = ["str_indices/simd"]
 
 # Private features
 integration_tests = []
+it = ["integration_tests"]
 
 [dependencies]
 smallvec = { version = "1.10.0", features = ["const_generics"] }

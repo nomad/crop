@@ -41,7 +41,7 @@ impl<'a> Iterator for Chunks<'a> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let exact = self.leaves.len();
+        let exact = self.len();
         (exact, Some(exact))
     }
 }
@@ -289,7 +289,7 @@ impl<'a> Iterator for Chars<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for Chars<'a> {
+impl DoubleEndedIterator for Chars<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.backward_byte_idx == 0 {
@@ -333,7 +333,7 @@ impl<'a> DoubleEndedIterator for Chars<'a> {
     }
 }
 
-impl<'a> std::iter::FusedIterator for Chars<'a> {}
+impl std::iter::FusedIterator for Chars<'_> {}
 
 /// An iterator over the raw lines of `Rope`s and `RopeSlice`s.
 #[derive(Clone)]
@@ -386,7 +386,7 @@ impl<'a> Iterator for RawLines<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for RawLines<'a> {
+impl DoubleEndedIterator for RawLines<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next_back()?;
@@ -395,14 +395,14 @@ impl<'a> DoubleEndedIterator for RawLines<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for RawLines<'a> {
+impl ExactSizeIterator for RawLines<'_> {
     #[inline]
     fn len(&self) -> usize {
         self.lines_total - self.lines_yielded
     }
 }
 
-impl<'a> std::iter::FusedIterator for RawLines<'a> {}
+impl std::iter::FusedIterator for RawLines<'_> {}
 
 /// An iterator over the lines of `Rope`s and `RopeSlice`s.
 #[derive(Clone)]
@@ -455,7 +455,7 @@ impl<'a> Iterator for Lines<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for Lines<'a> {
+impl DoubleEndedIterator for Lines<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next_back()?;
@@ -464,14 +464,14 @@ impl<'a> DoubleEndedIterator for Lines<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for Lines<'a> {
+impl ExactSizeIterator for Lines<'_> {
     #[inline]
     fn len(&self) -> usize {
         self.lines_total - self.lines_yielded
     }
 }
 
-impl<'a> std::iter::FusedIterator for Lines<'a> {}
+impl std::iter::FusedIterator for Lines<'_> {}
 
 #[cfg(feature = "graphemes")]
 pub use graphemes::Graphemes;
@@ -484,72 +484,55 @@ mod graphemes {
 
     use super::*;
 
-    /// TODO: docs
+    /// An iterator over the extended grapheme clusters of `Rope`s and
+    /// `RopeSlice`s.
     #[derive(Clone)]
     pub struct Graphemes<'a> {
-        /// TODO: docs
         chunks: Chunks<'a>,
+
+        slice: RopeSlice<'a>,
+
+        /// TODO: docs
+        forward_cursor: GraphemeCursor,
 
         /// TODO: docs
         forward_chunk: &'a str,
 
         /// TODO: docs
-        offset_of_forward_chunk: usize,
+        forward_byte_offset: usize,
 
         /// TODO: docs
-        yielded_in_forward_chunk: usize,
-
-        /// TODO: docs
-        _backward_chunk: &'a str,
-
-        /// TODO: docs
-        _to_be_yielded_in_backward_chunk: usize,
-
-        /// TODO: docs
-        yielded_forward: usize,
-
-        /// TODO: docs
-        yielded_backward: usize,
-
-        /// TODO: docs
-        total_bytes: usize,
-
-        /// TODO: docs
-        cursor: GraphemeCursor,
+        _backward_cursor: GraphemeCursor,
     }
 
     impl<'a> From<&'a Rope> for Graphemes<'a> {
         #[inline]
         fn from(rope: &'a Rope) -> Self {
+            let len = rope.byte_len();
+
             Self {
                 chunks: rope.chunks(),
+                slice: rope.byte_slice(..),
+                forward_cursor: GraphemeCursor::new(0, len, true),
                 forward_chunk: "",
-                yielded_in_forward_chunk: 0,
-                offset_of_forward_chunk: 0,
-                _backward_chunk: "",
-                _to_be_yielded_in_backward_chunk: 0,
-                yielded_forward: 0,
-                yielded_backward: 0,
-                total_bytes: rope.byte_len(),
-                cursor: GraphemeCursor::new(0, rope.byte_len(), true),
+                forward_byte_offset: 0,
+                _backward_cursor: GraphemeCursor::new(len, len, true),
             }
         }
     }
 
-    impl<'a, 'b: 'a> From<&'a RopeSlice<'b>> for Graphemes<'a> {
+    impl<'a> From<&'a RopeSlice<'a>> for Graphemes<'a> {
         #[inline]
-        fn from(slice: &'a RopeSlice<'b>) -> Self {
+        fn from(slice: &'a RopeSlice<'a>) -> Self {
+            let len = slice.byte_len();
+
             Self {
                 chunks: slice.chunks(),
+                slice: *slice,
+                forward_cursor: GraphemeCursor::new(0, len, true),
                 forward_chunk: "",
-                yielded_in_forward_chunk: 0,
-                offset_of_forward_chunk: 0,
-                _backward_chunk: "",
-                _to_be_yielded_in_backward_chunk: 0,
-                yielded_forward: 0,
-                yielded_backward: 0,
-                total_bytes: slice.byte_len(),
-                cursor: GraphemeCursor::new(0, slice.byte_len(), true),
+                forward_byte_offset: 0,
+                _backward_cursor: GraphemeCursor::new(len, len, true),
             }
         }
     }
@@ -559,106 +542,115 @@ mod graphemes {
 
         #[inline]
         fn next(&mut self) -> Option<Self::Item> {
-            if self.yielded_forward + self.yielded_backward == self.total_bytes
-            {
-                return None;
+            debug_assert_eq!(
+                self.forward_byte_offset,
+                self.forward_cursor.cur_cursor()
+            );
+
+            // NOTE: `self.forward_chunk` can never be empty when calling
+            // `GraphemeCursor::next_boundary()` or that'll panic.
+
+            if self.forward_chunk.is_empty() {
+                self.forward_chunk = self.chunks.next()?;
             }
 
-            if self.yielded_in_forward_chunk == self.forward_chunk.len() {
-                self.forward_chunk = match self.chunks.next() {
-                    Some(chunk) => {
-                        // NOTE: make sure  there are never empty chunks or
-                        // this will make the byte indexing below fail.
-                        chunk
+            let byte_start = self.forward_byte_offset;
+
+            let mut grapheme = Cow::Borrowed("");
+
+            loop {
+                match self.forward_cursor.next_boundary(
+                    self.forward_chunk,
+                    self.forward_byte_offset,
+                ) {
+                    Ok(Some(byte_end)) => {
+                        debug_assert!(byte_end >= self.forward_byte_offset);
+
+                        // This is stupid.
+                        if byte_end == self.forward_byte_offset {
+                            debug_assert!(byte_end > byte_start);
+
+                            let mut grapheme =
+                                String::with_capacity(byte_end - byte_start);
+
+                            let slice =
+                                self.slice.byte_slice(byte_start..byte_end);
+
+                            for chunk in slice.chunks() {
+                                grapheme.push_str(chunk);
+                            }
+
+                            return Some(Cow::Owned(grapheme));
+                        }
+
+                        let grapheme_end = &self.forward_chunk
+                            [..byte_end - self.forward_byte_offset];
+
+                        match &mut grapheme {
+                            Cow::Borrowed(gr) if gr.is_empty() => {
+                                *gr = grapheme_end;
+                            },
+
+                            Cow::Borrowed(gr) => {
+                                let mut gr = gr.to_owned();
+                                gr.push_str(grapheme_end);
+                                grapheme = Cow::Owned(gr);
+                            },
+
+                            Cow::Owned(gr) => {
+                                gr.push_str(grapheme_end);
+                            },
+                        }
+
+                        self.forward_byte_offset += grapheme_end.len();
+
+                        self.forward_chunk =
+                            if self.forward_chunk.len() > grapheme_end.len() {
+                                &self.forward_chunk[grapheme_end.len()..]
+                            } else if let Some(chunk) = self.chunks.next() {
+                                chunk
+                            } else {
+                                ""
+                            };
+
+                        return Some(grapheme);
                     },
 
-                    None => {
-                        todo!()
+                    Ok(None) => return None,
+
+                    Err(GraphemeIncomplete::NextChunk) => {
+                        match &mut grapheme {
+                            Cow::Borrowed(gr) if gr.is_empty() => {
+                                *gr = self.forward_chunk
+                            },
+
+                            Cow::Borrowed(gr) => {
+                                let mut gr = gr.to_owned();
+                                gr.push_str(self.forward_chunk);
+                                grapheme = Cow::Owned(gr);
+                            },
+
+                            Cow::Owned(gr) => gr.push_str(self.forward_chunk),
+                        }
+
+                        self.forward_byte_offset += self.forward_chunk.len();
+
+                        self.forward_chunk = self.chunks.next()?;
+                    },
+
+                    // This is stupid.
+                    Err(GraphemeIncomplete::PreContext(byte_idx)) => {
+                        let slice = self.slice.byte_slice(..byte_idx);
+                        let chunk = slice.chunks().next_back().unwrap();
+                        self.forward_cursor
+                            .provide_context(chunk, byte_idx - chunk.len());
+                    },
+
+                    Err(_) => {
+                        unreachable!();
                     },
                 }
-            };
-
-            let start = self.cursor.cur_cursor();
-
-            let end = match self.cursor.next_boundary(
-                self.forward_chunk,
-                self.offset_of_forward_chunk,
-            ) {
-                Ok(None) => return None,
-
-                Ok(Some(n)) => n,
-
-                Err(GraphemeIncomplete::NextChunk) => {
-                    let mut grapheme = String::from(
-                        &self.forward_chunk[self.yielded_in_forward_chunk..],
-                    );
-
-                    self.offset_of_forward_chunk += self.forward_chunk.len();
-
-                    self.forward_chunk = match self.chunks.next() {
-                        Some(chunk) => chunk,
-                        None => todo!(),
-                    };
-
-                    println!("grapheme: {grapheme}");
-                    println!("forward_chunk: {}", self.forward_chunk);
-                    println!(
-                        "offset_forward_chunk: {}",
-                        self.offset_of_forward_chunk
-                    );
-
-                    loop {
-                        let grapheme = match self.cursor.next_boundary(
-                            self.forward_chunk,
-                            self.offset_of_forward_chunk,
-                        ) {
-                            Ok(None) => grapheme,
-
-                            Ok(Some(n)) => {
-                                println!("bb");
-                                let end = n - self.offset_of_forward_chunk;
-                                grapheme.push_str(&self.forward_chunk[..end]);
-                                grapheme
-                            },
-
-                            Err(GraphemeIncomplete::NextChunk) => {
-                                println!("aa");
-                                self.offset_of_forward_chunk +=
-                                    self.forward_chunk.len();
-
-                                self.forward_chunk = match self.chunks.next() {
-                                    Some(chunk) => chunk,
-                                    None => todo!(),
-                                };
-
-                                continue;
-                            },
-
-                            Err(GraphemeIncomplete::PreContext(_)) => todo!(),
-
-                            _ => unreachable!(),
-                        };
-
-                        println!(
-                            "returning {grapheme} which is {} long",
-                            grapheme.len()
-                        );
-
-                        self.yielded_in_forward_chunk += grapheme.len();
-                        self.yielded_forward += grapheme.len();
-                        return Some(Cow::Owned(grapheme));
-                    }
-                },
-
-                Err(GraphemeIncomplete::PreContext(_)) => todo!(),
-
-                _ => unreachable!(),
-            };
-
-            let grapheme = &self.forward_chunk[start..end];
-            self.yielded_in_forward_chunk += grapheme.len();
-            self.yielded_forward += grapheme.len();
-            Some(Cow::Borrowed(grapheme))
+            }
         }
     }
 
