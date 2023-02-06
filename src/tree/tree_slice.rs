@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use super::{Leaf, Leaves, Metric, Node, SlicingMetric, Summarize, Units};
 
+/// An immutable view into a `Tree`.
 #[derive(Debug)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     /// The deepest node that contains all the leaves between..
@@ -15,20 +16,20 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     /// The total summary of this slice.
     pub(super) summary: L::Summary,
 
-    /// TODO: docs
-    pub(super) start_slice: &'a L::Slice,
+    /// A right sub-slice of the leaf containing the start of the sliced range.
+    pub(super) first_slice: &'a L::Slice,
 
-    /// TODO: docs
-    pub(super) start_summary: L::Summary,
+    /// [`first_slice`](Self::first_slice)'s summary.
+    pub(super) first_summary: L::Summary,
 
-    /// TODO: docs
-    pub(super) end_slice: &'a L::Slice,
+    /// A left sub-slice of the leaf containing the end of the sliced range.
+    pub(super) last_slice: &'a L::Slice,
 
-    /// TODO: docs
-    pub(super) end_summary: L::Summary,
+    /// [`last_slice`](Self::last_slice)'s summary.
+    pub(super) last_summary: L::Summary,
 
-    /// The number of leaves spanned by this slice, also counting the leaves
-    /// containing the start and end slices.
+    /// The number of leaves spanned by this slice, including the leaves
+    /// containing the first and last slices.
     pub(super) leaf_count: usize,
 }
 
@@ -38,8 +39,8 @@ impl<const FANOUT: usize, L: Leaf> Clone for TreeSlice<'_, FANOUT, L> {
         TreeSlice {
             offset: self.offset.clone(),
             summary: self.summary.clone(),
-            start_summary: self.start_summary.clone(),
-            end_summary: self.end_summary.clone(),
+            first_summary: self.first_summary.clone(),
+            last_summary: self.last_summary.clone(),
             ..*self
         }
     }
@@ -51,30 +52,34 @@ impl<'a, const FANOUT: usize, L: Leaf> Copy for TreeSlice<'a, FANOUT, L> where
 }
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
+    /*
+      Public methods
+    */
+
     #[doc(hidden)]
     pub fn assert_invariants(&self) {
         match &**self.root {
             Node::Internal(_) => {
                 assert!(self.leaf_count > 1);
 
-                assert_eq!(self.start_slice.summarize(), self.start_summary);
+                assert_eq!(self.first_slice.summarize(), self.first_summary);
 
-                assert_eq!(self.end_slice.summarize(), self.end_summary);
+                assert_eq!(self.last_slice.summarize(), self.last_summary);
 
                 assert!(
-                    L::BaseMetric::measure(&self.start_summary)
+                    L::BaseMetric::measure(&self.first_summary)
                         > L::BaseMetric::zero()
                 );
 
                 assert!(
-                    L::BaseMetric::measure(&self.end_summary)
+                    L::BaseMetric::measure(&self.last_summary)
                         > L::BaseMetric::zero()
                 );
 
                 if self.leaf_count == 2 {
                     assert_eq!(
                         self.summary,
-                        self.start_summary.clone() + &self.end_summary
+                        self.first_summary.clone() + &self.last_summary
                     );
                 }
 
@@ -84,8 +89,8 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
             Node::Leaf(leaf) => {
                 assert_eq!(1, self.leaf_count);
-                assert_eq!(self.start_summary, self.summary);
-                assert_eq!(self.summary, self.end_summary);
+                assert_eq!(self.first_summary, self.summary);
+                assert_eq!(self.summary, self.last_summary);
                 assert!(leaf.base_measure() >= self.base_measure());
             },
         }
@@ -97,28 +102,70 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         self.measure::<L::BaseMetric>()
     }
 
+    /// Returns the `M2`-measure of all the leaves before `up_to` plus the
+    /// `M2`-measure of the left sub-slice of the leaf at `up_to`.
+    ///
+    /// NOTE: this function doesn't do any bounds checks.
     #[inline]
-    pub fn convert_measure<M1, M2>(&self, from: M1) -> M2
+    pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: SlicingMetric<L>,
         M2: Metric<L>,
     {
-        debug_assert!(
-            from <= self.measure::<M1>() + M1::one(),
-            "Trying to convert {:?} into {}, but this TreeSlice is only {:?} \
-             long",
-            from,
-            std::any::type_name::<M2>(),
-            self.measure::<M1>(),
-        );
+        debug_assert!(up_to <= self.measure::<M1>() + M1::one(),);
 
-        if from == M1::zero() {
+        if up_to == M1::zero() {
             M2::zero()
         } else {
             self.root
-                .convert_measure::<M1, M2>(M1::measure(&self.offset) + from)
+                .convert_measure::<M1, M2>(M1::measure(&self.offset) + up_to)
                 - M2::measure(&self.offset)
         }
+    }
+
+    #[inline]
+    pub fn end_slice(&'a self) -> &'a L::Slice {
+        self.last_slice
+    }
+
+    #[inline]
+    pub fn end_summary(&'a self) -> &'a L::Summary {
+        &self.last_summary
+    }
+
+    /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
+    /// plus the `M`-measure of all the leaves before it.
+    ///
+    /// NOTE: this function doesn't do any bounds checks.
+    #[inline]
+    pub fn leaf_at_measure<M>(&'a self, measure: M) -> (&'a L::Slice, M)
+    where
+        M: Metric<L>,
+    {
+        debug_assert!(measure <= self.measure::<M>() + M::one());
+
+        if M::measure(&self.first_summary) >= measure {
+            (self.first_slice, M::zero())
+        } else {
+            let all_minus_last =
+                M::measure(&self.summary) - M::measure(&self.last_summary);
+
+            if all_minus_last >= measure {
+                let (leaf, mut offset) = self
+                    .root
+                    .leaf_at_measure(M::measure(&self.offset) + measure);
+                offset -= M::measure(&self.offset);
+                (leaf, offset)
+            } else {
+                (self.last_slice, all_minus_last)
+            }
+        }
+    }
+
+    /// Returns an iterator over the leaves of this `TreeSlice`.
+    #[inline]
+    pub fn leaves(&'a self) -> Leaves<'a, FANOUT, L> {
+        Leaves::from(self)
     }
 
     /// Returns the `M`-measure of this slice's summary.
@@ -128,49 +175,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     #[inline]
-    pub fn end_slice(&'a self) -> &'a L::Slice {
-        self.end_slice
-    }
-
-    #[inline]
-    pub fn end_summary(&'a self) -> &'a L::Summary {
-        &self.end_summary
-    }
-
-    #[inline]
-    pub fn leaf_at_measure<M>(&'a self, measure: M) -> (&'a L::Slice, M)
-    where
-        M: Metric<L>,
-    {
-        debug_assert!(measure <= self.measure::<M>() + M::one());
-
-        if M::measure(&self.start_summary) >= measure {
-            (self.start_slice, M::zero())
-        } else {
-            let all_minus_last =
-                M::measure(&self.summary) - M::measure(&self.end_summary);
-
-            if all_minus_last >= measure {
-                let (leaf, mut offset) = self
-                    .root
-                    .leaf_at_measure(M::measure(&self.offset) + measure);
-                offset -= M::measure(&self.offset);
-                (leaf, offset)
-            } else {
-                (self.end_slice, all_minus_last)
-            }
-        }
-    }
-
-    /// TODO: docs
-    #[inline]
-    pub fn leaves(&'a self) -> Leaves<'a, FANOUT, L> {
-        Leaves::from(self)
-    }
-
-    /// Returns .
-    #[inline]
-    pub fn leaf_count(&'a self) -> usize {
+    pub fn leaf_count(&self) -> usize {
         self.leaf_count
     }
 
@@ -181,12 +186,12 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
     #[inline]
     pub fn start_slice(&'a self) -> &'a L::Slice {
-        self.start_slice
+        self.first_slice
     }
 
     #[inline]
     pub fn start_summary(&'a self) -> &'a L::Summary {
-        &self.start_summary
+        &self.first_summary
     }
 
     #[inline]
@@ -271,10 +276,10 @@ where
             root,
             offset: L::Summary::default(),
             summary: L::Summary::default(),
-            start_slice: Default::default(),
-            start_summary: L::Summary::default(),
-            end_slice: Default::default(),
-            end_summary: L::Summary::default(),
+            first_slice: Default::default(),
+            first_summary: L::Summary::default(),
+            last_slice: Default::default(),
+            last_summary: L::Summary::default(),
             leaf_count: 0,
         };
 
@@ -483,7 +488,7 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                     // This is a node fully contained between the starting and
                     // the ending slices.
                     slice.summary += child_summary;
-                    slice.leaf_count += child.num_leaves();
+                    slice.leaf_count += child.leaf_count();
                 }
             }
         },
@@ -517,10 +522,10 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                             E::split(right_slice, end, &right_summary);
 
                         slice.offset += &left_summary;
-                        slice.start_slice = start_slice;
-                        slice.start_summary = start_summary.clone();
-                        slice.end_slice = start_slice;
-                        slice.end_summary = start_summary.clone();
+                        slice.first_slice = start_slice;
+                        slice.first_summary = start_summary.clone();
+                        slice.last_slice = start_slice;
+                        slice.last_summary = start_summary.clone();
                         slice.summary = start_summary;
                         slice.leaf_count = 1;
 
@@ -545,8 +550,8 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
 
                         slice.offset += &right_summary;
                         slice.summary += &start_summary;
-                        slice.start_slice = start_slice;
-                        slice.start_summary = start_summary;
+                        slice.first_slice = start_slice;
+                        slice.first_summary = start_summary;
                         slice.leaf_count = 1;
 
                         *found_first_slice = true;
@@ -577,8 +582,8 @@ fn tree_slice_from_range_in_root<'a, const N: usize, L, S, E>(
                     );
 
                     slice.summary += &end_summary;
-                    slice.end_slice = end_slice;
-                    slice.end_summary = end_summary;
+                    slice.last_slice = end_slice;
+                    slice.last_summary = end_summary;
                     slice.leaf_count += 1;
 
                     *done = true;

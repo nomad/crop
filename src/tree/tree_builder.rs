@@ -46,7 +46,7 @@ impl<const FANOUT: usize, L: Leaf> Default for TreeBuilder<FANOUT, L> {
 }
 
 impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
-    /// TODO: docs
+    /// Adds the next leaf to the builder.
     #[inline]
     pub fn append(&mut self, leaf: L) {
         debug_assert!(self.leaves.len() < FANOUT);
@@ -108,7 +108,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
         }
     }
 
-    /// TODO: docs
+    /// Completes the build and outputs the final `Tree`, consuming `self`.
     #[inline]
     pub fn build(mut self) -> Tree<FANOUT, L>
     where
@@ -181,6 +181,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
         tree
     }
 
+    /// Creates a new `TreeBuilder`.
     #[allow(dead_code)]
     #[inline]
     pub fn new() -> Self {

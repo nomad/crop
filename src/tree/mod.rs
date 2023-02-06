@@ -1,5 +1,3 @@
-//! A self-balancing tree with metadata stored in each node.
-
 mod leaves;
 mod node;
 mod node_internal;

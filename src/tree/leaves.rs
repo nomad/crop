@@ -43,7 +43,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
             forward: LeavesForward::from(tree),
             backward: LeavesBackward::from(tree),
             leaves_yielded: 0,
-            leaves_total: tree.root.num_leaves(),
+            leaves_total: tree.root.leaf_count(),
         }
     }
 }
@@ -170,7 +170,7 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
             leaves: &[],
             next_leaf_idx: 0,
             whole_yielded: 1,
-            whole_total: tree.root().num_leaves(),
+            whole_total: tree.root().leaf_count(),
         }
     }
 }
@@ -185,8 +185,8 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
         Self {
             is_initialized: false,
             base_offset: L::BaseMetric::measure(&slice.offset),
-            first_slice: Some((slice.start_slice, &slice.start_summary)),
-            last_slice: Some((slice.end_slice, &slice.end_summary)),
+            first_slice: Some((slice.first_slice, &slice.first_summary)),
+            last_slice: Some((slice.last_slice, &slice.last_summary)),
             root: &**slice.root(),
             path: Vec::with_capacity(slice.root().depth().saturating_sub(1)),
             leaves: &[],
@@ -407,7 +407,7 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
             leaves: &[],
             last_leaf_idx: 0,
             whole_yielded: 1,
-            whole_total: tree.root().num_leaves(),
+            whole_total: tree.root().leaf_count(),
         }
     }
 }
@@ -426,8 +426,8 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a TreeSlice<'a, FANOUT, L>>
         Self {
             is_initialized: false,
             base_offset,
-            first_slice: Some((slice.start_slice, &slice.start_summary)),
-            last_slice: Some((slice.end_slice, &slice.end_summary)),
+            first_slice: Some((slice.first_slice, &slice.first_summary)),
+            last_slice: Some((slice.last_slice, &slice.last_summary)),
             root: &**slice.root(),
             path: Vec::with_capacity(slice.root().depth().saturating_sub(1)),
             leaves: &[],

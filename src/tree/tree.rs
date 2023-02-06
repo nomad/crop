@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use super::*;
 
-/// TODO: docs
+/// A self-balancing tree with metadata stored in each node.
 #[derive(Default)]
 pub struct Tree<const FANOUT: usize, L: Leaf> {
     pub(super) root: Arc<Node<FANOUT, L>>,
@@ -41,13 +41,13 @@ impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
             debug_assert!(slice.root().is_leaf());
 
             Arc::new(Node::Leaf(Lnode::new(
-                slice.start_slice.to_owned(),
+                slice.first_slice.to_owned(),
                 slice.summary,
             )))
         } else if slice.leaf_count() == 2 {
             let (first, second) = L::balance_slices(
-                (slice.start_slice, &slice.start_summary),
-                (slice.end_slice, &slice.end_summary),
+                (slice.first_slice, &slice.first_summary),
+                (slice.last_slice, &slice.last_summary),
             );
 
             let first = Arc::new(Node::Leaf(Lnode::from(first)));
@@ -75,31 +75,39 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
       Public methods
     */
 
-    /// Checks that all the internal nodes in the Tree contain between `FANOUT
-    /// / 2` and `FANOUT` children. The root is the only internal node that's
-    /// allowed to have as few as 2 children. Doesn't do any checks on leaf
-    /// nodes.
     #[doc(hidden)]
     pub fn assert_invariants(&self) {
-        if let Node::Internal(root) = &*self.root {
-            assert!(
-                root.children().len() >= 2 && root.children().len() <= FANOUT
-            );
+        match &*self.root {
+            Node::Internal(root) => {
+                // The root is the only inode that can have as few as 2
+                // children.
+                assert!(
+                    root.children().len() >= 2
+                        && root.children().len() <= FANOUT
+                );
 
-            for child in root.children() {
-                child.assert_invariants()
-            }
+                for child in root.children() {
+                    child.assert_invariants()
+                }
+            },
+
+            Node::Leaf(leaf) => {
+                assert_eq!(&leaf.value.summarize(), self.summary());
+            },
         }
     }
 
-    /// Returns the base measure of this `Tree` obtaining by summing up the
+    /// Returns the base measure of this `Tree` obtained by summing up the
     /// base measures of all its leaves.
     #[inline]
     pub fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
-    /// Returns the `M2`-measure of all the leaves before `up_to`..
+    /// Returns the `M2`-measure of all the leaves before `up_to` plus the
+    /// `M2`-measure of the left sub-slice of the leaf at `up_to`.
+    ///
+    /// NOTE: this function doesn't do any bounds checks.
     #[inline]
     pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
@@ -110,7 +118,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         self.root.convert_measure(up_to)
     }
 
-    /// TODO: docs
     #[inline]
     pub fn from_leaves<I>(leaves: I) -> Self
     where
@@ -188,10 +195,10 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         tree
     }
 
-    /// Returns the leaf at `measure` (0-indexed) together with its `M` offset.
+    /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
+    /// plus the `M`-measure of all the leaves before it.
     ///
-    /// Note: this function doesn't do any bounds checks. Those are expected to
-    /// be performed by the caller.
+    /// NOTE: this function doesn't do any bounds checks.
     #[inline]
     pub fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
     where
@@ -206,6 +213,11 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
         Leaves::from(self)
+    }
+
+    #[inline]
+    pub fn leaf_count(&self) -> usize {
+        self.root.leaf_count()
     }
 
     /// Returns the `M`-measure of this `Tree` obtaining by summing up the
@@ -396,8 +408,8 @@ mod from_treeslice {
                     let first = cut_first_rec(
                         child,
                         start - offset,
-                        slice.start_slice,
-                        slice.start_summary.clone(),
+                        slice.first_slice,
+                        slice.first_summary.clone(),
                         &mut invalid_first,
                     );
 
@@ -423,8 +435,8 @@ mod from_treeslice {
                     let last = cut_last_rec(
                         child,
                         end - offset,
-                        slice.end_slice,
-                        slice.end_summary.clone(),
+                        slice.last_slice,
+                        slice.last_summary.clone(),
                         &mut invalid_last,
                     );
 

@@ -35,14 +35,21 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Node<N, L> {
-    /// Recursively asserts the invariants of...
+    /// Checks the invariants of the node, and if it's internal it calls itself
+    /// recursively on all of the inode's children.
     pub(super) fn assert_invariants(&self) {
-        if let Node::Internal(inode) = self {
-            inode.assert_invariants();
+        match self {
+            Node::Internal(inode) => {
+                inode.assert_invariants();
 
-            for child in inode.children() {
-                child.assert_invariants()
-            }
+                for child in inode.children() {
+                    child.assert_invariants()
+                }
+            },
+
+            Node::Leaf(leaf) => {
+                leaf.assert_invariants();
+            },
         }
     }
 
@@ -56,8 +63,8 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         );
 
         match self {
-            Node::Leaf(_) => std::hint::unreachable_unchecked(),
             Node::Internal(inode) => inode,
+            Node::Leaf(_) => std::hint::unreachable_unchecked(),
         }
     }
 
@@ -71,8 +78,8 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         );
 
         match self {
-            Node::Leaf(leaf) => leaf,
             Node::Internal(_) => std::hint::unreachable_unchecked(),
+            Node::Leaf(leaf) => leaf,
         }
     }
 
@@ -88,9 +95,14 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         );
 
         match self {
-            Node::Leaf(_) => std::hint::unreachable_unchecked(),
             Node::Internal(inode) => inode,
+            Node::Leaf(_) => std::hint::unreachable_unchecked(),
         }
+    }
+
+    #[inline]
+    pub fn base_measure(&self) -> L::BaseMetric {
+        self.measure::<L::BaseMetric>()
     }
 
     #[inline]
@@ -143,6 +155,16 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
+    pub(super) fn is_internal(&self) -> bool {
+        matches!(self, Node::Internal(_))
+    }
+
+    #[inline]
+    pub(super) fn is_leaf(&self) -> bool {
+        matches!(self, Node::Leaf(_))
+    }
+
+    #[inline]
     pub(super) fn is_valid(&self) -> bool {
         match self {
             Node::Internal(inode) => inode.has_enough_children(),
@@ -150,20 +172,6 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
-    #[inline]
-    pub fn measure<M: Metric<L>>(&self) -> M {
-        match self {
-            Node::Internal(inode) => inode.measure(),
-            Node::Leaf(leaf) => leaf.measure(),
-        }
-    }
-
-    #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
-        self.measure::<L::BaseMetric>()
-    }
-
-    /// Note: doesn't do bounds checks.
     #[inline]
     pub fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
     where
@@ -200,21 +208,19 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn num_leaves(&self) -> usize {
+    pub(super) fn leaf_count(&self) -> usize {
         match self {
-            Node::Internal(inode) => inode.num_leaves(),
+            Node::Internal(inode) => inode.leaf_count(),
             Node::Leaf(_) => 1,
         }
     }
 
     #[inline]
-    pub(super) fn is_internal(&self) -> bool {
-        matches!(self, Node::Internal(_))
-    }
-
-    #[inline]
-    pub(super) fn is_leaf(&self) -> bool {
-        matches!(self, Node::Leaf(_))
+    pub fn measure<M: Metric<L>>(&self) -> M {
+        match self {
+            Node::Internal(inode) => inode.measure(),
+            Node::Leaf(leaf) => leaf.measure(),
+        }
     }
 
     #[inline]

@@ -6,9 +6,9 @@ use super::{Leaf, Lnode, Metric, Node};
 #[derive(Clone)]
 pub(super) struct Inode<const N: usize, L: Leaf> {
     pub(super) children: Vec<Arc<Node<N, L>>>,
-    depth: usize,
-    num_leaves: usize,
     summary: L::Summary,
+    depth: usize,
+    leaf_count: usize,
 }
 
 impl<const N: usize, L: Leaf> std::fmt::Debug for Inode<N, L> {
@@ -17,9 +17,9 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Inode<N, L> {
         if !f.alternate() {
             f.debug_struct("Inode")
                 .field("children", &self.children)
-                .field("depth", &self.depth)
-                .field("num_leaves", &self.num_leaves)
                 .field("summary", &self.summary)
+                .field("depth", &self.depth)
+                .field("leaf_count", &self.leaf_count)
                 .finish()
         } else {
             pretty_print_inode(self, &mut String::new(), "", 0, f)
@@ -33,7 +33,7 @@ impl<const N: usize, L: Leaf> Default for Inode<N, L> {
         Self {
             children: Vec::with_capacity(N),
             depth: 1,
-            num_leaves: 0,
+            leaf_count: 0,
             summary: Default::default(),
         }
     }
@@ -60,15 +60,15 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         );
 
         let actual_leaves =
-            self.children().iter().map(|c| c.num_leaves()).sum::<usize>();
+            self.children().iter().map(|c| c.leaf_count()).sum::<usize>();
 
         assert_eq!(
-            self.num_leaves,
+            self.leaf_count,
             actual_leaves,
             "An internal node of depth {} thought it contained {} leaves in \
              its subtree, but actually contains {}",
             self.depth(),
-            self.num_leaves,
+            self.leaf_count,
             actual_leaves
         );
 
@@ -119,7 +119,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                         .children
                         .extend(second.children.iter().map(Arc::clone));
 
-                    first.num_leaves += second.num_leaves;
+                    first.leaf_count += second.leaf_count;
 
                     first.summary += second.summary();
 
@@ -162,7 +162,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                     let second = Arc::new(Node::Leaf(Lnode::from(second)));
                     self.children[1] = second;
                 } else {
-                    self.num_leaves -= 1;
+                    self.leaf_count -= 1;
                     self.children.remove(1);
                 }
             },
@@ -217,7 +217,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                         last.children.insert(idx, Arc::clone(child));
                     }
 
-                    last.num_leaves += penultimate.num_leaves;
+                    last.leaf_count += penultimate.leaf_count;
 
                     last.summary += penultimate.summary();
 
@@ -262,7 +262,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                     self.children[last_idx - 1] = penultimate;
                 } else {
                     *last = Lnode::from(left);
-                    self.num_leaves -= 1;
+                    self.leaf_count -= 1;
                     self.children.remove(last_idx - 1);
                 }
             },
@@ -341,7 +341,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(!self.is_full());
         debug_assert_eq!(child.depth() + 1, self.depth());
 
-        self.num_leaves += child.num_leaves();
+        self.leaf_count += child.leaf_count();
         self.summary += child.summary();
         self.children.insert(idx, child);
     }
@@ -405,8 +405,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn num_leaves(&self) -> usize {
-        self.num_leaves
+    pub(super) fn leaf_count(&self) -> usize {
+        self.leaf_count
     }
 
     #[inline]
@@ -430,7 +430,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(!self.is_full());
         debug_assert_eq!(child.depth() + 1, self.depth());
 
-        self.num_leaves += child.num_leaves();
+        self.leaf_count += child.leaf_count();
         self.summary += child.summary();
         self.children.push(child);
     }
@@ -450,15 +450,15 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         let depth = children[0].depth() + 1;
 
-        let mut num_leaves = children[0].num_leaves();
+        let mut leaf_count = children[0].leaf_count();
         let mut summary = children[0].summary().clone();
 
         for child in &children[1..] {
-            num_leaves += child.num_leaves();
+            leaf_count += child.leaf_count();
             summary += child.summary();
         }
 
-        Self { children, depth, num_leaves, summary }
+        Self { children, depth, leaf_count, summary }
     }
 
     #[inline]

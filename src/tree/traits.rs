@@ -2,7 +2,6 @@ use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 
-/// TODO: docs
 pub trait Summarize: Debug {
     type Summary: Debug
         + Default
@@ -16,7 +15,6 @@ pub trait Summarize: Debug {
     fn summarize(&self) -> Self::Summary;
 }
 
-/// TODO: docs
 pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized + Clone {
     type BaseMetric: Metric<Self>;
 

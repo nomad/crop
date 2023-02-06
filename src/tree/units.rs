@@ -214,10 +214,13 @@ where
             start_slice: <&L::Slice>::default(),
             start_summary: L::Summary::default(),
             first_slice: Some((
-                tree_slice.start_slice,
-                &tree_slice.start_summary,
+                tree_slice.first_slice,
+                &tree_slice.first_summary,
             )),
-            last_slice: Some((tree_slice.end_slice, &tree_slice.end_summary)),
+            last_slice: Some((
+                tree_slice.last_slice,
+                &tree_slice.last_summary,
+            )),
             base_start: L::BaseMetric::measure(&tree_slice.offset),
             base_yielded: L::BaseMetric::zero(),
             base_total: tree_slice.base_measure(),
@@ -267,7 +270,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                     match self.first_slice.take() {
                         Some((slice, summary)) => {
                             self.yielded_in_leaf =
-                                leaf.summary.clone() - summary;
+                                leaf.summary().clone() - summary;
 
                             self.start_slice = slice;
                             self.start_summary = summary.clone();
@@ -358,10 +361,10 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             TreeSlice {
                 root: self.leaf_node,
                 offset,
-                start_slice: slice,
-                start_summary: summary.clone(),
-                end_slice: slice,
-                end_summary: summary.clone(),
+                first_slice: slice,
+                first_summary: summary.clone(),
+                last_slice: slice,
+                last_summary: summary.clone(),
                 summary,
                 leaf_count: 1,
             },
@@ -429,7 +432,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                     break 'outer;
                 } else {
                     summary += child.summary();
-                    leaf_count += child.num_leaves();
+                    leaf_count += child.leaf_count();
                 }
             }
         }
@@ -453,7 +456,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                             continue 'outer;
                         } else {
                             summary += child.summary();
-                            leaf_count += child.num_leaves();
+                            leaf_count += child.leaf_count();
                         }
                     }
 
@@ -608,10 +611,10 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                 root,
                 offset,
                 summary,
-                end_slice,
-                end_summary,
-                start_slice,
-                start_summary,
+                last_slice: end_slice,
+                last_summary: end_summary,
+                first_slice: start_slice,
+                first_summary: start_summary,
                 leaf_count,
             },
             advance,
@@ -697,7 +700,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
             for child in &inode.children()[child_idx + 1..] {
                 summary += child.summary();
-                leaf_count += child.num_leaves();
+                leaf_count += child.leaf_count();
             }
         }
 
@@ -729,7 +732,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             } else {
                 offset += child_measure;
                 summary += child.summary();
-                leaf_count += child.num_leaves();
+                leaf_count += child.leaf_count();
             }
         }
 
@@ -745,7 +748,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                         } else {
                             offset += child_measure;
                             summary += child.summary();
-                            leaf_count += child.num_leaves();
+                            leaf_count += child.leaf_count();
                         }
                     }
 
@@ -792,10 +795,10 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                 TreeSlice {
                     root: self.leaf_node,
                     offset: self.yielded_in_leaf.clone(),
-                    start_slice: self.start_slice,
-                    start_summary: summary.clone(),
-                    end_slice: self.start_slice,
-                    end_summary: summary.clone(),
+                    first_slice: self.start_slice,
+                    first_summary: summary.clone(),
+                    last_slice: self.start_slice,
+                    last_summary: summary.clone(),
                     summary,
                     leaf_count: 1,
                 },
@@ -827,10 +830,10 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                 root,
                 offset,
                 summary,
-                start_slice,
-                start_summary,
-                end_slice,
-                end_summary,
+                first_slice: start_slice,
+                first_summary: start_summary,
+                last_slice: end_slice,
+                last_summary: end_summary,
                 // +2 to account for the leaves containing the first and last
                 // slices.
                 leaf_count: leaf_count + 2,
@@ -1000,10 +1003,13 @@ where
             end_slice: <&L::Slice>::default(),
             end_summary: L::Summary::default(),
             first_slice: Some((
-                tree_slice.start_slice,
-                &tree_slice.start_summary,
+                tree_slice.first_slice,
+                &tree_slice.first_summary,
             )),
-            last_slice: Some((tree_slice.end_slice, &tree_slice.end_summary)),
+            last_slice: Some((
+                tree_slice.last_slice,
+                &tree_slice.last_summary,
+            )),
             base_start: L::BaseMetric::measure(&tree_slice.offset),
             base_remaining: tree_slice.base_measure(),
             units_remaining: tree_slice.measure::<M>(),
@@ -1180,7 +1186,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
             for child in &inode.children()[..child_idx] {
                 summary += child.summary();
-                leaf_count += child.num_leaves();
+                leaf_count += child.leaf_count();
             }
 
             for child in &inode.children()[child_idx + 1..] {
@@ -1211,7 +1217,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             if offset + child_measure > range.start {
                 for child in children {
                     summary += child.summary();
-                    leaf_count += child.num_leaves();
+                    leaf_count += child.leaf_count();
                 }
                 node = child;
                 break;
@@ -1231,7 +1237,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                         if offset + child_measure > range.start {
                             for child in children {
                                 summary += child.summary();
-                                leaf_count += child.num_leaves();
+                                leaf_count += child.leaf_count();
                             }
                             node = child;
                             continue 'outer;
@@ -1271,10 +1277,10 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                     root: self.leaf_node,
                     offset: L::Summary::default(),
                     summary: end_summary.clone(),
-                    start_slice: end_slice,
-                    start_summary: end_summary.clone(),
-                    end_slice,
-                    end_summary,
+                    first_slice: end_slice,
+                    first_summary: end_summary.clone(),
+                    last_slice: end_slice,
+                    last_summary: end_summary,
                     leaf_count: 1,
                 },
                 advance,
@@ -1339,10 +1345,10 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             TreeSlice {
                 root,
                 offset,
-                start_slice,
-                start_summary,
-                end_slice,
-                end_summary,
+                first_slice: start_slice,
+                first_summary: start_summary,
+                last_slice: end_slice,
+                last_summary: end_summary,
                 summary,
                 // +2 to account for the leaves containing the first and last
                 // slices.
@@ -1378,10 +1384,10 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                 root: self.leaf_node,
                 offset,
                 summary: summary.clone(),
-                end_slice: slice,
-                end_summary: summary.clone(),
-                start_slice: slice,
-                start_summary: summary,
+                last_slice: slice,
+                last_summary: summary.clone(),
+                first_slice: slice,
+                first_summary: summary,
                 leaf_count: 1,
             },
             advance,
@@ -1448,7 +1454,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                     break 'outer;
                 } else {
                     summary += child.summary();
-                    leaf_count += child.num_leaves();
+                    leaf_count += child.leaf_count();
                 }
             }
         }
@@ -1474,7 +1480,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                             continue 'outer;
                         } else {
                             summary += child.summary();
-                            leaf_count += child.num_leaves();
+                            leaf_count += child.leaf_count();
                         }
                     }
 
@@ -1585,10 +1591,10 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                         TreeSlice {
                             root: self.leaf_node,
                             offset: self.leaf_node.summary().clone(),
-                            start_slice: empty,
-                            start_summary: empty_summary.clone(),
-                            end_slice: empty,
-                            end_summary: empty_summary.clone(),
+                            first_slice: empty,
+                            first_summary: empty_summary.clone(),
+                            last_slice: empty,
+                            last_summary: empty_summary.clone(),
                             summary: empty_summary,
                             leaf_count: 1,
                         },
@@ -1685,10 +1691,10 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                 root,
                 offset,
                 summary,
-                end_slice,
-                end_summary,
-                start_slice,
-                start_summary,
+                last_slice: end_slice,
+                last_summary: end_summary,
+                first_slice: start_slice,
+                first_summary: start_summary,
                 leaf_count,
             },
             advance,
@@ -1732,10 +1738,10 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                     TreeSlice {
                         root: self.leaf_node,
                         offset,
-                        start_slice: slice,
-                        start_summary: summary.clone(),
-                        end_slice: slice,
-                        end_summary: summary.clone(),
+                        first_slice: slice,
+                        first_summary: summary.clone(),
+                        last_slice: slice,
+                        last_summary: summary.clone(),
                         summary: summary.clone(),
                         leaf_count: 1,
                     },
