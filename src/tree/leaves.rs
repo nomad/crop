@@ -23,7 +23,7 @@ pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
     leaves_total: usize,
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> Clone for Leaves<'a, FANOUT, L> {
+impl<const FANOUT: usize, L: Leaf> Clone for Leaves<'_, FANOUT, L> {
     #[inline]
     fn clone(&self) -> Self {
         Self {
@@ -82,8 +82,8 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
-    for Leaves<'a, FANOUT, L>
+impl<const FANOUT: usize, L: Leaf> DoubleEndedIterator
+    for Leaves<'_, FANOUT, L>
 {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
@@ -96,8 +96,8 @@ impl<'a, const FANOUT: usize, L: Leaf> DoubleEndedIterator
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> ExactSizeIterator
-    for Leaves<'a, FANOUT, L>
+impl<const FANOUT: usize, L: Leaf> ExactSizeIterator
+    for Leaves<'_, FANOUT, L>
 {
     #[inline]
     fn len(&self) -> usize {
@@ -105,14 +105,14 @@ impl<'a, const FANOUT: usize, L: Leaf> ExactSizeIterator
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> std::iter::FusedIterator
-    for Leaves<'a, FANOUT, L>
+impl<const FANOUT: usize, L: Leaf> std::iter::FusedIterator
+    for Leaves<'_, FANOUT, L>
 {
 }
 
 struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// Whether `Self` has been initialized by calling
-    /// [`initialize`](LeavesForward::initialize).
+    /// [`initialize`](Self::initialize()).
     is_initialized: bool,
 
     /// The root of the `Tree` or `TreeSlice` we're iterating over.
@@ -123,10 +123,11 @@ struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// there is one) is 2.
     path: Vec<(&'a Inode<N, L>, usize)>,
 
-    /// TODO: docs
+    /// The current leaf bunch.
     leaves: &'a [Arc<Node<N, L>>],
 
-    /// TODO: docs
+    /// The index of the next leaf in [`leaves`](Self::leaves) that'll be
+    /// yielded by [`next`](Self::next()).
     next_leaf_idx: usize,
 
     /// The first slice in the yielding range and its summary. It's only set if
@@ -137,17 +138,20 @@ struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// we're iterating over a `TreeSlice`.
     last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
 
-    /// TODO: docs
+    /// The base measure between the start of the tree under `root` and the
+    /// first leaf in the iterating range.
     base_offset: L::BaseMetric,
 
-    /// TODO: docs
+    /// The number of **whole** leaves yielded so far.
     whole_yielded: usize,
 
-    /// TODO: docs
+    /// The number of **whole** leaves this iterator will yield. All leaves are
+    /// considered whole except for the first and last leaf slices of
+    /// `TreeSlice`s.
     whole_total: usize,
 }
 
-impl<'a, const N: usize, L: Leaf> Clone for LeavesForward<'a, N, L> {
+impl<const N: usize, L: Leaf> Clone for LeavesForward<'_, N, L> {
     #[inline]
     fn clone(&self) -> Self {
         Self { path: self.path.clone(), ..*self }
@@ -159,7 +163,6 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
 {
     #[inline]
     fn from(tree: &'a Tree<N, L>) -> LeavesForward<'a, N, L> {
-        // TODO: explain why `yielded` starts off  as `1`.
         Self {
             is_initialized: false,
             base_offset: L::BaseMetric::zero(),
@@ -169,6 +172,8 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
             path: Vec::with_capacity(tree.root().depth().saturating_sub(1)),
             leaves: &[],
             next_leaf_idx: 0,
+            // NOTE: `whole_yielded` starts off as 1 because `Self::next()`
+            // doesn't increase this counter the first time it's called.
             whole_yielded: 1,
             whole_total: tree.root().leaf_count(),
         }
@@ -229,7 +234,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                         .children()
                         .iter()
                         .map(|n| {
-                            // Safety: the first child is an internal node, so
+                            // SAFETY: the first child is an internal node, so
                             // all its siblings are internal nodes as well.
                             unsafe { n.as_internal_unchecked() }
                         })
@@ -254,7 +259,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                         .children()
                         .iter()
                         .map(|n| {
-                            // Safety: the first child is a leaf node, so all
+                            // SAFETY: the first child is a leaf node, so all
                             // its siblings are leaf nodes as well.
                             unsafe { n.as_leaf_unchecked() }
                         })
@@ -298,7 +303,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
             } else {
                 let inode = &inode.children()[*visited];
 
-                // Safety: the last internal node in `path` is always *2*
+                // SAFETY: the last internal node in `path` is always *2*
                 // levels above a leaf, so all its children are internal
                 // nodes 1 level above a leaf.
                 break unsafe { inode.as_internal_unchecked() };
@@ -354,34 +359,43 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 }
 
 struct LeavesBackward<'a, const N: usize, L: Leaf> {
-    /// TODO: docs
+    /// Whether `Self` has been initialized by calling
+    /// [`initialize`](Self::initialize()).
     is_initialized: bool,
 
-    /// TODO: docs
-    base_offset: L::BaseMetric,
-
-    /// TODO: docs
-    first_slice: Option<(&'a L::Slice, &'a L::Summary)>,
-
-    /// TODO: docs
-    last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
-
-    /// TODO: docs
+    /// The root of the `Tree` or `TreeSlice` we're iterating over.
     root: &'a Node<N, L>,
 
-    /// TODO: docs
+    /// The path from the root down to (but not including) the internal node
+    /// containing `leaves`. It follows that the depth of the last node (if
+    /// there is one) is 2.
     path: Vec<(&'a Inode<N, L>, usize)>,
 
-    /// TODO: docs
+    /// The current leaf bunch.
     leaves: &'a [Arc<Node<N, L>>],
 
-    /// TODO: docs
+    /// The index of the last leaf in [`leaves`](Self::leaves) that was yielded
+    /// by [`previous`](Self::previous()).
     last_leaf_idx: usize,
 
-    /// TODO: docs
+    /// The first slice in the yielding range and its summary. It's only set if
+    /// we're iterating over a `TreeSlice`.
+    first_slice: Option<(&'a L::Slice, &'a L::Summary)>,
+
+    /// The last slice in the yielding range and its summary. It's only set if
+    /// we're iterating over a `TreeSlice`.
+    last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
+
+    /// The base measure between the last leaf in the iterating range and the
+    /// end of the tree under `root`.
+    base_offset: L::BaseMetric,
+
+    /// The number of **whole** leaves yielded so far.
     whole_yielded: usize,
 
-    /// TODO: docs
+    /// The number of **whole** leaves this iterator will yield. All leaves are
+    /// considered whole except for the first and last leaf slices of
+    /// `TreeSlice`s.
     whole_total: usize,
 }
 
@@ -406,6 +420,8 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
             path: Vec::with_capacity(tree.root().depth().saturating_sub(1)),
             leaves: &[],
             last_leaf_idx: 0,
+            // NOTE: `whole_yielded` starts off as 1 because `Self::previous()`
+            // doesn't increase this counter the first time it's called.
             whole_yielded: 1,
             whole_total: tree.root().leaf_count(),
         }
@@ -470,7 +486,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
                         .children()
                         .iter()
                         .map(|n| {
-                            // Safety: the last child is an internal node, so
+                            // SAFETY: the last child is an internal node, so
                             // all its siblings are internal nodes as well.
                             unsafe { n.as_internal_unchecked() }
                         })
@@ -496,7 +512,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
                         .children()
                         .iter()
                         .map(|n| {
-                            // Safety: the last child is a leaf node, so all
+                            // SAFETY: the last child is a leaf node, so all
                             // its siblings are leaf nodes as well.
                             unsafe { n.as_leaf_unchecked() }
                         })
@@ -538,7 +554,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
 
                 let inode = &inode.children()[*visited];
 
-                // Safety: the last internal node in `path` is always *2*
+                // SAFETY: the last internal node in `path` is always *2*
                 // levels above a leaf, so all its children are internal
                 // nodes 1 level above a leaf.
                 break unsafe { inode.as_internal_unchecked() };
