@@ -83,8 +83,27 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
                     );
                 }
 
-                // TODO: make sure that the first and last slices are under
-                // different children of the root.
+                // This last part checks that the first and last slices are
+                // under different children of the root, making the latter the
+                // deepest node that contains both.
+
+                let (root, remove_offset) = {
+                    let start = L::BaseMetric::measure(&self.offset);
+                    deepest_node_containing_base_range_greedy(
+                        self.root,
+                        start,
+                        start + L::BaseMetric::measure(&self.summary),
+                    )
+                };
+
+                // All these asserts should be equivalent, we use them all for
+                // redundancy.
+                assert!(Arc::ptr_eq(self.root, root));
+                assert_eq!(self.root.depth(), root.depth());
+                assert_eq!(
+                    L::BaseMetric::measure(&remove_offset),
+                    L::BaseMetric::zero()
+                );
             },
 
             Node::Leaf(leaf) => {
