@@ -4,37 +4,32 @@ use smallvec::SmallVec;
 
 use super::{Inode, Leaf, Lnode, Node, Tree};
 
+/// An incremental `Tree` builder.
 #[derive(Clone)]
 pub struct TreeBuilder<const FANOUT: usize, L: Leaf> {
     /// A stack of internal nodes.
     ///
     /// # Invariants
     ///
-    /// - all the inodes within a stack level have the same depth. That is, for
-    /// every `i` in `0..stack.len()`, `j,k` in  `0..stack[i].len()`, it holds
-    /// `stack[i][j].depth() = stack[i][k].depth()`;
+    /// - all the nodes at every stack level are internal nodes;
+    ///
+    /// - all the inodes within a stack level have the same depth;
     ///
     /// - all the vectors at every stack level have a length strictly less
     /// than `FANOUT` (but it could also be zero, i.e. all levels except the
     /// first one can be empty);
     ///
     /// - the inodes are grouped in order of descending depth, with each stack
-    /// level containing inodes of height one less than the previous level.
-    /// That is, for every `i` in `0..stack.len() - 1`, it holds
-    /// `stack[i][0].depth() = 1 + stack[i + 1][0].depth()` (assuming that both
-    /// `stack[i]` and `stack[i + 1]` are not empty);
+    /// level containing inodes of depth one less than the previous level;
     ///
-    /// - every inode at every stack level is completely full, that is...
+    /// - every inode at every stack level is completely full, i.e. for every
+    /// inode it holds `inode.leaf_count() == FANOUT**(inode.depth())`;
     ///
-    /// - the inodes in the last stack level (assuming there are any) always
-    /// have a depth of 1.
+    /// - all the inodes in the last stack level (assuming there are any) have
+    /// a depth of 1.
     stack: Vec<SmallVec<[Arc<Node<FANOUT, L>>; FANOUT]>>,
 
     /// A bunch of leaves waiting to be grouped into an internal node.
-    ///
-    /// # Invariants
-    ///
-    /// - `leaves.len() < FANOUT`.
     leaves: SmallVec<[Arc<Node<FANOUT, L>>; FANOUT]>,
 }
 
@@ -46,7 +41,6 @@ impl<const FANOUT: usize, L: Leaf> Default for TreeBuilder<FANOUT, L> {
 }
 
 impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
-    /// Adds the next leaf to the builder.
     #[inline]
     pub fn append(&mut self, leaf: L) {
         debug_assert!(self.leaves.len() < FANOUT);
@@ -130,14 +124,14 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
             Arc::new(Node::Internal(Inode::from_children(self.leaves)))
         } else {
             loop {
-                // TODO: explain why we can unwrap
                 let stack_level = self.stack.pop().unwrap();
 
                 match stack_level.len() {
                     0 => continue,
 
                     1 if self.stack.is_empty() => {
-                        // TODO: explain this edge case
+                        // The stack is now empty and there was a single node
+                        // in its first level. That node is the root.
                         break stack_level.into_iter().next().unwrap();
                     },
 
@@ -181,7 +175,6 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
         tree
     }
 
-    /// Creates a new `TreeBuilder`.
     #[allow(dead_code)]
     #[inline]
     pub fn new() -> Self {

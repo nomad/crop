@@ -84,8 +84,8 @@ impl<'a, const FANOUT: usize, L: Leaf, M: UnitMetric<L>> Iterator
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
-    DoubleEndedIterator for Units<'a, FANOUT, L, M>
+impl<const FANOUT: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
+    DoubleEndedIterator for Units<'_, FANOUT, L, M>
 {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
@@ -103,8 +103,8 @@ impl<'a, const FANOUT: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: UnitMetric<L>>
-    std::iter::FusedIterator for Units<'a, FANOUT, L, M>
+impl<const FANOUT: usize, L: Leaf, M: UnitMetric<L>> std::iter::FusedIterator
+    for Units<'_, FANOUT, L, M>
 {
 }
 
@@ -158,8 +158,8 @@ struct UnitsForward<'a, const N: usize, L: Leaf, M: Metric<L>> {
     units_total: M,
 }
 
-impl<'a, const N: usize, L: Leaf, M: Metric<L>> Clone
-    for UnitsForward<'a, N, L, M>
+impl<const N: usize, L: Leaf, M: Metric<L>> Clone
+    for UnitsForward<'_, N, L, M>
 {
     #[inline]
     fn clone(&self) -> Self {
@@ -949,8 +949,8 @@ struct UnitsBackward<'a, const N: usize, L: Leaf, M: Metric<L>> {
     units_remaining: M,
 }
 
-impl<'a, const N: usize, L: Leaf, M: Metric<L>> Clone
-    for UnitsBackward<'a, N, L, M>
+impl<const N: usize, L: Leaf, M: Metric<L>> Clone
+    for UnitsBackward<'_, N, L, M>
 {
     #[inline]
     fn clone(&self) -> Self {
