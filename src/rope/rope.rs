@@ -356,7 +356,10 @@ impl From<&str> for Rope {
     #[inline]
     fn from(s: &str) -> Self {
         Rope {
-            tree: Tree::from_leaves(RopeChunkIter::new(s)),
+            tree: Tree::from_leaves(
+                RopeChunkIter::new(s)
+                    .map(|chunk| RopeChunk { text: chunk.to_owned() }),
+            ),
             last_byte_is_newline: last_byte_is_newline(s),
         }
     }

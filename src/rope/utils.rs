@@ -43,17 +43,18 @@ pub(super) fn assert_valid_chunk(
     }
 
     // CRLF pairs should never be split across chunks.
-    if let Some(&b'\r') = chunk.as_bytes().last() {
+    if ends_in_cr(chunk) {
         if let Some(next) = next {
-            if *next.as_bytes().first().unwrap() == b'\n' {
-                panic!("");
+            if starts_with_lf(next) {
+                panic!();
             }
         }
     }
 }
 
+/// Returns whether `byte_offset` would be splitting a CRLF pair inside `s`.
 #[inline]
-fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
+pub(super) fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
     byte_offset > 0
         && byte_offset < s.len()
         && ({
@@ -62,7 +63,35 @@ fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
         })
 }
 
-/// TODO: docs
+#[inline]
+pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
+    s: &str,
+    mut candidate: usize,
+) -> usize {
+    if WITH_RIGHT_BIAS {
+        while !s.is_char_boundary(candidate) {
+            candidate += 1;
+        }
+        if is_splitting_crlf_pair(s, candidate) {
+            candidate += 1;
+        }
+    } else {
+        while !s.is_char_boundary(candidate) {
+            candidate -= 1;
+        }
+        if is_splitting_crlf_pair(s, candidate) {
+            candidate -= 1;
+        }
+    }
+    candidate
+}
+
+/// Balances `left` with the contents of `right`, assuming that:
+///
+/// - `left` has less than `RopeChunk::min_bytes()` bytes;
+/// - `right` has more than `RopeChunk::min_bytes()` bytes;
+/// - `left` and `right` can't be combined in a single `RopeChunk`, i.e. `left`
+/// and `right` combined have more than `RopeChunk::max_bytes()` bytes.
 #[inline]
 pub(super) fn balance_left_with_right(
     left: &ChunkSlice,
@@ -74,21 +103,10 @@ pub(super) fn balance_left_with_right(
     debug_assert!(right.len() > RopeChunk::min_bytes());
     debug_assert!(left.len() + right.len() > RopeChunk::max_bytes());
 
-    let mut bytes_to_left = RopeChunk::min_bytes() - left.len();
-
-    // If we're splitting a code point we take less bytes from the right slice.
-    // This will result in the final left chunk having less than
-    // `RopeChunk::min_bytes()` bytes.
-    if !right.is_char_boundary(bytes_to_left) {
-        bytes_to_left -= 1;
-        while !right.is_char_boundary(bytes_to_left) {
-            bytes_to_left -= 1;
-        }
-    }
-    // Similarly, if we're splitting a CRLF pair we take 1 less byte.
-    else if is_splitting_crlf_pair(right, bytes_to_left) {
-        bytes_to_left -= 1;
-    }
+    let bytes_to_left = adjust_split_point::<false>(
+        right,
+        RopeChunk::min_bytes() - left.len(),
+    );
 
     let add_to_left: &ChunkSlice = (&right[..bytes_to_left]).into();
 
@@ -108,34 +126,27 @@ pub(super) fn balance_left_with_right(
     ((left, left_summary), (right.to_owned(), right_summary))
 }
 
-/// TODO: docs
+/// Balances `right` with the contents of `left`, assuming that:
+///
+/// - `left` has more than `RopeChunk::min_bytes()` bytes;
+/// - `right` has less than `RopeChunk::min_bytes()` bytes;
+/// - `left` and `right` can't be combined in a single `RopeChunk`, i.e. `left`
+/// and `right` combined have more than `RopeChunk::max_bytes()` bytes.
 #[inline]
 pub(super) fn balance_right_with_left(
     left: &ChunkSlice,
     left_summary: &ChunkSummary,
-    old_right: &ChunkSlice,
+    right: &ChunkSlice,
     right_summary: &ChunkSummary,
 ) -> ((RopeChunk, ChunkSummary), (RopeChunk, ChunkSummary)) {
     debug_assert!(left.len() > RopeChunk::min_bytes());
-    debug_assert!(old_right.len() < RopeChunk::min_bytes());
-    debug_assert!(left.len() + old_right.len() > RopeChunk::max_bytes());
+    debug_assert!(right.len() < RopeChunk::min_bytes());
+    debug_assert!(left.len() + right.len() > RopeChunk::max_bytes());
 
-    let mut bytes_keep_left =
-        left.len() - (RopeChunk::min_bytes() - old_right.len());
-
-    // If we're splitting a code point we take less bytes from the left slice.
-    // This will result in the final right chunk having less than
-    // `RopeChunk::min_bytes()` bytes.
-    if !left.is_char_boundary(bytes_keep_left) {
-        bytes_keep_left += 1;
-        while !left.is_char_boundary(bytes_keep_left) {
-            bytes_keep_left += 1;
-        }
-    }
-    // Similarly, if we're splitting a CRLF pair we take 1 less byte.
-    else if is_splitting_crlf_pair(left, bytes_keep_left) {
-        bytes_keep_left += 1;
-    }
+    let bytes_keep_left = adjust_split_point::<true>(
+        left,
+        left.len() - (RopeChunk::min_bytes() - right.len()),
+    );
 
     let add_to_right: &ChunkSlice = (&left[bytes_keep_left..]).into();
 
@@ -146,6 +157,8 @@ pub(super) fn balance_right_with_left(
     let mut left_summary = *left_summary;
     left_summary -= &add_to_right_summary;
 
+    let old_right = right;
+
     let mut right = add_to_right.to_owned();
     right.push_str(old_right);
 
@@ -155,7 +168,14 @@ pub(super) fn balance_right_with_left(
     ((left.to_owned(), left_summary), (right, right_summary))
 }
 
-/// TODO: docs
+/// Returns the number of bytes that `s`'s trailing line break takes up.
+///
+/// NOTE: this function assumes that `s` ends with a newline (`\n`), if `s`
+/// doesn't it can return a wrong result.
+///
+/// # Panics
+///
+/// Panics if `s` is empty.
 #[inline]
 pub(super) fn bytes_line_break(s: &str) -> usize {
     debug_assert!(!s.is_empty() && *s.as_bytes().last().unwrap() == b'\n');
@@ -267,7 +287,8 @@ fn ends_in_cr(s: &str) -> bool {
     s.as_bytes()[s.len() - 1] == b'\r'
 }
 
-/// TODO: docs
+/// Returns whether `byte_offset` is a grapheme boundary in the string
+/// constructed by concatenating the chunks yielded by `chunks`.
 #[cfg(feature = "graphemes")]
 #[inline]
 pub(super) fn is_grapheme_boundary(
@@ -325,7 +346,6 @@ pub(super) fn last_byte_is_newline(s: &str) -> bool {
     !s.is_empty() && s.as_bytes()[s.len() - 1] == b'\n'
 }
 
-/// TODO: docs
 #[inline]
 pub(super) fn range_bounds_to_start_end<B>(
     range: B,
@@ -350,7 +370,10 @@ where
     (start, end)
 }
 
-/// TODO: docs
+/// Returns a tuple `(to_add, rest)`, where `to_add` is the largest left
+/// sub-slice of `text` that can be added to `current` that still keeps the
+/// latter under `RopeChunk::max_bytes()`. It follows that `rest` is the right
+/// sub-slice of `text` not included in `to_add`.
 #[inline]
 pub(super) fn rope_chunk_append<'a>(
     current: &str,
@@ -359,7 +382,7 @@ pub(super) fn rope_chunk_append<'a>(
     if current.len() >= RopeChunk::max_bytes() {
         // If the current text is already longer than `RopeChunk::max_bytes()`
         // the only edge case to consider is not splitting CRLF pairs.
-        if ends_in_cr(current) && !text.is_empty() && starts_with_lf(text) {
+        if ends_in_cr(current) && starts_with_lf(text) {
             return (&text[0..1], &text[1..]);
         } else {
             return ("", text);
@@ -377,10 +400,7 @@ pub(super) fn rope_chunk_append<'a>(
     }
 
     // Add one more byte if we're splitting a CRLF pair.
-    if ends_in_cr(&text[..bytes_to_add])
-        && !text[bytes_to_add..].is_empty()
-        && starts_with_lf(&text[bytes_to_add..])
-    {
+    if is_splitting_crlf_pair(text, bytes_to_add) {
         bytes_to_add += 1;
     }
 
@@ -393,5 +413,5 @@ pub(super) fn rope_chunk_append<'a>(
 ///
 /// This function will panic if the string slice is empty.
 fn starts_with_lf(s: &str) -> bool {
-    s.as_bytes()[0] == b'\n'
+    !s.is_empty() && s.as_bytes()[0] == b'\n'
 }

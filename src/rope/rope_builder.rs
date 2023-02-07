@@ -22,8 +22,6 @@ impl RopeBuilder {
     {
         let mut text = text.as_ref();
 
-        // TODO: handle edge case where a chunk ends in `\r` and the next one
-        // begins in `\n`.
         loop {
             let (to_add, rest) = rope_chunk_append(&self.buffer, text);
             self.buffer.push_str(to_add);
@@ -33,8 +31,8 @@ impl RopeBuilder {
                 }
                 break;
             } else {
-                text = rest;
                 self.tree_builder.append(std::mem::take(&mut self.buffer));
+                text = rest;
             }
         }
 

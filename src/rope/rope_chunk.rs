@@ -255,51 +255,52 @@ impl SubAssign<&Self> for ChunkSummary {
 }
 
 pub(super) struct RopeChunkIter<'a> {
-    str: &'a str,
+    text: &'a str,
+    yielded: usize,
 }
 
 impl<'a> RopeChunkIter<'a> {
     #[inline]
-    pub(super) fn new(str: &'a str) -> Self {
-        Self { str }
+    pub(super) fn new(text: &'a str) -> Self {
+        Self { text, yielded: 0 }
     }
 }
 
 impl<'a> Iterator for RopeChunkIter<'a> {
-    type Item = RopeChunk;
+    type Item = &'a str;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        // TODO: refactor this
-        match self.str.len() {
-            0 => None,
+        let remaining = self.text.len() - self.yielded;
 
-            n if n >= ROPE_CHUNK_MAX_BYTES => {
-                let mut bytes = ROPE_CHUNK_MAX_BYTES;
+        let chunk = if remaining == 0 {
+            return None;
+        } else if remaining > RopeChunk::max_bytes() {
+            let mut chunk_len = RopeChunk::max_bytes();
 
-                while !self.str.is_char_boundary(bytes) {
-                    bytes += 1;
-                }
+            let remaining = remaining - chunk_len;
 
-                // Increase by one more byte if we'd be splitting a `\r\n`
-                // pair.
-                if (self.str.as_bytes()[bytes - 1] == b'\r')
-                    && (self.str.len() > bytes + 1)
-                    && (self.str.as_bytes()[bytes] == b'\n')
-                {
-                    bytes += 1;
-                }
+            if remaining < RopeChunk::min_bytes() {
+                chunk_len -= RopeChunk::min_bytes() - remaining;
+            }
 
-                let text = self.str[..bytes].to_owned();
-                self.str = &self.str[bytes..];
-                Some(RopeChunk { text })
-            },
+            chunk_len = adjust_split_point::<true>(
+                &self.text[self.yielded..],
+                chunk_len,
+            );
 
-            _ => {
-                let text = self.str.to_owned();
-                self.str = "";
-                Some(RopeChunk { text })
-            },
-        }
+            &self.text[self.yielded..(self.yielded + chunk_len)]
+        } else {
+            debug_assert!(
+                self.yielded == 0
+                    || remaining >= RopeChunk::min_bytes().saturating_sub(3)
+            );
+
+            &self.text[self.text.len() - remaining..]
+        };
+
+        self.yielded += chunk.len();
+
+        Some(chunk)
     }
 }
