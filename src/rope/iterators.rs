@@ -1,5 +1,6 @@
 use super::metrics::{LineMetric, RawLineMetric};
-use super::{Rope, RopeChunk, RopeSlice};
+use super::rope_chunk::RopeChunk;
+use super::{Rope, RopeSlice};
 use crate::tree::{Leaves, Units};
 
 /// An iterator over the chunks of `Rope`s and `RopeSlice`s.

@@ -1,5 +1,6 @@
+use super::rope_chunk::RopeChunk;
 use super::utils::*;
-use super::{Rope, RopeChunk};
+use super::Rope;
 use crate::tree::TreeBuilder;
 
 /// TODO: docs

@@ -1,7 +1,7 @@
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
+use super::rope_chunk::{ChunkSlice, ChunkSummary, RopeChunk};
 use super::utils::*;
-use super::{ChunkSlice, ChunkSummary, RopeChunk};
 use crate::tree::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]

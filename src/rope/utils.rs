@@ -2,7 +2,7 @@ use std::fmt::Write;
 use std::ops::{Bound, RangeBounds};
 
 use super::iterators::Chunks;
-use super::{ChunkSlice, ChunkSummary, RopeChunk};
+use super::rope_chunk::{ChunkSlice, ChunkSummary, RopeChunk};
 use crate::tree::Summarize;
 
 #[allow(dead_code)]

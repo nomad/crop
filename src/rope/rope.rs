@@ -2,8 +2,8 @@ use std::ops::RangeBounds;
 
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
+use super::rope_chunk::{RopeChunk, RopeChunkIter};
 use super::utils::*;
-use super::{RopeChunk, RopeChunkIter};
 use crate::tree::Tree;
 use crate::RopeSlice;
 
@@ -13,7 +13,7 @@ const ROPE_FANOUT: usize = 8;
 #[cfg(any(test, feature = "integration_tests"))]
 const ROPE_FANOUT: usize = 4;
 
-/// A utf-8 text rope.
+/// A UTF-8 text rope.
 ///
 /// TODO: docs
 #[derive(Clone, Default)]
@@ -167,10 +167,10 @@ impl Rope {
             );
         }
 
-        let (chunk, ByteMetric(chunk_idx)) =
+        let (chunk, ByteMetric(chunk_byte_offset)) =
             self.tree.leaf_at_measure(ByteMetric(byte_offset));
 
-        chunk.is_char_boundary(byte_offset - chunk_idx)
+        chunk.is_char_boundary(byte_offset - chunk_byte_offset)
     }
 
     /// Returns `true` if the `Rope`'s byte length is zero.
@@ -355,15 +355,9 @@ impl std::fmt::Display for Rope {
 impl From<&str> for Rope {
     #[inline]
     fn from(s: &str) -> Self {
-        if s.is_empty() {
-            // Building a rope from empty string has to be special-cased
-            // because `RopeChunkIter` would yield 0 items.
-            Rope::new()
-        } else {
-            Rope {
-                tree: Tree::from_leaves(RopeChunkIter::new(s)),
-                last_byte_is_newline: last_byte_is_newline(s),
-            }
+        Rope {
+            tree: Tree::from_leaves(RopeChunkIter::new(s)),
+            last_byte_is_newline: last_byte_is_newline(s),
         }
     }
 }
@@ -407,37 +401,25 @@ impl std::str::FromStr for Rope {
 impl std::cmp::PartialEq<Rope> for Rope {
     #[inline]
     fn eq(&self, rhs: &Rope) -> bool {
-        if !(self.byte_len() == rhs.byte_len()
-            && self.line_len() == rhs.line_len())
-        {
-            false
-        } else {
-            chunks_eq_chunks(self.chunks(), rhs.chunks())
-        }
+        (self.byte_len() == rhs.byte_len())
+            && (self.line_len() == rhs.line_len())
+            && chunks_eq_chunks(self.chunks(), rhs.chunks())
     }
 }
 
 impl std::cmp::PartialEq<RopeSlice<'_>> for Rope {
     #[inline]
     fn eq(&self, rhs: &RopeSlice<'_>) -> bool {
-        if !(self.byte_len() == rhs.byte_len()
-            && self.line_len() == rhs.line_len())
-        {
-            false
-        } else {
-            chunks_eq_chunks(self.chunks(), rhs.chunks())
-        }
+        (self.byte_len() == rhs.byte_len())
+            && (self.line_len() == rhs.line_len())
+            && chunks_eq_chunks(self.chunks(), rhs.chunks())
     }
 }
 
 impl std::cmp::PartialEq<str> for Rope {
     #[inline]
     fn eq(&self, rhs: &str) -> bool {
-        if self.byte_len() != rhs.len() {
-            false
-        } else {
-            chunks_eq_str(self.chunks(), rhs)
-        }
+        (self.byte_len() == rhs.len()) && chunks_eq_str(self.chunks(), rhs)
     }
 }
 

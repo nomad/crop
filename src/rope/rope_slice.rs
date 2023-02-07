@@ -2,10 +2,13 @@ use std::ops::RangeBounds;
 
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
+use super::rope_chunk::RopeChunk;
 use super::utils::*;
-use super::{Rope, RopeChunk};
+use super::Rope;
 use crate::tree::TreeSlice;
 
+/// An immutable slice of a [`Rope`](crate::Rope).
+///
 /// TODO: docs
 #[derive(Copy, Clone)]
 pub struct RopeSlice<'a> {
@@ -280,13 +283,9 @@ impl std::fmt::Display for RopeSlice<'_> {
 impl<'a, 'b> std::cmp::PartialEq<RopeSlice<'b>> for RopeSlice<'a> {
     #[inline]
     fn eq(&self, rhs: &RopeSlice<'b>) -> bool {
-        if !(self.byte_len() == rhs.byte_len()
-            && self.line_len() == rhs.line_len())
-        {
-            false
-        } else {
-            chunks_eq_chunks(self.chunks(), rhs.chunks())
-        }
+        (self.byte_len() == rhs.byte_len())
+            && (self.line_len() == rhs.line_len())
+            && chunks_eq_chunks(self.chunks(), rhs.chunks())
     }
 }
 
@@ -300,11 +299,7 @@ impl std::cmp::PartialEq<Rope> for RopeSlice<'_> {
 impl std::cmp::PartialEq<str> for RopeSlice<'_> {
     #[inline]
     fn eq(&self, rhs: &str) -> bool {
-        if self.byte_len() != rhs.len() {
-            false
-        } else {
-            chunks_eq_str(self.chunks(), rhs)
-        }
+        (self.byte_len() == rhs.len()) && chunks_eq_str(self.chunks(), rhs)
     }
 }
 

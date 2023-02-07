@@ -118,6 +118,10 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         self.root.convert_measure(up_to)
     }
 
+    /// Creates a new `Tree` from a collection of leaves.
+    ///
+    /// NOTE: if the iterator yields 0 items the `Tree` will contain a single
+    /// leaf with `L`'s default value.
     #[inline]
     pub fn from_leaves<I>(leaves: I) -> Self
     where
