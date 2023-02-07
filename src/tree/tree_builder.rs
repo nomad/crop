@@ -4,7 +4,7 @@ use smallvec::SmallVec;
 
 use super::{Inode, Leaf, Lnode, Node, Tree};
 
-/// An incremental `Tree` builder.
+/// An incremental [`Tree`] builder.
 #[derive(Clone)]
 pub struct TreeBuilder<const FANOUT: usize, L: Leaf> {
     /// A stack of internal nodes.

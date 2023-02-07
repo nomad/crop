@@ -125,25 +125,17 @@ impl Iterator for Bytes<'_> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if self.forward_byte_idx == self.forward_chunk.len() {
-            // We've exhausted the current chunk.
             if let Some(chunk) = self.chunks.next() {
                 self.forward_chunk = chunk.as_bytes();
                 self.forward_byte_idx = 0;
+            } else if self.backward_byte_idx == 0 {
+                return None;
             } else {
-                // There are no more chunks but there may still be some
-                // un-yielded bytes on the backward chunk.
-                if self.backward_byte_idx == 0 {
-                    return None;
-                } else {
-                    // We return the first byte of the backward chunk, remove
-                    // that byte from the chunk and update the backward byte
-                    // index.
-                    let byte = self.backward_chunk[0];
-                    self.backward_chunk = &self.backward_chunk[1..];
-                    self.backward_byte_idx -= 1;
-                    self.bytes_yielded += 1;
-                    return Some(byte);
-                }
+                let byte = self.backward_chunk[0];
+                self.backward_chunk = &self.backward_chunk[1..];
+                self.backward_byte_idx -= 1;
+                self.bytes_yielded += 1;
+                return Some(byte);
             }
         }
 
@@ -164,24 +156,17 @@ impl DoubleEndedIterator for Bytes<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.backward_byte_idx == 0 {
-            // We've exhausted the current chunk.
             if let Some(chunk) = self.chunks.next_back() {
                 self.backward_chunk = chunk.as_bytes();
                 self.backward_byte_idx = chunk.len();
+            } else if self.forward_byte_idx == self.forward_chunk.len() {
+                return None;
             } else {
-                // There are no more chunks but there may still be some
-                // un-yielded bytes on the forward chunk.
-                if self.forward_byte_idx == self.forward_chunk.len() {
-                    return None;
-                } else {
-                    // We return the last byte of the forward chunk and remove
-                    // that byte from the chunk.
-                    let byte_idx = self.forward_chunk.len() - 1;
-                    let byte = self.forward_chunk[byte_idx];
-                    self.forward_chunk = &self.forward_chunk[..byte_idx];
-                    self.bytes_yielded += 1;
-                    return Some(byte);
-                }
+                let byte_idx = self.forward_chunk.len() - 1;
+                let byte = self.forward_chunk[byte_idx];
+                self.forward_chunk = &self.forward_chunk[..byte_idx];
+                self.bytes_yielded += 1;
+                return Some(byte);
             }
         }
 
@@ -255,24 +240,21 @@ impl<'a> Iterator for Chars<'a> {
             if let Some(chunk) = self.chunks.next() {
                 self.forward_chunk = chunk;
                 self.forward_byte_idx = 0;
+            } else if self.backward_byte_idx == 0 {
+                return None;
             } else {
-                // NOTE: see `Bytes::next` for some relevant comments.
-                if self.backward_byte_idx == 0 {
-                    return None;
-                } else {
-                    let ch = self.backward_chunk.chars().next();
+                let ch = self.backward_chunk.chars().next();
 
-                    debug_assert!(ch.is_some());
+                debug_assert!(ch.is_some());
 
-                    // SAFETY: `backward_byte_idx` is greater than zero so there
-                    // are still chars to yield in that chunk.
-                    let ch = unsafe { ch.unwrap_unchecked() };
+                // SAFETY: `backward_byte_idx` is greater than zero so there
+                // are still chars to yield in that chunk.
+                let ch = unsafe { ch.unwrap_unchecked() };
 
-                    let len = ch.len_utf8();
-                    self.backward_chunk = &self.backward_chunk[len..];
-                    self.backward_byte_idx -= len;
-                    return Some(ch);
-                }
+                let len = ch.len_utf8();
+                self.backward_chunk = &self.backward_chunk[len..];
+                self.backward_byte_idx -= len;
+                return Some(ch);
             }
         }
 
@@ -297,25 +279,22 @@ impl DoubleEndedIterator for Chars<'_> {
             if let Some(chunk) = self.chunks.next_back() {
                 self.backward_chunk = chunk;
                 self.backward_byte_idx = self.backward_chunk.len();
+            } else if self.forward_byte_idx == self.forward_chunk.len() {
+                return None;
             } else {
-                // NOTE: see `Bytes::next_back` for some relevant comments.
-                if self.forward_byte_idx == self.forward_chunk.len() {
-                    return None;
-                } else {
-                    let ch = self.forward_chunk.chars().next_back();
+                let ch = self.forward_chunk.chars().next_back();
 
-                    debug_assert!(ch.is_some());
+                debug_assert!(ch.is_some());
 
-                    // SAFETY: `forward_byte_idx` is less than the byte length
-                    // of `chunk_front`, so there are still chars to yield in
-                    // that chunk.
-                    let ch = unsafe { ch.unwrap_unchecked() };
+                // SAFETY: `forward_byte_idx` is less than the byte length
+                // of `chunk_front`, so there are still chars to yield in
+                // that chunk.
+                let ch = unsafe { ch.unwrap_unchecked() };
 
-                    self.forward_chunk = &self.forward_chunk
-                        [..self.forward_chunk.len() - ch.len_utf8()];
+                self.forward_chunk = &self.forward_chunk
+                    [..self.forward_chunk.len() - ch.len_utf8()];
 
-                    return Some(ch);
-                }
+                return Some(ch);
             }
         }
 
@@ -583,8 +562,6 @@ mod graphemes {
                 }
             }
 
-            let byte_start = self.forward_offset;
-
             let mut grapheme = Cow::Borrowed("");
 
             loop {
@@ -597,7 +574,7 @@ mod graphemes {
                 {
                     Ok(Some(byte_end)) => {
                         if byte_end == self.forward_offset {
-                            debug_assert!(byte_end > byte_start);
+                            debug_assert!(!grapheme.is_empty());
                             return Some(grapheme);
                         }
 
@@ -718,8 +695,6 @@ mod graphemes {
                     }
             }
 
-            let byte_end = self.backward_cursor.cur_cursor();
-
             let mut grapheme = Cow::Borrowed("");
 
             loop {
@@ -733,7 +708,7 @@ mod graphemes {
                 ) {
                     Ok(Some(byte_start)) => {
                         if byte_start == self.backward_offset {
-                            debug_assert!(byte_end > byte_start);
+                            debug_assert!(!grapheme.is_empty());
                             return Some(grapheme);
                         }
 

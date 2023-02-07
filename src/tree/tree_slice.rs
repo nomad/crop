@@ -3,10 +3,12 @@ use std::sync::Arc;
 
 use super::{Leaf, Leaves, Metric, Node, SlicingMetric, Summarize, Units};
 
-/// An immutable view into a `Tree`.
+/// An immutable slice of a [`Tree`].
 #[derive(Debug)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
-    /// The deepest node that contains all the leaves between..
+    /// The deepest node that contains all the leaves between (and including)
+    /// the ones containing [`first_slice`](Self::first_slice) and
+    /// [`last_slice`](Self::last_slice).
     pub(super) root: &'a Arc<Node<FANOUT, L>>,
 
     /// The summary between the left-most leaf of the root and the start of the
@@ -46,7 +48,7 @@ impl<const FANOUT: usize, L: Leaf> Clone for TreeSlice<'_, FANOUT, L> {
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> Copy for TreeSlice<'a, FANOUT, L> where
+impl<const FANOUT: usize, L: Leaf> Copy for TreeSlice<'_, FANOUT, L> where
     L::Summary: Copy
 {
 }
@@ -204,12 +206,12 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     #[inline]
-    pub fn start_slice(&'a self) -> &'a L::Slice {
+    pub fn start_slice(&self) -> &L::Slice {
         self.first_slice
     }
 
     #[inline]
-    pub fn start_summary(&'a self) -> &'a L::Summary {
+    pub fn start_summary(&self) -> &L::Summary {
         &self.first_summary
     }
 
@@ -248,7 +250,7 @@ where
 
     /// NOTE: doesn't do any bounds checks on `range`.
     #[inline]
-    pub fn slice<M>(self, mut range: Range<M>) -> TreeSlice<'a, FANOUT, L>
+    pub fn slice<M>(self, mut range: Range<M>) -> Self
     where
         M: SlicingMetric<L>,
         L::BaseMetric: SlicingMetric<L>,
@@ -288,7 +290,7 @@ where
         root: &'a Arc<Node<FANOUT, L>>,
         start: S,
         end: E,
-    ) -> TreeSlice<'a, FANOUT, L>
+    ) -> Self
     where
         S: SlicingMetric<L>,
         E: SlicingMetric<L>,

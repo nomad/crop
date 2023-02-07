@@ -5,64 +5,6 @@ use super::iterators::Chunks;
 use super::rope_chunk::{ChunkSlice, ChunkSummary, RopeChunk};
 use crate::tree::Summarize;
 
-#[allow(dead_code)]
-pub(super) fn assert_valid_chunk(
-    chunk: &str,
-    next: Option<&str>,
-    is_first: bool,
-) {
-    // TODO: explain the reason for the `-3`.
-    let min_bytes = if RopeChunk::min_bytes() >= 4 {
-        RopeChunk::min_bytes() - 3
-    } else {
-        1
-    };
-
-    // Only the first chunk of a single-chunk Rope is allowed to contain less
-    // than the min number of bytes.
-    if chunk.len() < min_bytes && !(is_first && next.is_none()) {
-        panic!("AA: {chunk}");
-    }
-
-    // Chunks are only allowed to exceed the max number of bytes if the max
-    // byte offset lies at a char boundary or between a CRLF pair.
-    if chunk.len() > RopeChunk::max_bytes() {
-        let excess = RopeChunk::max_bytes() - chunk.len();
-
-        if !chunk.is_char_boundary(RopeChunk::max_bytes()) {
-            let mut i = 1;
-            while !chunk.is_char_boundary(RopeChunk::max_bytes() + i) {
-                i += 1;
-            }
-            if i != excess {
-                panic!("");
-            }
-        } else if !(excess == 1 && &chunk[chunk.len() - 2..] == "\r\n") {
-            panic!("");
-        }
-    }
-
-    // CRLF pairs should never be split across chunks.
-    if ends_in_cr(chunk) {
-        if let Some(next) = next {
-            if starts_with_lf(next) {
-                panic!();
-            }
-        }
-    }
-}
-
-/// Returns whether `byte_offset` would be splitting a CRLF pair inside `s`.
-#[inline]
-pub(super) fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
-    byte_offset > 0
-        && byte_offset < s.len()
-        && ({
-            let s = s.as_bytes();
-            s[byte_offset - 1] == b'\r' && s[byte_offset] == b'\n'
-        })
-}
-
 #[inline]
 pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
     s: &str,
@@ -172,10 +114,6 @@ pub(super) fn balance_right_with_left(
 ///
 /// NOTE: this function assumes that `s` ends with a newline (`\n`), if `s`
 /// doesn't it can return a wrong result.
-///
-/// # Panics
-///
-/// Panics if `s` is empty.
 #[inline]
 pub(super) fn bytes_line_break(s: &str) -> usize {
     debug_assert!(!s.is_empty() && *s.as_bytes().last().unwrap() == b'\n');
@@ -283,7 +221,7 @@ pub(super) fn debug_chunks(
 /// # Panics
 ///
 /// This function will panic if the string slice is empty.
-fn ends_in_cr(s: &str) -> bool {
+pub(super) fn ends_in_cr(s: &str) -> bool {
     s.as_bytes()[s.len() - 1] == b'\r'
 }
 
@@ -340,6 +278,17 @@ pub(super) fn is_grapheme_boundary(
     }
 }
 
+/// Returns whether `byte_offset` would be splitting a CRLF pair inside `s`.
+#[inline]
+pub(super) fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
+    byte_offset > 0
+        && byte_offset < s.len()
+        && ({
+            let s = s.as_bytes();
+            s[byte_offset - 1] == b'\r' && s[byte_offset] == b'\n'
+        })
+}
+
 /// Returns `true` if the last byte of the string slice is a line feed (0x0A).
 #[inline]
 pub(super) fn last_byte_is_newline(s: &str) -> bool {
@@ -372,8 +321,8 @@ where
 
 /// Returns a tuple `(to_add, rest)`, where `to_add` is the largest left
 /// sub-slice of `text` that can be added to `current` that still keeps the
-/// latter under `RopeChunk::max_bytes()`. It follows that `rest` is the right
-/// sub-slice of `text` not included in `to_add`.
+/// latter under the byte limit of [`RopeChunk`]s. It follows that `rest` is
+/// the right sub-slice of `text` not included in `to_add`.
 #[inline]
 pub(super) fn rope_chunk_append<'a>(
     current: &str,
@@ -395,23 +344,12 @@ pub(super) fn rope_chunk_append<'a>(
         return (text, "");
     }
 
-    while !text.is_char_boundary(bytes_to_add) {
-        bytes_to_add += 1;
-    }
-
-    // Add one more byte if we're splitting a CRLF pair.
-    if is_splitting_crlf_pair(text, bytes_to_add) {
-        bytes_to_add += 1;
-    }
+    bytes_to_add = adjust_split_point::<true>(text, bytes_to_add);
 
     (&text[..bytes_to_add], &text[bytes_to_add..])
 }
 
 /// Returns `true` if the first byte in the string slice is a line feed.
-///
-/// # Panics
-///
-/// This function will panic if the string slice is empty.
-fn starts_with_lf(s: &str) -> bool {
+pub(super) fn starts_with_lf(s: &str) -> bool {
     !s.is_empty() && s.as_bytes()[0] == b'\n'
 }

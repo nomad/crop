@@ -29,15 +29,36 @@ impl Debug for RopeChunk {
 impl Default for RopeChunk {
     #[inline]
     fn default() -> Self {
-        Self { text: String::with_capacity(Self::max_bytes() + 3) }
+        Self { text: String::with_capacity(Self::chunk_max()) }
     }
 }
 
 impl RopeChunk {
+    /// The number of bytes `RopeChunk`s must always stay under.
+    pub(super) const fn chunk_max() -> usize {
+        // We can exceed the max by 3 bytes at most, which happens when the
+        // chunk boundary would have landed after the first byte of a 4 byte
+        // codepoint.
+        Self::max_bytes() + 3
+    }
+
+    /// The number of bytes `RopeChunk`s must always stay over.
+    pub(super) const fn chunk_min() -> usize {
+        if Self::min_bytes() > 3 {
+            // The wiggle room is 3 bytes for the reason already explained in
+            // the comment above.
+            Self::min_bytes() - 3
+        } else {
+            1
+        }
+    }
+
+    /// The number of bytes `RopeChunk`s should aim to stay under.
     pub(super) const fn max_bytes() -> usize {
         ROPE_CHUNK_MAX_BYTES
     }
 
+    /// The number of bytes `RopeChunk`s should aim to stay over.
     pub(super) const fn min_bytes() -> usize {
         ROPE_CHUNK_MIN_BYTES
     }
@@ -271,14 +292,14 @@ impl<'a> Iterator for RopeChunkIter<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let remaining = self.text.len() - self.yielded;
+        let mut remaining = self.text.len() - self.yielded;
 
         let chunk = if remaining == 0 {
             return None;
         } else if remaining > RopeChunk::max_bytes() {
             let mut chunk_len = RopeChunk::max_bytes();
 
-            let remaining = remaining - chunk_len;
+            remaining -= chunk_len;
 
             if remaining < RopeChunk::min_bytes() {
                 chunk_len -= RopeChunk::min_bytes() - remaining;
@@ -292,8 +313,7 @@ impl<'a> Iterator for RopeChunkIter<'a> {
             &self.text[self.yielded..(self.yielded + chunk_len)]
         } else {
             debug_assert!(
-                self.yielded == 0
-                    || remaining >= RopeChunk::min_bytes().saturating_sub(3)
+                self.yielded == 0 || remaining >= RopeChunk::chunk_min()
             );
 
             &self.text[self.text.len() - remaining..]

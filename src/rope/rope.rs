@@ -23,19 +23,29 @@ pub struct Rope {
 }
 
 impl Rope {
-    /// TODO: docs.
     #[doc(hidden)]
     pub fn assert_invariants(&self) {
         self.tree.assert_invariants();
 
         let mut chunks = self.chunks().peekable();
 
-        if let Some(first) = chunks.next() {
-            assert_valid_chunk(first, chunks.peek().copied(), true);
+        if chunks.len() == 0 {
+            return;
+        } else if chunks.len() == 1 {
+            let chunk = chunks.next().unwrap();
+            assert!(chunk.len() <= RopeChunk::chunk_max());
+            return;
         }
 
         while let Some(chunk) = chunks.next() {
-            assert_valid_chunk(chunk, chunks.peek().copied(), false);
+            assert!(chunk.len() >= RopeChunk::chunk_min());
+            assert!(chunk.len() <= RopeChunk::chunk_max());
+
+            if ends_in_cr(chunk) {
+                if let Some(next) = chunks.peek().copied() {
+                    assert!(!starts_with_lf(next));
+                }
+            }
         }
     }
 

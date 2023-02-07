@@ -36,7 +36,7 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
 
 impl<const N: usize, L: Leaf> Node<N, L> {
     /// Checks the invariants of the node, and if it's internal it calls itself
-    /// recursively on all of the inode's children.
+    /// recursively on all of its children.
     pub(super) fn assert_invariants(&self) {
         match self {
             Node::Internal(inode) => {
