@@ -491,24 +491,32 @@ mod graphemes {
     pub struct Graphemes<'a> {
         chunks: Chunks<'a>,
 
+        /// The slice we're iterating over, used to provide precontext to the
+        /// `GraphemeCursor`s.
         slice: RopeSlice<'a>,
 
-        /// TODO: docs
+        /// The cursor used when calling [`Graphemes::next()`].
         forward_cursor: GraphemeCursor,
 
-        /// TODO: docs
+        /// The chunk used when calling [`Graphemes::next()`].
         forward_chunk: &'a str,
 
-        /// TODO: docs
+        /// The byte offset of the start of
+        /// [`forward_chunk`](Self::forward_chunk) from the beginning of the
+        /// iterating range, which is also the sum of the bytes of all the
+        /// graphemes that have been yielded by [`Self::next()`].
         forward_offset: usize,
 
-        /// TODO: docs
+        /// The cursor used when calling [`Graphemes::next_back()`].
         backward_cursor: GraphemeCursor,
 
-        /// TODO: docs
+        /// The chunk used when calling [`Graphemes::next_back()`].
         backward_chunk: &'a str,
 
-        /// TODO: docs
+        /// The byte offset of the end of
+        /// [`backward_chunk`](Self::backward_chunk) from the end of the
+        /// iterating range, which is also the sum of the bytes of all the
+        /// graphemes that have been yielded by [`Self::next_back()`].
         backward_offset: usize,
     }
 
@@ -588,15 +596,9 @@ mod graphemes {
                     .next_boundary(self.forward_chunk, self.forward_offset)
                 {
                     Ok(Some(byte_end)) => {
-                        // This is stupid.
                         if byte_end == self.forward_offset {
                             debug_assert!(byte_end > byte_start);
-
-                            return Some(Cow::Owned(
-                                self.slice
-                                    .byte_slice(byte_start..byte_end)
-                                    .to_string(),
-                            ));
+                            return Some(grapheme);
                         }
 
                         debug_assert!(byte_end > self.forward_offset);
@@ -666,7 +668,8 @@ mod graphemes {
                             }
                     },
 
-                    // This is stupid.
+                    // Why does it ask for precontext if we've been feeding it
+                    // stuff from the beginning of the range?
                     Err(GraphemeIncomplete::PreContext(byte_idx)) => {
                         let slice = self.slice.byte_slice(..byte_idx);
                         let chunk = slice.chunks().next_back().unwrap();
@@ -683,8 +686,7 @@ mod graphemes {
 
         #[inline]
         fn size_hint(&self) -> (usize, Option<usize>) {
-            let hi = self.backward_cursor.cur_cursor()
-                - self.forward_cursor.cur_cursor();
+            let hi = self.backward_offset - self.forward_offset;
             let lo = (hi != 0) as usize;
             (lo, Some(hi))
         }
@@ -721,7 +723,7 @@ mod graphemes {
             let mut grapheme = Cow::Borrowed("");
 
             loop {
-                // NOTE: the chunk passed to `GraphemeCursor::next_boundary()`
+                // NOTE: the chunk passed to `GraphemeCursor::prev_boundary()`
                 // can't be empty or it'll panic.
 
                 match self.backward_cursor.prev_boundary(
@@ -732,12 +734,7 @@ mod graphemes {
                     Ok(Some(byte_start)) => {
                         if byte_start == self.backward_offset {
                             debug_assert!(byte_end > byte_start);
-
-                            return Some(Cow::Owned(
-                                self.slice
-                                    .byte_slice(byte_start..byte_end)
-                                    .to_string(),
-                            ));
+                            return Some(grapheme);
                         }
 
                         debug_assert!(byte_start < self.backward_offset);
@@ -829,6 +826,9 @@ mod graphemes {
                             }
                     },
 
+                    // Why does it ask for precontext if we're iterating
+                    // backward? Shouldn't it always just ask for the previous
+                    // chunk?
                     Err(GraphemeIncomplete::PreContext(byte_idx)) => {
                         let slice = self.slice.byte_slice(..byte_idx);
                         let chunk = slice.chunks().next_back().unwrap();
