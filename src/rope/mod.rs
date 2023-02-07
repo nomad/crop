@@ -8,5 +8,4 @@ mod utils;
 
 pub use rope::Rope;
 pub use rope_builder::RopeBuilder;
-// use rope_chunk::{ChunkSlice, ChunkSummary, RopeChunk, RopeChunkIter};
 pub use rope_slice::RopeSlice;

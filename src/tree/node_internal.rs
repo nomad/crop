@@ -155,7 +155,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             },
 
             _ => {
-                // Safety: the first and second children are siblings so they
+                // SAFETY: the first and second children are siblings so they
                 // must be of the same kind.
                 unsafe { std::hint::unreachable_unchecked() }
             },
@@ -253,7 +253,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             },
 
             _ => {
-                // Safety: the penultimate and last children are siblings so
+                // SAFETY: the penultimate and last children are siblings so
                 // they must be of the same kind.
                 unsafe { std::hint::unreachable_unchecked() }
             },

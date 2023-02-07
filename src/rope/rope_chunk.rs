@@ -19,6 +19,13 @@ pub(super) struct RopeChunk {
     pub(super) text: String,
 }
 
+impl Debug for RopeChunk {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.text)
+    }
+}
+
 impl Default for RopeChunk {
     #[inline]
     fn default() -> Self {
@@ -33,13 +40,6 @@ impl RopeChunk {
 
     pub(super) const fn min_bytes() -> usize {
         ROPE_CHUNK_MIN_BYTES
-    }
-}
-
-impl Debug for RopeChunk {
-    #[inline]
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.text)
     }
 }
 
@@ -157,7 +157,7 @@ impl Default for &ChunkSlice {
 impl From<&str> for &ChunkSlice {
     #[inline]
     fn from(text: &str) -> Self {
-        // Safety: a `ChunkSlice` has the same layout of a `str`.
+        // SAFETY: a `ChunkSlice` has the same layout as a `str`.
         unsafe { &*(text as *const str as *const ChunkSlice) }
     }
 }
@@ -202,11 +202,9 @@ impl Add<Self> for ChunkSummary {
     type Output = Self;
 
     #[inline]
-    fn add(self, rhs: Self) -> Self {
-        ChunkSummary {
-            bytes: self.bytes + rhs.bytes,
-            line_breaks: self.line_breaks + rhs.line_breaks,
-        }
+    fn add(mut self, rhs: Self) -> Self {
+        self += &rhs;
+        self
     }
 }
 
@@ -214,11 +212,9 @@ impl Sub<Self> for ChunkSummary {
     type Output = Self;
 
     #[inline]
-    fn sub(self, rhs: Self) -> Self {
-        ChunkSummary {
-            bytes: self.bytes - rhs.bytes,
-            line_breaks: self.line_breaks - rhs.line_breaks,
-        }
+    fn sub(mut self, rhs: Self) -> Self {
+        self -= &rhs;
+        self
     }
 }
 
@@ -226,11 +222,9 @@ impl Add<&Self> for ChunkSummary {
     type Output = Self;
 
     #[inline]
-    fn add(self, rhs: &Self) -> Self {
-        ChunkSummary {
-            bytes: self.bytes + rhs.bytes,
-            line_breaks: self.line_breaks + rhs.line_breaks,
-        }
+    fn add(mut self, rhs: &Self) -> Self {
+        self += rhs;
+        self
     }
 }
 
@@ -238,25 +232,23 @@ impl Sub<&Self> for ChunkSummary {
     type Output = Self;
 
     #[inline]
-    fn sub(self, rhs: &Self) -> Self {
-        ChunkSummary {
-            bytes: self.bytes - rhs.bytes,
-            line_breaks: self.line_breaks - rhs.line_breaks,
-        }
+    fn sub(mut self, rhs: &Self) -> Self {
+        self -= rhs;
+        self
     }
 }
 
-impl<'a> AddAssign<&'a Self> for ChunkSummary {
+impl AddAssign<&Self> for ChunkSummary {
     #[inline]
-    fn add_assign(&mut self, rhs: &'a Self) {
+    fn add_assign(&mut self, rhs: &Self) {
         self.bytes += rhs.bytes;
         self.line_breaks += rhs.line_breaks;
     }
 }
 
-impl<'a> SubAssign<&'a Self> for ChunkSummary {
+impl SubAssign<&Self> for ChunkSummary {
     #[inline]
-    fn sub_assign(&mut self, rhs: &'a Self) {
+    fn sub_assign(&mut self, rhs: &Self) {
         self.bytes -= rhs.bytes;
         self.line_breaks -= rhs.line_breaks;
     }
@@ -278,6 +270,7 @@ impl<'a> Iterator for RopeChunkIter<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
+        // TODO: refactor this
         match self.str.len() {
             0 => None,
 
@@ -307,17 +300,6 @@ impl<'a> Iterator for RopeChunkIter<'a> {
                 self.str = "";
                 Some(RopeChunk { text })
             },
-        }
-    }
-}
-
-impl<'a> ExactSizeIterator for RopeChunkIter<'a> {
-    #[inline]
-    fn len(&self) -> usize {
-        if self.str.len() > ROPE_CHUNK_MAX_BYTES {
-            2
-        } else {
-            1
         }
     }
 }

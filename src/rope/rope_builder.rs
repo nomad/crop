@@ -3,6 +3,8 @@ use super::utils::*;
 use super::Rope;
 use crate::tree::TreeBuilder;
 
+/// An incremental [`Rope`](crate::Rope) builder.
+///
 /// TODO: docs
 #[derive(Clone, Default)]
 pub struct RopeBuilder {

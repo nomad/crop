@@ -300,7 +300,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         let mut node = loop {
             let &mut (node, ref mut child_idx) = self.path.last_mut().unwrap();
 
-            // Safety: every node in the path is an internal node.
+            // SAFETY: every node in the path is an internal node.
             let inode = unsafe { node.as_internal_unchecked() };
 
             *child_idx += 1;
@@ -392,11 +392,11 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     /// `Leaf` is the leaf node immediately after `self.leaf` then `Summary`
     /// will be empty and `Count` will be zero.
     ///
-    /// Note: it assumes that such a leaf node exists. If that's not the case
+    /// NOTE: it assumes that such a leaf node exists. If that's not the case
     /// this function may panic or return a leaf node outside of the valid
     /// range for this iterator.
     ///
-    /// Note: after calling this function the path will contain the path from
+    /// NOTE: after calling this function the path will contain the path from
     /// the root down to the internal node containing `Leaf`, and
     /// `self.leaf_node` will be set to `Leaf`.
     #[allow(clippy::type_complexity)]
@@ -417,7 +417,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         'outer: loop {
             let (node, child_idx) = self.path.pop().unwrap();
 
-            // Safety: every node in the path is an internal node.
+            // SAFETY: every node in the path is an internal node.
             let inode = unsafe { node.as_internal_unchecked() };
 
             for child in &inode.children()[..child_idx] {
@@ -442,7 +442,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         // Step 2: push nodes on the path until we get to the first leaf node
         // with a positive `M`-measure. Once we get there we're done.
 
-        // Safety: every node in the path is an internal node.
+        // SAFETY: every node in the path is an internal node.
         let mut node =
             unsafe { &inode.as_internal_unchecked().children()[child_idx] };
 
@@ -484,7 +484,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         let mut node = loop {
             let (node, child_idx) = self.path[path_idx];
 
-            // Safety: every node in the path is an internal node.
+            // SAFETY: every node in the path is an internal node.
             let inode = unsafe { node.as_internal_unchecked() };
 
             if child_idx > 0 {
@@ -595,7 +595,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
                 offset -= &remove_offset;
 
-                // Safety: `previous_leaf` is guaranteed to be a leaf node by
+                // SAFETY: `previous_leaf` is guaranteed to be a leaf node by
                 // `Self::previous_leaf()`.
                 let previous_leaf =
                     unsafe { previous_leaf.as_leaf_unchecked() };
@@ -650,7 +650,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             'outer: for (path_idx, &(node, child_idx)) in
                 self.path.iter().enumerate()
             {
-                // Safety: every node in the path is an internal node.
+                // SAFETY: every node in the path is an internal node.
                 let inode = unsafe { node.as_internal_unchecked() };
 
                 let mut measured = L::BaseMetric::zero();
@@ -691,7 +691,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         let mut leaf_count = 0;
 
         for &(node, child_idx) in &self.path[root_idx + 1..] {
-            // Safety: every node in the path is an internal node.
+            // SAFETY: every node in the path is an internal node.
             let inode = unsafe { node.as_internal_unchecked() };
 
             for child in &inode.children()[..child_idx] {
@@ -706,7 +706,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
         let (root, child_idx) = self.path[root_idx];
 
-        // Safety: every node in the path is an internal node.
+        // SAFETY: every node in the path is an internal node.
         let inode = unsafe { root.as_internal_unchecked() };
 
         let mut offset = L::BaseMetric::zero();
@@ -1087,7 +1087,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         let mut node = loop {
             let &mut (node, ref mut child_idx) = self.path.last_mut().unwrap();
 
-            // Safety: every node in the path is an internal node.
+            // SAFETY: every node in the path is an internal node.
             let inode = unsafe { node.as_internal_unchecked() };
 
             if *child_idx > 0 {
@@ -1144,7 +1144,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             'outer: for (path_idx, &(node, child_idx)) in
                 self.path.iter().enumerate()
             {
-                // Safety: every node in the path is an internal node.
+                // SAFETY: every node in the path is an internal node.
                 let inode = unsafe { node.as_internal_unchecked() };
 
                 let mut offset = L::BaseMetric::zero();
@@ -1181,7 +1181,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         let mut leaf_count = 0;
 
         for &(node, child_idx) in &self.path[root_idx + 1..] {
-            // Safety: every node in the path is an internal node.
+            // SAFETY: every node in the path is an internal node.
             let inode = unsafe { node.as_internal_unchecked() };
 
             for child in &inode.children()[..child_idx] {
@@ -1196,7 +1196,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
         let (root, child_idx) = self.path[root_idx];
 
-        // Safety: every node in the path is an internal node.
+        // SAFETY: every node in the path is an internal node.
         let inode = unsafe { root.as_internal_unchecked() };
 
         for child in &inode.children()[child_idx + 1..] {
@@ -1414,11 +1414,11 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     /// `Leaf` is the leaf node immediately before `self.leaf` then `Summary`
     /// will be empty and `Count` will be zero.
     ///
-    /// Note: it assumes that such a leaf node exists. If that's not the case
+    /// NOTE: it assumes that such a leaf node exists. If that's not the case
     /// this function may panic or return a leaf node outside of the valid
     /// range for this iterator.
     ///
-    /// Note: after calling this function the path will contain the path from
+    /// NOTE: after calling this function the path will contain the path from
     /// the root down to the internal node containing `Leaf`, and
     /// `self.leaf_node` will be set to `Leaf`.
     #[allow(clippy::type_complexity)]
@@ -1439,7 +1439,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         'outer: loop {
             let (node, child_idx) = self.path.pop().unwrap();
 
-            // Safety: every node in the path is an internal node.
+            // SAFETY: every node in the path is an internal node.
             let inode = unsafe { node.as_internal_unchecked() };
 
             for child in &inode.children()[child_idx + 1..] {
@@ -1464,7 +1464,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         // Step 2: push nodes on the path until we get to the first leaf node
         // with a positive `M`-measure. Once we get there we're done.
 
-        // Safety: every node in the path is an internal node.
+        // SAFETY: every node in the path is an internal node.
         let mut node =
             unsafe { &inode.as_internal_unchecked().children()[child_idx] };
 
@@ -1508,7 +1508,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         let mut node = loop {
             let (node, mut child_idx) = self.path[path_idx];
 
-            // Safety: every node in the path is an internal node.
+            // SAFETY: every node in the path is an internal node.
             let inode = unsafe { node.as_internal_unchecked() };
 
             child_idx += 1;
@@ -1538,7 +1538,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     /// root of the returned `TreeSlice` is a node in the path so it's
     /// guaranteed to be an internal node.
     ///
-    /// Note: this uses [`previous_leaf_with_measure`][1] internally so it
+    /// NOTE: this uses [`previous_leaf_with_measure`][1] internally so it
     /// should only be called when `self.units_yielded < self.units_total`.
     ///
     /// [1]: UnitsBackward::previous_leaf_with_measure()
@@ -1676,7 +1676,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
                 offset -= &remove_offset;
 
-                // Safety: `next_leaf` is guaranteed to be a leaf node by
+                // SAFETY: `next_leaf` is guaranteed to be a leaf node by
                 // `Self::next_leaf()`.
                 let next_leaf = unsafe { next_leaf.as_leaf_unchecked() };
 

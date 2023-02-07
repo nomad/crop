@@ -256,7 +256,7 @@ impl<'a> Iterator for Chars<'a> {
                 self.forward_chunk = chunk;
                 self.forward_byte_idx = 0;
             } else {
-                // Note: see `Bytes::next` for some relevant comments.
+                // NOTE: see `Bytes::next` for some relevant comments.
                 if self.backward_byte_idx == 0 {
                     return None;
                 } else {
@@ -264,7 +264,7 @@ impl<'a> Iterator for Chars<'a> {
 
                     debug_assert!(ch.is_some());
 
-                    // Safety: `backward_byte_idx` is greater than zero so there
+                    // SAFETY: `backward_byte_idx` is greater than zero so there
                     // are still chars to yield in that chunk.
                     let ch = unsafe { ch.unwrap_unchecked() };
 
@@ -280,7 +280,7 @@ impl<'a> Iterator for Chars<'a> {
 
         debug_assert!(ch.is_some());
 
-        // Safety: `forward_byte_idx` is less than the byte length of
+        // SAFETY: `forward_byte_idx` is less than the byte length of
         // `chunk_front`, so there are still chars to yield in this chunk.
         let ch = unsafe { ch.unwrap_unchecked() };
 
@@ -298,7 +298,7 @@ impl DoubleEndedIterator for Chars<'_> {
                 self.backward_chunk = chunk;
                 self.backward_byte_idx = self.backward_chunk.len();
             } else {
-                // Note: see `Bytes::next_back` for some relevant comments.
+                // NOTE: see `Bytes::next_back` for some relevant comments.
                 if self.forward_byte_idx == self.forward_chunk.len() {
                     return None;
                 } else {
@@ -306,7 +306,7 @@ impl DoubleEndedIterator for Chars<'_> {
 
                     debug_assert!(ch.is_some());
 
-                    // Safety: `forward_byte_idx` is less than the byte length
+                    // SAFETY: `forward_byte_idx` is less than the byte length
                     // of `chunk_front`, so there are still chars to yield in
                     // that chunk.
                     let ch = unsafe { ch.unwrap_unchecked() };
@@ -324,7 +324,7 @@ impl DoubleEndedIterator for Chars<'_> {
 
         debug_assert!(ch.is_some());
 
-        // Safety: `backward_byte_idx` is greater than zero so there
+        // SAFETY: `backward_byte_idx` is greater than zero so there
         // are still chars to yield in this chunk.
         let ch = unsafe { ch.unwrap_unchecked() };
 
