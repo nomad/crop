@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::fmt::Debug;
-use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 pub trait Summarize: Debug {
     type Summary: Debug
@@ -15,20 +15,28 @@ pub trait Summarize: Debug {
     fn summarize(&self) -> Self::Summary;
 }
 
-pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized + Clone {
+pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized {
     type BaseMetric: Metric<Self>;
 
     type Slice: ?Sized
         + Summarize<Summary = <Self as Summarize>::Summary>
         + ToOwned<Owned = Self>;
 
-    /// TODO: docs
+    /// Returns `true` if the leaf is big enough on its own, `false` if it
+    /// should be balanced with another leaf slice to become valid.
     #[allow(unused_variables)]
     fn is_big_enough(&self, summary: &Self::Summary) -> bool {
         true
     }
 
-    /// TODO: docs
+    /// Balances two leaves.
+    ///
+    /// There are no guarantees on whether both `first` and `second` are big
+    /// enough, all combinations should be checked.
+    ///
+    /// The first `(leaf, summary)` in the returned tuple is the left leaf
+    /// together with its summary, the second tuple is optional and is only
+    /// returned if the two leaves didn't get combined in a single leaf.
     #[allow(unused_variables)]
     #[allow(clippy::type_complexity)]
     fn balance_slices<'a>(
@@ -39,7 +47,6 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized + Clone {
     }
 }
 
-/// TODO: docs
 pub trait Metric<L: Leaf>:
     Debug
     + Copy
@@ -49,50 +56,49 @@ pub trait Metric<L: Leaf>:
     + AddAssign<Self>
     + SubAssign<Self>
 {
-    /// The identity element of this metric wrt to addition. It should always
-    /// be such that `t + t::zero() = t` for all `t` in `T`.
+    /// The identity element of this metric with respect to addition.
+    ///
+    /// Given an implementor `M` of this trait, for all instances `m` of `M`
+    /// it should hold `m == m + M::zero()`.
     fn zero() -> Self;
 
-    /// TODO: docs.
+    /// The smallest value larger than [`zero`](Self::zero()) this metric can
+    /// produce.
     fn one() -> Self;
 
-    /// TODO: docs
+    /// Returns the measure of the summary according to this metric.
     fn measure(summary: &L::Summary) -> Self;
 }
 
-/// TODO: docs
+/// Metrics that can be used to slice `Tree`s and `TreeSlice`s.
 pub trait SlicingMetric<L: Leaf>: Metric<L> {
-    /// TODO: docs
+    /// Splits the given slice at `at`, returning a
+    /// `(left_slice, left_summary, right_slice, right_summary)` tuple.
+    ///
+    /// NOTE: the original slice must always be split without omitting any
+    /// contents. In other words, it should always hold
+    /// `summary == left_summary + right_summary`.
     #[allow(clippy::type_complexity)]
     fn split<'a>(
         slice: &'a L::Slice,
         at: Self,
         summary: &L::Summary,
     ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary);
-
-    /// TODO: docs
-    #[allow(clippy::type_complexity)]
-    fn take<'a>(
-        slice: &'a L::Slice,
-        range: Range<Self>,
-        summary: &L::Summary,
-    ) -> (L::Summary, &'a L::Slice, L::Summary) {
-        let (_, left_summary, right_slice, right_summary) =
-            Self::split(slice, range.start, summary);
-
-        let (slice, summary, _, _) = Self::split(
-            right_slice,
-            range.end - Self::measure(&left_summary),
-            &right_summary,
-        );
-
-        (left_summary, slice, summary)
-    }
 }
 
-/// TODO: docs
+/// Allows iterating forward over the units of this metric.
 pub trait UnitMetric<L: Leaf>: Metric<L> {
-    /// TODO: docs
+    /// Returns a
+    /// `(first_slice, first_summary, advance, rest_slice, rest_summary)`
+    /// tuple, where `advance` is equal to `first_summary` **plus** the summary
+    /// of any content between the end of `first_slice` and the start of
+    /// `rest_slice` that's not included in neither of them.
+    ///
+    /// It follows that if `slice == first_slice ++ rest_slice` (where `++`
+    /// denotes concatenation) the `first_summary` and the `advance` should be
+    /// equal.
+    ///
+    /// In any case it must always hold `summary == advance + rest_summary`.
     #[allow(clippy::type_complexity)]
     fn first_unit<'a>(
         slice: &'a L::Slice,
@@ -100,16 +106,37 @@ pub trait UnitMetric<L: Leaf>: Metric<L> {
     ) -> (&'a L::Slice, L::Summary, L::Summary, &'a L::Slice, L::Summary);
 }
 
-/// TODO: docs
+/// Allows iterating backward over the units of this metric.
 pub trait DoubleEndedUnitMetric<L: Leaf>: UnitMetric<L> {
-    /// TODO: docs
+    /// Returns a
+    /// `(rest_slice, rest_summary, last_slice, last_summary, advance)`
+    /// tuple, where `advance` is equal to `last_summary` **plus** the summary
+    /// of any content between the end of `last_slice` and the end of the
+    /// original `slice`.
+    ///
+    /// It follows that if `slice == rest_slice ++ last_slice` (where `++`
+    /// denotes concatenation) the `last_summary` and the `advance` should be
+    /// equal.
+    ///
+    /// In any case it must always hold `summary == rest_summary + advance`.
     #[allow(clippy::type_complexity)]
     fn last_unit<'a>(
         slice: &'a L::Slice,
         summary: &L::Summary,
     ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary, L::Summary);
 
-    /// TODO: docs
+    /// It's possible for a leaf slice to contain some content that extends
+    /// past the end of its last `M`-unit. This is referred to as "the
+    /// remainder of the leaf divided by `M`".
+    ///
+    /// Returns a `(rest_slice, rest_summary, remainder, remainder_summary)`
+    /// tuple. Note that unlike [`last_unit`](Self::last_unit()), this function
+    /// does not allow an `advance` to be returned. Instead `rest_slice` and
+    /// `remainder` should always concatenate up the original `slice` and their
+    /// summaries should sum up to the original `summary`.
+    ///
+    /// The remainder can be empty if the last `M`-unit coincides with the end
+    /// of the leaf slice.
     #[allow(clippy::type_complexity)]
     fn remainder<'a>(
         slice: &'a L::Slice,
