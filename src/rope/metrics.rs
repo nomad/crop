@@ -61,11 +61,29 @@ impl SlicingMetric<RopeChunk> for ByteMetric {
     fn split<'a>(
         chunk: &'a ChunkSlice,
         ByteMetric(up_to): Self,
-        _: &ChunkSummary,
+        &summary: &ChunkSummary,
     ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
-        let left = chunk[..up_to].into();
-        let right = chunk[up_to..].into();
-        (left, left.summarize(), right, right.summarize())
+        if up_to == chunk.len() {
+            (chunk, summary, "".into(), ChunkSummary::default())
+        } else {
+            let left: &ChunkSlice = chunk[..up_to].into();
+            let right: &ChunkSlice = chunk[up_to..].into();
+
+            // Summarize the shorter side, then get the other summary by
+            // subtracting it from the total.
+
+            let (left_summary, right_summary) = if up_to < chunk.len() / 2 {
+                let left_summary = left.summarize();
+                let right_summary = summary - left_summary;
+                (left_summary, right_summary)
+            } else {
+                let right_summary = right.summarize();
+                let left_summary = summary - right_summary;
+                (left_summary, right_summary)
+            };
+
+            (left, left_summary, right, right_summary)
+        }
     }
 }
 
@@ -128,7 +146,22 @@ impl SlicingMetric<RopeChunk> for RawLineMetric {
         RawLineMetric(at): Self,
         summary: &ChunkSummary,
     ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
-        split_slice_at_line_break(chunk, at, summary)
+        // This is the index of the byte *after* the newline, or the byte
+        // length of the chunk if the newline is the last byte.
+        let left_bytes = str_indices::lines_lf::to_byte_idx(chunk, at);
+
+        let left = chunk[..left_bytes].into();
+
+        let left_summary = ChunkSummary { bytes: left_bytes, line_breaks: at };
+
+        let right = chunk[left_bytes..].into();
+
+        let right_summary = ChunkSummary {
+            bytes: chunk.len() - left_bytes,
+            line_breaks: summary.line_breaks - at,
+        };
+
+        (left, left_summary, right, right_summary)
     }
 }
 

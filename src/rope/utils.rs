@@ -387,34 +387,6 @@ pub(super) fn rope_chunk_append<'a>(
     (&text[..bytes_to_add], &text[bytes_to_add..])
 }
 
-/// Splits a chunk at the `line_break`-th line break (0-indexed), returning the
-/// left and right slices and their respective summaries.
-#[inline]
-#[allow(clippy::type_complexity)]
-pub(super) fn split_slice_at_line_break<'a>(
-    chunk: &'a ChunkSlice,
-    line_break: usize,
-    summary: &ChunkSummary,
-) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
-    // This is the index of the byte *after* the newline, or the byte length of
-    // the chunk if the newline is the last byte.
-    let left_bytes = str_indices::lines_lf::to_byte_idx(chunk, line_break);
-
-    let left = chunk[..left_bytes].into();
-
-    let left_summary =
-        ChunkSummary { bytes: left_bytes, line_breaks: line_break };
-
-    let right = chunk[left_bytes..].into();
-
-    let right_summary = ChunkSummary {
-        bytes: chunk.len() - left_bytes,
-        line_breaks: summary.line_breaks - line_break,
-    };
-
-    (left, left_summary, right, right_summary)
-}
-
 /// Returns `true` if the first byte in the string slice is a line feed.
 ///
 /// # Panics

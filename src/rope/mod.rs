@@ -1,5 +1,3 @@
-//! A utf-8 text rope built on top of a [`Tree`](crate::tree::Tree).
-
 pub(crate) mod iterators;
 mod metrics;
 mod rope;
