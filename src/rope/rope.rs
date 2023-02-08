@@ -312,12 +312,12 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
-    pub fn replace<R, T>(&mut self, byte_range: R, _text: T)
+    pub fn replace<R, T>(&mut self, byte_range: R, text: T)
     where
         R: RangeBounds<usize>,
         T: AsRef<str>,
     {
-        let (_start, end) =
+        let (start, end) =
             range_bounds_to_start_end(byte_range, 0, self.byte_len());
 
         if end > self.byte_len() {
@@ -329,7 +329,13 @@ impl Rope {
             );
         }
 
-        todo!()
+        self.tree.replace(
+            ByteMetric(start)..ByteMetric(end),
+            RopeChunkIter::new(text.as_ref()).map(Into::into),
+        );
+
+        #[cfg(debug_assertions)]
+        self.assert_invariants();
     }
 }
 

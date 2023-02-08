@@ -1,10 +1,10 @@
 use std::fmt::{self, Debug};
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, Range, Sub, SubAssign};
 use std::str;
 
 use super::metrics::ByteMetric;
 use super::utils::*;
-use crate::tree::{Leaf, Summarize};
+use crate::tree::{Leaf, ReplaceableLeaf, Summarize};
 
 #[cfg(all(not(test), not(feature = "integration_tests")))]
 const ROPE_CHUNK_MAX_BYTES: usize = 1024;
@@ -158,6 +158,33 @@ impl Leaf for RopeChunk {
             );
 
             (left, Some(right))
+        }
+    }
+}
+
+impl ReplaceableLeaf<ByteMetric> for RopeChunk {
+    #[inline]
+    fn replace(
+        &mut self,
+        summary: &mut ChunkSummary,
+        Range { start: ByteMetric(start), end: ByteMetric(end) }: Range<
+            ByteMetric,
+        >,
+        slice: &ChunkSlice,
+    ) -> Option<(Self, ChunkSummary)> {
+        if end > start {
+            let removed: &ChunkSlice = self[start..end].into();
+            *summary -= &removed.summarize();
+        }
+
+        *summary += &slice.summarize();
+
+        self.replace_range(start..end, slice);
+
+        if self.len() > Self::max_bytes() {
+            todo!();
+        } else {
+            None
         }
     }
 }

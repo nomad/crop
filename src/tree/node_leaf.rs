@@ -1,3 +1,4 @@
+use super::traits::*;
 use super::{Leaf, Metric};
 
 #[derive(Clone, Default)]
@@ -56,13 +57,26 @@ impl<L: Leaf> Lnode<L> {
     }
 
     #[inline]
-    pub fn measure<M: Metric<L>>(&self) -> M {
+    pub(super) fn measure<M: Metric<L>>(&self) -> M {
         M::measure(self.summary())
     }
 
     #[inline]
     pub(super) fn new(value: L, summary: L::Summary) -> Self {
         Self { value, summary }
+    }
+
+    #[inline]
+    pub(super) fn replace<M>(
+        &mut self,
+        range: std::ops::Range<M>,
+        slice: &L::Slice,
+    ) -> Option<Self>
+    where
+        L: ReplaceableLeaf<M>,
+        M: Metric<L>,
+    {
+        self.value.replace(&mut self.summary, range, slice).map(Into::into)
     }
 
     #[inline]

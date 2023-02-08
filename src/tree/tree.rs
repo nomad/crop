@@ -211,6 +211,35 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M::measure(self.summary())
     }
 
+    /// TODO: docs
+    #[inline]
+    pub fn replace<'a, M, I>(&mut self, range: Range<M>, leaves: I)
+    where
+        L: ReplaceableLeaf<M>,
+        M: Metric<L>,
+        I: IntoIterator<Item = &'a L::Slice>,
+        L::Slice: 'a,
+        for<'d> &'d L::Slice: Default,
+    {
+        let leaves = &mut leaves.into_iter();
+
+        let push_back =
+            tree_replace::a(Arc::make_mut(&mut self.root), range, leaves);
+
+        if let Some(next) = leaves.next() {
+            todo!();
+        }
+
+        if let Some(push_back) = push_back {
+            debug_assert!(!push_back.is_empty());
+
+            todo!();
+        }
+
+        #[cfg(debug_assertions)]
+        self.assert_invariants();
+    }
+
     /// Returns a slice of the `Tree` in the range of the given metric.
     #[inline]
     pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
@@ -277,8 +306,97 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     }
 }
 
+mod tree_replace {
+    //! This module handles the logic used in [`Tree::replace()`].
+
+    use super::*;
+
+    /// This is recurvise.
+    #[inline]
+    pub(super) fn a<'a, const N: usize, L, M, I>(
+        node: &mut Node<N, L>,
+        mut range: Range<M>,
+        leaves: &mut I,
+    ) -> Option<Vec<Arc<Node<N, L>>>>
+    where
+        L: ReplaceableLeaf<M>,
+        M: Metric<L>,
+        I: Iterator<Item = &'a L::Slice>,
+        L::Slice: 'a,
+        for<'d> &'d L::Slice: Default,
+    {
+        // 1: get to the deepest node that fully contains the replaced range.
+
+        match node {
+            Node::Internal(inode) => {
+                let mut measured = M::zero();
+
+                for (idx, child) in inode.children().iter().enumerate() {
+                    let child_measure = child.measure::<M>();
+
+                    let contains_start =
+                        measured + child_measure >= range.start;
+
+                    if contains_start {
+                        let contains_last_slice =
+                            measured + child_measure >= range.end;
+
+                        if contains_last_slice {
+                            let node = Arc::make_mut(inode.child_mut(idx));
+                            range.start -= measured;
+                            range.end -= measured;
+                            return a(node, range, leaves);
+                        } else {
+                            return do_stuff_with_deepest(node, range, leaves);
+                        }
+                    } else {
+                        measured += child_measure;
+                    }
+                }
+
+                unreachable!();
+            },
+
+            Node::Leaf(_) => do_stuff_with_deepest(node, range, leaves),
+        }
+    }
+
+    /// This is not recurvise. The only the code that handles the first final
+    /// branches are.
+    ///
+    /// Returns a vector of nodes that should be pushed back onto the Tree
+    /// after this node.
+    #[inline]
+    fn do_stuff_with_deepest<'a, const N: usize, L, M, I>(
+        node: &mut Node<N, L>,
+        range: Range<M>,
+        leaves: &mut I,
+    ) -> Option<Vec<Arc<Node<N, L>>>>
+    where
+        L: ReplaceableLeaf<M>,
+        M: Metric<L>,
+        I: Iterator<Item = &'a L::Slice>,
+        L::Slice: 'a,
+        for<'d> &'d L::Slice: Default,
+    {
+        let inode = match node {
+            Node::Internal(inode) => inode,
+
+            Node::Leaf(leaf) => {
+                let slice = leaves.next().unwrap_or_default();
+
+                return leaf
+                    .replace(range, slice)
+                    .map(|e| vec![Arc::new(Node::Leaf(e))]);
+            },
+        };
+
+        todo!();
+    }
+}
+
 mod from_treeslice {
-    //! Functions used to convert `TreeSlice`s into `Tree`s.
+    //! This module handles the logic used to convert `TreeSlice`s into `Tree`s.
 
     use super::*;
 
