@@ -175,14 +175,46 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
         if end > start {
             let removed: &ChunkSlice = self[start..end].into();
             *summary -= &removed.summarize();
+            *summary += &slice.summarize();
+            self.replace_range(start..end, slice);
+        } else if !slice.is_empty() {
+            *summary += &slice.summarize();
+            self.insert_str(start, slice);
+        } else {
+            return None;
         }
 
-        *summary += &slice.summarize();
-
-        self.replace_range(start..end, slice);
-
         if self.len() > Self::max_bytes() {
-            todo!();
+            let split_point =
+                adjust_split_point::<true>(&self, Self::min_bytes());
+
+            let extra = {
+                // NOTE: this is the body of [`String::split_off()`] but it
+                // skips the codepoint boundary check.
+
+                let v = unsafe { self.as_mut_vec() };
+                let v = v.split_off(split_point);
+
+                // SAFETY: `split_point` is a char boundary and the contents of
+                // the chunk from `split_point` until the end are valid UTF-8.
+                let text = unsafe { String::from_utf8_unchecked(v) };
+
+                RopeChunk { text }
+            };
+
+            let summary = extra.summarize();
+
+            debug_assert!(self.len() >= RopeChunk::chunk_min());
+            debug_assert!(self.len() <= RopeChunk::chunk_max());
+            debug_assert!(extra.len() >= RopeChunk::chunk_min());
+            debug_assert!(extra.len() <= RopeChunk::chunk_max());
+
+            // None
+
+            Some((extra, summary))
+        } else if self.len() < Self::min_bytes() {
+            // todo!();
+            None
         } else {
             None
         }

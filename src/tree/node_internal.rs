@@ -303,14 +303,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn child_mut(
-        &mut self,
-        child_idx: usize,
-    ) -> &mut Arc<Node<N, L>> {
-        &mut self.children[child_idx]
-    }
-
-    #[inline]
     pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
         &self.children
     }
@@ -388,7 +380,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    fn is_empty(&self) -> bool {
+    pub(super) fn is_empty(&self) -> bool {
         self.children.len() == 0
     }
 
@@ -449,6 +441,13 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
+    pub(super) fn remove(&mut self, child_idx: usize) {
+        let child = self.children.remove(child_idx);
+        self.summary -= child.summary();
+        self.leaf_count -= child.leaf_count();
+    }
+
+    #[inline]
     pub(super) fn summary(&self) -> &L::Summary {
         &self.summary
     }
@@ -472,6 +471,32 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         let split_at = first_idx + 1;
         let (first, second) = self.children.split_at_mut(split_at);
         (&mut first[first_idx], &mut second[second_idx - split_at])
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub(super) fn with_child_mut<F, T>(
+        &mut self,
+        child_idx: usize,
+        fun: F,
+    ) -> T
+    where
+        F: FnOnce(&mut Arc<Node<N, L>>) -> T,
+    {
+        let child = &mut self.children[child_idx];
+        self.summary -= child.summary();
+        self.leaf_count -= child.leaf_count();
+
+        let ret = fun(child);
+
+        if child.base_measure() > L::BaseMetric::zero() {
+            self.summary += child.summary();
+            self.leaf_count += child.leaf_count();
+        } else {
+            self.children.remove(child_idx);
+        }
+
+        ret
     }
 }
 

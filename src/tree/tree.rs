@@ -213,7 +213,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
     /// TODO: docs
     #[inline]
-    pub fn replace<'a, M, I>(&mut self, range: Range<M>, leaves: I)
+    pub fn replace<'a, M, I>(&mut self, range: Range<M>, slices: I)
     where
         L: ReplaceableLeaf<M>,
         M: Metric<L>,
@@ -221,19 +221,42 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         L::Slice: 'a,
         for<'d> &'d L::Slice: Default,
     {
-        let leaves = &mut leaves.into_iter();
+        let mut slices = slices.into_iter();
 
         let push_back =
-            tree_replace::a(Arc::make_mut(&mut self.root), range, leaves);
+            tree_replace::a(Arc::make_mut(&mut self.root), range, &mut slices);
 
-        if let Some(next) = leaves.next() {
+        // TODO:
+        // - consume the iterator, build the Tree
+        //
+        // - nodes in push back should have the same depth as the root (or maybe
+        // one less?)
+        //
+        // - if the depth of the Tree is the same as the root create a new
+        // Inode with the root, the new tree and the nodes in push_back.
+        //
+        // - if it's < do an append_at depth on the root, then same as before
+        // with the nodes in push_back
+        //
+        // - if it's > 0 do a prepend at depth on that node with the root, then
+        // an append at depth with the nodes in push_back.
+
+        if let Some(next) = slices.next() {
             todo!();
         }
 
         if let Some(push_back) = push_back {
             debug_assert!(!push_back.is_empty());
 
-            todo!();
+            let root = std::mem::replace(
+                &mut self.root,
+                Arc::new(Node::Internal(Inode::empty())),
+            );
+
+            let root =
+                Inode::from_children(std::iter::once(root).chain(push_back));
+
+            self.root = Arc::new(Node::Internal(root));
         }
 
         #[cfg(debug_assertions)]
@@ -311,12 +334,14 @@ mod tree_replace {
 
     use super::*;
 
-    /// This is recurvise.
+    /// This is recursive.
+    ///
+    /// TODO: docs
     #[inline]
     pub(super) fn a<'a, const N: usize, L, M, I>(
         node: &mut Node<N, L>,
         mut range: Range<M>,
-        leaves: &mut I,
+        slices: &mut I,
     ) -> Option<Vec<Arc<Node<N, L>>>>
     where
         L: ReplaceableLeaf<M>,
@@ -329,48 +354,62 @@ mod tree_replace {
 
         match node {
             Node::Internal(inode) => {
-                let mut measured = M::zero();
+                let mut remaining = {
+                    let mut measured = M::zero();
+                    let mut children = inode.children().iter().enumerate();
 
-                for (idx, child) in inode.children().iter().enumerate() {
-                    let child_measure = child.measure::<M>();
+                    loop {
+                        let (idx, child) = children.next().unwrap();
 
-                    let contains_start =
-                        measured + child_measure >= range.start;
+                        let child_measure = child.measure::<M>();
 
-                    if contains_start {
-                        let contains_last_slice =
-                            measured + child_measure >= range.end;
+                        let contains_start =
+                            measured + child_measure >= range.start;
 
-                        if contains_last_slice {
-                            let node = Arc::make_mut(inode.child_mut(idx));
-                            range.start -= measured;
-                            range.end -= measured;
-                            return a(node, range, leaves);
+                        if contains_start {
+                            let contains_last_slice =
+                                measured + child_measure >= range.end;
+
+                            if contains_last_slice {
+                                range.start -= measured;
+                                range.end -= measured;
+                                break inode.with_child_mut(idx, |child| {
+                                    a(Arc::make_mut(child), range, slices)
+                                });
+                            } else {
+                                break do_stuff_with_deepest(
+                                    node, range, slices,
+                                );
+                            }
                         } else {
-                            return do_stuff_with_deepest(node, range, leaves);
+                            measured += child_measure;
                         }
-                    } else {
-                        measured += child_measure;
                     }
+                };
+
+                if let Some(remaining) = &mut remaining {
+                    todo!();
                 }
 
-                unreachable!();
+                remaining
             },
 
-            Node::Leaf(_) => do_stuff_with_deepest(node, range, leaves),
+            Node::Leaf(_) => do_stuff_with_deepest(node, range, slices),
         }
     }
 
-    /// This is not recurvise. The only the code that handles the first final
+    /// This is not recursive. The only the code that handles the first final
     /// branches are.
     ///
     /// Returns a vector of nodes that should be pushed back onto the Tree
     /// after this node.
+    ///
+    /// TODO: docs
     #[inline]
     fn do_stuff_with_deepest<'a, const N: usize, L, M, I>(
         node: &mut Node<N, L>,
         range: Range<M>,
-        leaves: &mut I,
+        slices: &mut I,
     ) -> Option<Vec<Arc<Node<N, L>>>>
     where
         L: ReplaceableLeaf<M>,
@@ -383,7 +422,7 @@ mod tree_replace {
             Node::Internal(inode) => inode,
 
             Node::Leaf(leaf) => {
-                let slice = leaves.next().unwrap_or_default();
+                let slice = slices.next().unwrap_or_default();
 
                 return leaf
                     .replace(range, slice)
@@ -391,12 +430,173 @@ mod tree_replace {
             },
         };
 
+        let mut offset = M::zero();
+
+        let mut replace_whole = 0..0;
+
+        for (idx, child) in inode.children().iter().enumerate() {
+            let child_measure = child.measure::<M>();
+
+            if offset + child_measure >= range.start {
+                inode.with_child_mut(idx, |child| {
+                    replace_first_rec(
+                        Arc::make_mut(child),
+                        range.start - offset,
+                        slices,
+                    )
+                });
+                offset += child_measure;
+                replace_whole.start = idx + 1;
+                replace_whole.end = replace_whole.start;
+                break;
+            } else {
+                offset += child_measure;
+            }
+        }
+
+        debug_assert!(replace_whole.start > 0);
+
+        for (idx, child) in
+            inode.children()[replace_whole.start..].iter().enumerate()
+        {
+            let child_measure = child.measure::<M>();
+
+            if offset + child_measure >= range.end {
+                inode.with_child_mut(idx, |child| {
+                    replace_last_rec(
+                        Arc::make_mut(child),
+                        range.end - offset,
+                        slices,
+                    )
+                });
+                replace_whole.end += idx;
+                break;
+            } else {
+                offset += child_measure;
+            }
+        }
+
+        if replace_whole.end > replace_whole.start {
+            todo!();
+        }
+
+        // TODO: we gotta do some rebalancing/other stuff here.
+
         todo!();
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn replace_first_rec<'a, const N: usize, L, M, I>(
+        node: &mut Node<N, L>,
+        replace_from: M,
+        slices: &mut I,
+    ) where
+        L: ReplaceableLeaf<M>,
+        M: Metric<L>,
+        I: Iterator<Item = &'a L::Slice>,
+        L::Slice: 'a,
+        for<'d> &'d L::Slice: Default,
+    {
+        match node {
+            Node::Internal(inode) => {
+                let mut offset = M::zero();
+
+                for (idx, child) in inode.children().iter().enumerate() {
+                    let child_measure = child.measure::<M>();
+
+                    if offset + child_measure >= replace_from {
+                        inode.with_child_mut(idx, |child| {
+                            replace_first_rec(
+                                Arc::make_mut(child),
+                                replace_from - offset,
+                                slices,
+                            )
+                        });
+
+                        for (idx, child) in
+                            inode.children()[idx + 1..].iter().enumerate()
+                        {
+                            // TODO: we gotta do some shit here.
+                        }
+
+                        return;
+                    } else {
+                        offset += child_measure;
+                    }
+                }
+
+                unreachable!();
+            },
+
+            Node::Leaf(leaf) => {
+                let slice = slices.next().unwrap_or_default();
+
+                // TODO: the end of the range is wrong for metrics !=
+                // BaseMetric.
+                let _ = leaf.replace(replace_from..leaf.measure::<M>(), slice);
+
+                // TODO: what do we do with an extra excess?
+            },
+        }
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn replace_last_rec<'a, const N: usize, L, M, I>(
+        node: &mut Node<N, L>,
+        replace_up_to: M,
+        slices: &mut I,
+    ) where
+        L: ReplaceableLeaf<M>,
+        M: Metric<L>,
+        I: Iterator<Item = &'a L::Slice>,
+        L::Slice: 'a,
+        for<'d> &'d L::Slice: Default,
+    {
+        match node {
+            Node::Internal(inode) => {
+                let mut offset = M::zero();
+
+                for (idx, child) in inode.children().iter().enumerate() {
+                    let child_measure = child.measure::<M>();
+
+                    if offset + child_measure >= replace_up_to {
+                        inode.with_child_mut(idx, |child| {
+                            replace_first_rec(
+                                Arc::make_mut(child),
+                                replace_up_to - offset,
+                                slices,
+                            )
+                        });
+
+                        return;
+                    } else {
+                        offset += child_measure;
+                        // TODO: we gotta do some shit here.
+                    }
+                }
+
+                unreachable!();
+            },
+
+            Node::Leaf(leaf) => {
+                // TODO: this should actually be taken from the back.
+                let slice = slices.next().unwrap_or_default();
+
+                // TODO: the end of the range is wrong for metrics !=
+                // BaseMetric.
+                let _ = leaf.replace(M::zero()..replace_up_to, slice);
+
+                // TODO: what do we do with an extra excess?
+            },
+        }
     }
 }
 
 mod from_treeslice {
-    //! This module handles the logic used to convert `TreeSlice`s into `Tree`s.
+    //! This module handles the logic used to convert `TreeSlice`s into
+    //! `Tree`s.
 
     use super::*;
 
@@ -570,7 +770,7 @@ mod from_treeslice {
 
                 let mut children = i.children().iter();
 
-                while let Some(child) = children.next() {
+                for child in children.by_ref() {
                     let this = child.base_measure();
 
                     if offset + this > take_from {
