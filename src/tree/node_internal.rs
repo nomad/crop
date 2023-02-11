@@ -27,6 +27,42 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Inode<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Inode<N, L> {
+    /// TODO: docs
+    #[inline]
+    pub(super) fn append_at_depth(
+        &mut self,
+        mut node: Arc<Node<N, L>>,
+    ) -> Option<Self>
+    where
+        L: Clone,
+    {
+        debug_assert!(node.depth() < self.depth());
+
+        if self.depth() > node.depth() + 1 {
+            let extra =
+                self.with_child_mut(self.children.len() - 1, |last| {
+                    let last = Arc::make_mut(last);
+                    // SAFETY: TODO
+                    let last = unsafe { last.as_mut_internal_unchecked() };
+                    last.append_at_depth(node)
+                })?;
+
+            node = Arc::new(Node::Internal(extra));
+        }
+
+        debug_assert_eq!(self.depth(), node.depth() + 1);
+
+        if !self.is_full() {
+            self.push(node);
+            None
+        } else {
+            let mut other = self.split_off(Self::min_children() + 1);
+            other.push(node);
+            debug_assert_eq!(Self::min_children(), other.children.len());
+            Some(other)
+        }
+    }
+
     pub(super) fn assert_invariants(&self) {
         assert!(
             self.children().len() >= Self::min_children(),
@@ -445,6 +481,21 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         let child = self.children.remove(child_idx);
         self.summary -= child.summary();
         self.leaf_count -= child.leaf_count();
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub(super) fn split_off(&mut self, child_offset: usize) -> Self {
+        debug_assert!(child_offset <= self.children.len());
+
+        for child in &self.children[child_offset..] {
+            self.summary -= child.summary();
+            self.leaf_count -= child.leaf_count();
+        }
+
+        let children = self.children.split_off(child_offset);
+
+        Self::from_children(children)
     }
 
     #[inline]
