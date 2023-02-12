@@ -71,10 +71,6 @@ impl<const FANOUT: usize, L: Leaf> From<TreeSlice<'_, FANOUT, L>>
 }
 
 impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
-    /*
-      Public methods
-    */
-
     #[doc(hidden)]
     pub fn assert_invariants(&self) {
         match &*self.root {
@@ -91,9 +87,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
                 }
             },
 
-            Node::Leaf(leaf) => {
-                assert_eq!(&leaf.value.summarize(), self.summary());
-            },
+            Node::Leaf(leaf) => leaf.assert_invariants(),
         }
     }
 
@@ -166,6 +160,34 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M::measure(self.summary())
     }
 
+    /// TODO: move this away?
+    ///
+    /// Continuously replaces the root with its first child as long as the root
+    /// is an internal node with a single child.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the root has a strong counter > 1.
+    #[inline]
+    pub(super) fn pull_up_root(&mut self) {
+        let root = &mut self.root;
+
+        while let Node::Internal(i) = Arc::get_mut(root).unwrap() {
+            if i.children().len() == 1 {
+                let child = unsafe {
+                    i.children
+                        .drain(..)
+                        .next()
+                        // SAFETY: there is exactly 1 child.
+                        .unwrap_unchecked()
+                };
+                *root = child;
+            } else {
+                break;
+            }
+        }
+    }
+
     /// TODO: docs
     #[inline]
     pub fn replace<'a, M, I>(&mut self, range: Range<M>, slices: I)
@@ -187,10 +209,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
                 std::mem::replace(root, Node::Internal(Inode::empty()));
 
             *root = Node::Internal(Inode::from_equally_deep_nodes(
-                iter_chain::chain(
-                    std::iter::once(Arc::new(old_root)),
-                    extra.into_iter(),
-                ),
+                std::iter::once(Arc::new(old_root)).exact_chain(extra),
             ));
         }
 
@@ -198,6 +217,14 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         self.assert_invariants();
     }
 
+    #[inline]
+    pub(super) fn root(&self) -> &Arc<Node<FANOUT, L>> {
+        &self.root
+    }
+
+    /// TODO:
+    /// move this back to `Tree::from_leaves` once we don't use it in
+    /// tree_replace
     /// TODO: docs
     #[inline]
     fn root_from_leaves<I>(mut leaves: I) -> Option<Arc<Node<FANOUT, L>>>
@@ -210,7 +237,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         let Some(second) = leaves.next() else { return Some(first) };
         let second = Arc::new(Node::Leaf(Lnode::from(second)));
 
-        let mut nodes = {
+        let nodes = {
             let (lo, hi) = leaves.size_hint();
             let mut n = Vec::with_capacity(2 + hi.unwrap_or(lo));
             n.push(first);
@@ -259,41 +286,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     {
         Units::from(self)
     }
-
-    /*
-      Private methods
-    */
-
-    /// Continuously replaces the root with its first child as long as the root
-    /// is an internal node with a single child.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `Arc` enclosing the root has a strong counter > 1.
-    #[inline]
-    pub(super) fn pull_up_root(&mut self) {
-        let root = &mut self.root;
-
-        while let Node::Internal(i) = Arc::get_mut(root).unwrap() {
-            if i.children().len() == 1 {
-                let child = unsafe {
-                    i.children
-                        .drain(..)
-                        .next()
-                        // SAFETY: there is exactly 1 child.
-                        .unwrap_unchecked()
-                };
-                *root = child;
-            } else {
-                break;
-            }
-        }
-    }
-
-    #[inline]
-    pub(super) fn root(&self) -> &Arc<Node<FANOUT, L>> {
-        &self.root
-    }
 }
 
 mod tree_replace {
@@ -319,7 +311,10 @@ mod tree_replace {
     {
         match node {
             Node::Internal(inode) => {
+                // The index of the child containing the entire replacement
+                // range.
                 let mut child_idx = 0;
+
                 let mut split = None;
 
                 let mut offset = M::zero();
@@ -349,17 +344,47 @@ mod tree_replace {
                     }
                 }
 
-                for node in split? {
-                    inode.insert(child_idx + 1, node);
-                    child_idx += 1;
-                }
+                if let Some(extra) = split {
+                    debug_assert!(extra
+                        .iter()
+                        .all(|n| n.depth()
+                            == inode.children()[child_idx].depth()));
 
-                if inode.is_overfull() {
-                    let min_children = Inode::<N, L>::min_children();
-                    let split_offset = inode.children().len() - min_children;
-                    let split = inode.split_off(split_offset);
-                    Some(vec![Arc::new(Node::Internal(split))])
+                    let total_children = inode.children().len() + extra.len();
+
+                    let max_children = Inode::<N, L>::max_children();
+
+                    if total_children <= max_children {
+                        for node in extra {
+                            child_idx += 1;
+                            inode.insert(child_idx, node)
+                        }
+                        return None;
+                    }
+
+                    let last =
+                        inode.split_off(child_idx + 1).collect::<Vec<_>>();
+
+                    let children = std::mem::take(&mut inode.children)
+                        .into_iter()
+                        .exact_chain(extra)
+                        .exact_chain(last);
+
+                    let mut inodes = ChildSegmenter::new(children);
+
+                    *inode = inodes.next().unwrap();
+
+                    let extra = inodes
+                        .map(Node::Internal)
+                        .map(Arc::new)
+                        .collect::<Vec<_>>();
+
+                    debug_assert!(!extra.is_empty());
+
+                    Some(extra)
                 } else {
+                    // TODO: check to see if the children at child_idx needs to
+                    // be rebalances/removed/whatever.
                     None
                 }
             },
@@ -534,7 +559,7 @@ mod tree_replace {
         if inode.is_overfull() {
             let min_children = Inode::<N, L>::min_children();
             let split_offset = inode.children().len() - min_children;
-            let split = inode.split_off(split_offset);
+            let split = Inode::from_children(inode.split_off(split_offset));
             Some(vec![Arc::new(Node::Internal(split))])
         } else {
             None
@@ -967,36 +992,55 @@ mod from_treeslice {
     }
 }
 
+use iter_chain::ExactChain;
+
 mod iter_chain {
-    //! Implements a `ExactChain<I1, I2>` which is just like
-    //! [`std::iter::Chain`] except it implements `ExactSizeIterator` when both
-    //! `I1` and `I2` are `ExactSizeIterator`.
+    //! Implements `Chain` which is just like
+    //! [`std::iter::Chain`] except it implements `ExactSizeIterator` when
+    //! the first and second iterators are both are `ExactSizeIterator`.
     //!
     //! See [1] or [2] for why this is needed.
     //!
     //! [1]: https://github.com/rust-lang/rust/issues/34433
     //! [2]: https://github.com/rust-lang/rust/pull/66531
 
-    pub(super) struct ExactChain<T, U> {
+    pub(super) struct Chain<T, U> {
         chain: std::iter::Chain<T, U>,
         yielded: usize,
         total: usize,
     }
 
-    #[inline]
-    pub(super) fn chain<T, I1, I2>(first: I1, second: I2) -> ExactChain<I1, I2>
-    where
-        I1: ExactSizeIterator<Item = T>,
-        I2: ExactSizeIterator<Item = T>,
+    pub(super) trait ExactChain<I>:
+        ExactSizeIterator<Item = I>
     {
-        ExactChain {
-            yielded: 0,
-            total: first.len() + second.len(),
-            chain: first.chain(second),
+        fn exact_chain<U>(self, other: U) -> Chain<Self, U::IntoIter>
+        where
+            Self: Sized,
+            U: IntoIterator<Item = I>,
+            U::IntoIter: ExactSizeIterator;
+    }
+
+    impl<I, T> ExactChain<I> for T
+    where
+        T: ExactSizeIterator<Item = I>,
+    {
+        #[inline]
+        fn exact_chain<U>(self, other: U) -> Chain<Self, U::IntoIter>
+        where
+            Self: Sized,
+            U: IntoIterator<Item = I>,
+            U::IntoIter: ExactSizeIterator,
+        {
+            let other = other.into_iter();
+            Chain {
+                yielded: 0,
+                total: self.len() + other.len(),
+                chain: self.chain(other),
+            }
         }
     }
 
-    impl<T, I1, I2> Iterator for ExactChain<I1, I2>
+    impl<T, I1, I2> Iterator for Chain<I1, I2>
     where
         I1: ExactSizeIterator<Item = T>,
         I2: ExactSizeIterator<Item = T>,
@@ -1017,7 +1061,7 @@ mod iter_chain {
         }
     }
 
-    impl<T, I1, I2> ExactSizeIterator for ExactChain<I1, I2>
+    impl<T, I1, I2> ExactSizeIterator for Chain<I1, I2>
     where
         I1: ExactSizeIterator<Item = T>,
         I2: ExactSizeIterator<Item = T>,

@@ -56,7 +56,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             self.push(node);
             None
         } else {
-            let mut other = self.split_off(Self::min_children() + 1);
+            let mut other =
+                Self::from_children(self.split_off(Self::min_children() + 1));
             other.push(node);
             debug_assert_eq!(Self::min_children(), other.children.len());
             Some(other)
@@ -402,36 +403,18 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     /// TODO: docs
     #[inline]
-    fn collapse_nodes<I>(mut nodes: I) -> Vec<Arc<Node<N, L>>>
+    fn collapse_nodes<I>(nodes: I) -> Vec<Arc<Node<N, L>>>
     where
         I: ExactSizeIterator<Item = Arc<Node<N, L>>>,
     {
-        let mut new_nodes = {
-            let c = nodes.len() / N + ((nodes.len() % N != 0) as usize);
-            Vec::with_capacity(c)
-        };
+        // TODO: check if this performs in the same way
+        // ChildSegmenter::new(nodes).map(Node::Internal).map(Arc::new).collect()
 
-        while nodes.len() > 0 {
-            debug_assert!(nodes.len() >= Self::min_children());
+        let mut segmenter = ChildSegmenter::new(nodes);
 
-            let take = if nodes.len() > Self::max_children() {
-                if nodes.len() - Self::max_children() >= Self::min_children() {
-                    Self::max_children()
-                } else {
-                    nodes.len() - Self::min_children()
-                }
-            } else {
-                nodes.len()
-            };
+        let mut new_nodes = Vec::with_capacity(segmenter.len());
 
-            debug_assert!(
-                take >= Self::min_children() && take <= Self::max_children(),
-            );
-
-            debug_assert!(nodes.len() >= take);
-
-            let children = nodes.by_ref().take(take);
-            let inode = Inode::from_children(children);
+        while let Some(inode) = segmenter.next() {
             new_nodes.push(Arc::new(Node::Internal(inode)));
         }
 
@@ -554,7 +537,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     /// TODO: docs
     #[inline]
-    pub(super) fn split_off(&mut self, child_offset: usize) -> Self {
+    pub(super) fn split_off(
+        &mut self,
+        child_offset: usize,
+    ) -> std::vec::Drain<'_, Arc<Node<N, L>>> {
         debug_assert!(child_offset <= self.children.len());
 
         for child in &self.children[child_offset..] {
@@ -562,7 +548,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             self.leaf_count -= child.leaf_count();
         }
 
-        Self::from_children(self.children.split_off(child_offset))
+        self.children.drain(child_offset..)
     }
 
     #[inline]
@@ -634,6 +620,83 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
 
         ret
+    }
+}
+
+/// TODO: docs
+pub(super) struct ChildSegmenter<const N: usize, L, Children>
+where
+    L: Leaf,
+    Children: ExactSizeIterator<Item = Arc<Node<N, L>>>,
+{
+    children: Children,
+}
+
+impl<const N: usize, L, Children> ChildSegmenter<N, L, Children>
+where
+    L: Leaf,
+    Children: ExactSizeIterator<Item = Arc<Node<N, L>>>,
+{
+    #[inline]
+    pub(super) fn new(children: Children) -> Self {
+        debug_assert!(children.len() >= Inode::<N, L>::min_children());
+        Self { children }
+    }
+}
+
+impl<const N: usize, L, Children> Iterator for ChildSegmenter<N, L, Children>
+where
+    L: Leaf,
+    Children: ExactSizeIterator<Item = Arc<Node<N, L>>>,
+{
+    type Item = Inode<N, L>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let min_children = Inode::<N, L>::min_children();
+        let max_children = Inode::<N, L>::max_children();
+        let remaining = self.children.len();
+
+        debug_assert!(remaining == 0 || remaining >= min_children);
+
+        let take = if remaining == 0 {
+            return None;
+        } else if remaining > max_children {
+            if remaining - max_children >= min_children {
+                max_children
+            } else {
+                remaining - min_children
+            }
+        } else {
+            remaining
+        };
+
+        debug_assert!(take >= min_children && take <= max_children,);
+
+        debug_assert!(remaining >= take);
+
+        Some(Inode::from_children(self.children.by_ref().take(take)))
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = self.len();
+        (exact, Some(exact))
+    }
+}
+
+impl<const N: usize, L, Children> ExactSizeIterator
+    for ChildSegmenter<N, L, Children>
+where
+    L: Leaf,
+    Children: ExactSizeIterator<Item = Arc<Node<N, L>>>,
+{
+    #[inline]
+    fn len(&self) -> usize {
+        let max_children = Inode::<N, L>::max_children();
+
+        self.children.len() / max_children
+            + ((self.children.len() % max_children != 0) as usize)
     }
 }
 

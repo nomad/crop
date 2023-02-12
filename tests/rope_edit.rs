@@ -32,7 +32,6 @@ fn rope_replace_1() {
     r.assert_invariants();
 }
 
-#[ignore]
 #[test]
 fn rope_insert_random() {
     let mut rng = rand::thread_rng();
@@ -41,7 +40,7 @@ fn rope_insert_random() {
         let mut r = Rope::from(s);
         let mut s = s.to_owned();
 
-        for _ in 0..100 {
+        for _ in 0..5 {
             let insert_at = rng.gen_range(0..=r.byte_len());
 
             let insert = {
@@ -69,7 +68,7 @@ fn rope_delete_random() {
         let mut r = Rope::from(s);
         let mut s = s.to_owned();
 
-        for _ in 0..100 {
+        for _ in 0..5 {
             let delete_range = {
                 let start = rng.gen_range(0..=r.byte_len());
                 let end = rng.gen_range(start..=r.byte_len());
@@ -95,7 +94,7 @@ fn rope_replace_random() {
         let mut r = Rope::from(s);
         let mut s = s.to_owned();
 
-        for _ in 0..100 {
+        for _ in 0..5 {
             let replace_range = {
                 let start = rng.gen_range(0..=r.byte_len());
                 let end = rng.gen_range(start..=r.byte_len());

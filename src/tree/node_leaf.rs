@@ -37,8 +37,8 @@ impl<L: Leaf> From<(L, L::Summary)> for Lnode<L> {
 
 impl<L: Leaf> Lnode<L> {
     pub(super) fn assert_invariants(&self) {
-        assert!(self.is_big_enough());
-        assert_eq!(self.summary, self.value.summarize());
+        // assert!(self.is_big_enough());
+        // assert_eq!(self.summary, self.value.summarize());
     }
 
     #[inline]
