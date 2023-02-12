@@ -406,13 +406,17 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    fn insert(&mut self, idx: usize, child: Arc<Node<N, L>>) {
-        debug_assert!(!self.is_full());
+    pub(super) fn insert(
+        &mut self,
+        child_offset: usize,
+        child: Arc<Node<N, L>>,
+    ) {
+        // debug_assert!(!self.is_full());
         debug_assert_eq!(child.depth() + 1, self.depth());
 
         self.leaf_count += child.leaf_count();
         self.summary += child.summary();
-        self.children.insert(idx, child);
+        self.children.insert(child_offset, child);
     }
 
     #[inline]
@@ -421,8 +425,13 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    fn is_full(&self) -> bool {
+    pub(super) fn is_full(&self) -> bool {
         self.children.len() == N
+    }
+
+    #[inline]
+    pub(super) fn is_overfull(&self) -> bool {
+        self.children.len() > N
     }
 
     /// Returns a reference to the last child of this internal node.
@@ -493,14 +502,31 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             self.leaf_count -= child.leaf_count();
         }
 
-        let children = self.children.split_off(child_offset);
-
-        Self::from_children(children)
+        Self::from_children(self.children.split_off(child_offset))
     }
 
     #[inline]
     pub(super) fn summary(&self) -> &L::Summary {
         &self.summary
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub(super) fn swap_child(
+        &mut self,
+        child_idx: usize,
+        new_child: Arc<Node<N, L>>,
+    ) -> Arc<Node<N, L>> {
+        debug_assert!(child_idx < self.children.len());
+        debug_assert_eq!(new_child.depth() + 1, self.depth());
+
+        let to_swap = &self.children[child_idx];
+        self.summary -= to_swap.summary();
+        self.leaf_count -= to_swap.leaf_count();
+
+        self.summary += new_child.summary();
+        self.leaf_count += new_child.leaf_count();
+        std::mem::replace(&mut self.children[child_idx], new_child)
     }
 
     /// Returns mutable references to the child nodes at `first_idx` and

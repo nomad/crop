@@ -172,6 +172,15 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
         >,
         slice: &ChunkSlice,
     ) -> Option<(Self, ChunkSummary)> {
+        // TODO: can we compute some of these summaries better? Check width
+        // of replaced range and slice to see if we can get it cheaper by
+        // substraction.
+
+        // TODO: if we already know that self.len() will overflow we can chop
+        // stuff off before calling `replace_range` and `insert_str`. Having
+        // less stuff on the rhs of the split will cause fewer bytes to be
+        // shifted to the right.
+
         if end > start {
             let removed: &ChunkSlice = self[start..end].into();
             *summary -= &removed.summarize();
@@ -185,6 +194,8 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
         }
 
         if self.len() > Self::max_bytes() {
+            // TODO: this should be the right-most byte that leaves the
+            // returned node with Self::min_bytes bytes.
             let split_point =
                 adjust_split_point::<true>(&self, Self::min_bytes());
 
@@ -202,7 +213,10 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
                 RopeChunk { text }
             };
 
-            let summary = extra.summarize();
+            // TODO: can we do better?
+            let extra_summary = extra.summarize();
+
+            *summary -= &extra_summary;
 
             debug_assert!(self.len() >= RopeChunk::chunk_min());
             debug_assert!(self.len() <= RopeChunk::chunk_max());
@@ -211,7 +225,7 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
 
             // None
 
-            Some((extra, summary))
+            Some((extra, extra_summary))
         } else if self.len() < Self::min_bytes() {
             // todo!();
             None
