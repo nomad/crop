@@ -9,14 +9,14 @@ pub struct Tree<const FANOUT: usize, L: Leaf> {
     pub(super) root: Arc<Node<FANOUT, L>>,
 }
 
-impl<const N: usize, L: Leaf> Clone for Tree<N, L> {
+impl<const FANOUT: usize, L: Leaf> Clone for Tree<FANOUT, L> {
     #[inline]
     fn clone(&self) -> Self {
         Tree { root: Arc::clone(&self.root) }
     }
 }
 
-impl<const N: usize, L: Leaf> std::fmt::Debug for Tree<N, L> {
+impl<const FANOUT: usize, L: Leaf> std::fmt::Debug for Tree<FANOUT, L> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         if !f.alternate() {
@@ -27,11 +27,11 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Tree<N, L> {
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> From<TreeSlice<'a, FANOUT, L>>
+impl<const FANOUT: usize, L: Leaf> From<TreeSlice<'_, FANOUT, L>>
     for Tree<FANOUT, L>
 {
     #[inline]
-    fn from(slice: TreeSlice<'a, FANOUT, L>) -> Tree<FANOUT, L> {
+    fn from(slice: TreeSlice<'_, FANOUT, L>) -> Tree<FANOUT, L> {
         let root = if slice.base_measure() == slice.root().base_measure() {
             // If the TreeSlice and its root have the same base measure it
             // means the TreeSlice spanned the whole Tree from which it was
@@ -178,41 +178,21 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     {
         let root = Arc::make_mut(&mut self.root);
 
-        let split = tree_replace::some_name(root, range, slices.into_iter());
+        if let Some(extra) =
+            tree_replace::some_name(root, range, slices.into_iter())
+        {
+            debug_assert!(extra.iter().all(|n| n.depth() == root.depth()));
 
-        if let Some(split) = split {
-            todo!();
+            let old_root =
+                std::mem::replace(root, Node::Internal(Inode::empty()));
+
+            *root = Node::Internal(Inode::from_equally_deep_nodes(
+                iter_chain::chain(
+                    std::iter::once(Arc::new(old_root)),
+                    extra.into_iter(),
+                ),
+            ));
         }
-
-        // TODO:
-        // - consume the iterator, build the Tree
-        //
-        // - nodes in push back should have the same depth as the root (or maybe
-        // one less?)
-        //
-        // - if the depth of the Tree is the same as the root create a new
-        // Inode with the root, the new tree and the nodes in push_back.
-        //
-        // - if it's < do an append_at depth on the root, then same as before
-        // with the nodes in push_back
-        //
-        // - if it's > 0 do a prepend at depth on that node with the root, then
-        // an append at depth with the nodes in push_back.
-
-        // if !slices.is_empty() {
-        //     todo!();
-        // }
-
-        // if let Some(split) = split {
-        //     let old_root = std::mem::replace(
-        //         root,
-        //         Node::Internal(Inode::from_children([split])),
-        //     );
-
-        //     unsafe {
-        //         root.as_mut_internal_unchecked().insert(0, Arc::new(old_root))
-        //     }
-        // }
 
         #[cfg(debug_assertions)]
         self.assert_invariants();
@@ -239,32 +219,15 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
             n
         };
 
-        while nodes.len() > FANOUT {
-            let capacity =
-                nodes.len() / FANOUT + ((nodes.len() % FANOUT != 0) as usize);
+        let mut root = Inode::from_equally_deep_nodes(nodes);
 
-            let mut new_nodes = Vec::with_capacity(capacity);
-
-            let mut iter = nodes.into_iter();
-
-            while iter.len() > 0 {
-                let children = iter.by_ref().take(FANOUT);
-                let inode = Inode::from_children(children);
-                new_nodes.push(Arc::new(Node::Internal(inode)));
-            }
-
-            nodes = new_nodes;
-        }
-
-        let mut root = Inode::from_children(nodes);
-
+        // TODO: if the last chunk had >= min_bytes we could avoid doing all of
+        // this.
         root.balance_right_side();
-
         let mut tree = Self { root: Arc::new(Node::Internal(root)) };
-
         tree.pull_up_root();
-
         Some(tree.root)
+        //
     }
 
     /// Returns a slice of the `Tree` in the range of the given metric.
@@ -354,54 +317,41 @@ mod tree_replace {
         L::Slice: 'a,
         for<'d> &'d L::Slice: Default,
     {
-        // 1: get to the deepest node that fully contains the replaced range.
-
         match node {
             Node::Internal(inode) => {
-                let (mut child_idx, split) = {
-                    let mut measured = M::zero();
-                    let mut children = inode.children().iter().enumerate();
+                let mut child_idx = 0;
+                let mut split = None;
 
-                    loop {
-                        let (idx, child) = children.next().unwrap();
+                let mut offset = M::zero();
 
-                        let child_measure = child.measure::<M>();
+                for (idx, child) in inode.children().iter().enumerate() {
+                    let child_measure = child.measure::<M>();
 
-                        let contains_start =
-                            measured + child_measure >= range.start;
+                    offset += child_measure;
 
-                        if contains_start {
-                            let contains_last_slice =
-                                measured + child_measure >= range.end;
+                    if offset >= range.start {
+                        if offset >= range.end {
+                            child_idx = idx;
 
-                            if contains_last_slice {
-                                range.start -= measured;
-                                range.end -= measured;
-                                let split =
-                                    inode.with_child_mut(idx, |child| {
-                                        some_name(
-                                            Arc::make_mut(child),
-                                            range,
-                                            slices,
-                                        )
-                                    });
-                                break (idx, split);
-                            } else {
-                                return do_stuff_with_deepest(
-                                    inode, range, slices,
-                                );
-                            };
+                            split = inode.with_child_mut(idx, |child| {
+                                offset -= child_measure;
+                                range.start -= offset;
+                                range.end -= offset;
+                                some_name(Arc::make_mut(child), range, slices)
+                            });
+
+                            break;
                         } else {
-                            measured += child_measure;
-                        }
+                            return do_stuff_with_deepest(
+                                inode, range, slices,
+                            );
+                        };
                     }
-                };
+                }
 
-                if let Some(split) = split {
-                    for node in split {
-                        inode.insert(child_idx + 1, node);
-                        child_idx += 1;
-                    }
+                for node in split? {
+                    inode.insert(child_idx + 1, node);
+                    child_idx += 1;
                 }
 
                 if inode.is_overfull() {
@@ -417,23 +367,28 @@ mod tree_replace {
             Node::Leaf(leaf) => {
                 let replace_with = slices.next().unwrap_or_default();
 
-                let extra = leaf.replace(range, replace_with);
+                let extra_leaf = leaf.replace(range, replace_with);
 
-                let leaves = slices
+                let mut leaves = slices
                     .map(std::borrow::ToOwned::to_owned)
                     .map(Lnode::from)
                     .map(Node::Leaf)
                     .map(Arc::new);
 
-                if let Some(extra) = extra {
+                if let Some(leaf) = extra_leaf {
                     let (lo, hi) = leaves.size_hint();
-                    let mut nodes = Vec::with_capacity(1 + hi.unwrap_or(lo));
-                    nodes.push(Arc::new(Node::Leaf(extra)));
-                    nodes.extend(leaves);
-                    Some(nodes)
+                    let mut extra = Vec::with_capacity(1 + hi.unwrap_or(lo));
+                    extra.extend(leaves);
+                    extra.push(Arc::new(Node::Leaf(leaf)));
+                    Some(extra)
+                } else if let Some(leaf) = leaves.next() {
+                    let (lo, hi) = leaves.size_hint();
+                    let mut extra = Vec::with_capacity(1 + hi.unwrap_or(lo));
+                    extra.push(leaf);
+                    extra.extend(leaves);
+                    Some(extra)
                 } else {
-                    let nodes = leaves.collect::<Vec<_>>();
-                    (!nodes.is_empty()).then_some(nodes)
+                    None
                 }
             },
         }
@@ -496,7 +451,12 @@ mod tree_replace {
 
         let mut split_last = None;
 
-        let mut slices = slices.collect::<Vec<_>>();
+        let mut slices = {
+            // We collect into a Vec to satisfy the trait bounds of
+            // `replace_last_rec`.
+            let s = slices.collect::<Vec<_>>();
+            s.into_iter()
+        };
 
         for (idx, child) in
             child_indexes.map(|idx| (idx, &inode.children[idx]))
@@ -544,7 +504,7 @@ mod tree_replace {
 
         let leaf_count = (inode.depth() - 1) ^ N;
 
-        let mut leaves = slices.drain(..).map(std::borrow::ToOwned::to_owned);
+        let mut leaves = slices.map(std::borrow::ToOwned::to_owned);
 
         for idx in start_idx + 1..end_idx {
             if let Some(node) =
@@ -661,23 +621,25 @@ mod tree_replace {
                 //
                 // TODO: make `Leaf::replace()` generic over a `RangeBounds<M>`
                 // instead of `Range<M>`?
-                return leaf
-                    .replace(replace_from..leaf.measure::<M>(), replace_with)
-                    .map(|e| Arc::new(Node::Leaf(e)));
+                leaf.replace(replace_from..leaf.measure::<M>(), replace_with)
+                    .map(|e| Arc::new(Node::Leaf(e)))
             },
         }
     }
 
     /// TODO: docs
     #[inline]
-    fn replace_last_rec<'a, const N: usize, L, M>(
+    fn replace_last_rec<'a, const N: usize, I, L, M>(
         node: &mut Node<N, L>,
         replace_up_to: M,
-        slices: &mut Vec<&'a L::Slice>,
+        slices: &mut I,
     ) -> Option<Arc<Node<N, L>>>
     where
         L: ReplaceableLeaf<M>,
         M: Metric<L>,
+        I: Iterator<Item = &'a L::Slice>
+            + DoubleEndedIterator
+            + ExactSizeIterator,
         L::Slice: 'a,
         for<'d> &'d L::Slice: Default,
     {
@@ -708,11 +670,10 @@ mod tree_replace {
             },
 
             Node::Leaf(leaf) => {
-                let replace_with = slices.pop().unwrap_or_default();
+                let replace_with = slices.next_back().unwrap_or_default();
 
-                return leaf
-                    .replace(M::zero()..replace_up_to, replace_with)
-                    .map(|e| Arc::new(Node::Leaf(e)));
+                leaf.replace(M::zero()..replace_up_to, replace_with)
+                    .map(|e| Arc::new(Node::Leaf(e)))
             },
         }
     }
@@ -1006,6 +967,68 @@ mod from_treeslice {
     }
 }
 
+mod iter_chain {
+    //! Implements a `ExactChain<I1, I2>` which is just like
+    //! [`std::iter::Chain`] except it implements `ExactSizeIterator` when both
+    //! `I1` and `I2` are `ExactSizeIterator`.
+    //!
+    //! See [1] or [2] for why this is needed.
+    //!
+    //! [1]: https://github.com/rust-lang/rust/issues/34433
+    //! [2]: https://github.com/rust-lang/rust/pull/66531
+
+    pub(super) struct ExactChain<T, U> {
+        chain: std::iter::Chain<T, U>,
+        yielded: usize,
+        total: usize,
+    }
+
+    #[inline]
+    pub(super) fn chain<T, I1, I2>(first: I1, second: I2) -> ExactChain<I1, I2>
+    where
+        I1: ExactSizeIterator<Item = T>,
+        I2: ExactSizeIterator<Item = T>,
+    {
+        ExactChain {
+            yielded: 0,
+            total: first.len() + second.len(),
+            chain: first.chain(second),
+        }
+    }
+
+    impl<T, I1, I2> Iterator for ExactChain<I1, I2>
+    where
+        I1: ExactSizeIterator<Item = T>,
+        I2: ExactSizeIterator<Item = T>,
+    {
+        type Item = T;
+
+        #[inline]
+        fn next(&mut self) -> Option<Self::Item> {
+            let item = self.chain.next()?;
+            self.yielded += 1;
+            Some(item)
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let exact = self.len();
+            (exact, Some(exact))
+        }
+    }
+
+    impl<T, I1, I2> ExactSizeIterator for ExactChain<I1, I2>
+    where
+        I1: ExactSizeIterator<Item = T>,
+        I2: ExactSizeIterator<Item = T>,
+    {
+        #[inline]
+        fn len(&self) -> usize {
+            self.total - self.yielded
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use std::ops::{Add, AddAssign, Sub, SubAssign};
@@ -1043,15 +1066,15 @@ mod tests {
         }
     }
 
-    impl<'a> AddAssign<&'a Self> for Count {
-        fn add_assign(&mut self, rhs: &'a Self) {
+    impl AddAssign<&Self> for Count {
+        fn add_assign(&mut self, rhs: &Self) {
             self.count += rhs.count;
             self.leaves += rhs.leaves;
         }
     }
 
-    impl<'a> SubAssign<&'a Self> for Count {
-        fn sub_assign(&mut self, rhs: &'a Self) {
+    impl SubAssign<&Self> for Count {
+        fn sub_assign(&mut self, rhs: &Self) {
             self.count -= rhs.count;
             self.leaves -= rhs.leaves;
         }

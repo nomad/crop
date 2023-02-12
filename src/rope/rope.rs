@@ -158,11 +158,11 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
-    pub fn insert<T>(&mut self, byte_index: usize, text: T)
+    pub fn insert<T>(&mut self, byte_offset: usize, text: T)
     where
         T: AsRef<str>,
     {
-        self.replace(byte_index..byte_index, text)
+        self.replace(byte_offset..byte_offset, text)
     }
 
     /// TODO: docs

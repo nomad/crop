@@ -400,6 +400,66 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         Self { children, depth, leaf_count, summary }
     }
 
+    /// TODO: docs
+    #[inline]
+    fn collapse_nodes<I>(mut nodes: I) -> Vec<Arc<Node<N, L>>>
+    where
+        I: ExactSizeIterator<Item = Arc<Node<N, L>>>,
+    {
+        let mut new_nodes = {
+            let c = nodes.len() / N + ((nodes.len() % N != 0) as usize);
+            Vec::with_capacity(c)
+        };
+
+        while nodes.len() > 0 {
+            debug_assert!(nodes.len() >= Self::min_children());
+
+            let take = if nodes.len() > Self::max_children() {
+                if nodes.len() - Self::max_children() >= Self::min_children() {
+                    Self::max_children()
+                } else {
+                    nodes.len() - Self::min_children()
+                }
+            } else {
+                nodes.len()
+            };
+
+            debug_assert!(
+                take >= Self::min_children() && take <= Self::max_children(),
+            );
+
+            debug_assert!(nodes.len() >= take);
+
+            let children = nodes.by_ref().take(take);
+            let inode = Inode::from_children(children);
+            new_nodes.push(Arc::new(Node::Internal(inode)));
+        }
+
+        new_nodes
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub(super) fn from_equally_deep_nodes<I>(nodes: I) -> Self
+    where
+        I: IntoIterator<Item = Arc<Node<N, L>>>,
+        I::IntoIter: ExactSizeIterator,
+    {
+        let nodes = nodes.into_iter();
+
+        let mut nodes = if nodes.len() > Self::max_children() {
+            Self::collapse_nodes(nodes)
+        } else {
+            return Self::from_children(nodes);
+        };
+
+        while nodes.len() > Self::max_children() {
+            nodes = Self::collapse_nodes(nodes.into_iter());
+        }
+
+        Self::from_children(nodes)
+    }
+
     #[inline]
     pub(super) fn has_enough_children(&self) -> bool {
         self.children().len() >= Self::min_children()

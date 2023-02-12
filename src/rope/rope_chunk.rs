@@ -197,7 +197,7 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
             // TODO: this should be the right-most byte that leaves the
             // returned node with Self::min_bytes bytes.
             let split_point =
-                adjust_split_point::<true>(&self, Self::min_bytes());
+                adjust_split_point::<true>(self, Self::min_bytes());
 
             let extra = {
                 // NOTE: this is the body of [`String::split_off()`] but it
@@ -395,5 +395,11 @@ impl<'a> Iterator for RopeChunkIter<'a> {
         self.yielded += chunk.len();
 
         Some(chunk)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let lo = (self.text.len() - self.yielded) / RopeChunk::max_bytes();
+        (lo, Some(lo + 1))
     }
 }
