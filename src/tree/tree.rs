@@ -77,10 +77,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
             Node::Internal(root) => {
                 // The root is the only inode that can have as few as 2
                 // children.
-                assert!(
-                    root.children().len() >= 2
-                        && root.children().len() <= FANOUT
-                );
+                assert!(root.len() >= 2 && root.len() <= FANOUT);
 
                 for child in root.children() {
                     child.assert_invariants()
@@ -173,7 +170,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         let root = &mut self.root;
 
         while let Node::Internal(i) = Arc::get_mut(root).unwrap() {
-            if i.children().len() == 1 {
+            if i.len() == 1 {
                 let child = unsafe {
                     i.children
                         .drain(..)
@@ -350,11 +347,9 @@ mod tree_replace {
                         .all(|n| n.depth()
                             == inode.children()[child_idx].depth()));
 
-                    let total_children = inode.children().len() + extra.len();
-
-                    let max_children = Inode::<N, L>::max_children();
-
-                    if total_children <= max_children {
+                    if inode.len() + extra.len()
+                        <= Inode::<N, L>::max_children()
+                    {
                         for node in extra {
                             child_idx += 1;
                             inode.insert(child_idx, node)
@@ -447,7 +442,7 @@ mod tree_replace {
 
         let mut offset = M::zero();
 
-        let mut child_indexes = 0..inode.children().len();
+        let mut child_indexes = 0..inode.len();
 
         for (idx, child) in
             child_indexes.by_ref().map(|idx| (idx, &inode.children[idx]))
@@ -558,7 +553,7 @@ mod tree_replace {
 
         if inode.is_overfull() {
             let min_children = Inode::<N, L>::min_children();
-            let split_offset = inode.children().len() - min_children;
+            let split_offset = inode.len() - min_children;
             let split = Inode::from_children(inode.split_off(split_offset));
             Some(vec![Arc::new(Node::Internal(split))])
         } else {
@@ -598,13 +593,13 @@ mod tree_replace {
 
                         // If the child was the last in the inode there's
                         // nothing left to do.
-                        if idx + 1 == inode.children().len() {
+                        if idx + 1 == inode.len() {
                             return extra;
                         }
 
                         // TODO: prepend_at_depth `extra` on the next node.
 
-                        for idx in idx + 1..inode.children().len() {
+                        for idx in idx + 1..inode.len() {
                             let leaf_count = (inode.depth() - 1) ^ N;
 
                             let replacement = Tree::root_from_leaves(
@@ -622,7 +617,7 @@ mod tree_replace {
                                     todo!();
                                 }
                             } else {
-                                // inode.drain(idx..inode.children().len());
+                                // inode.drain(idx..inode.len());
                                 return None;
                             }
                         }
@@ -900,7 +895,7 @@ mod from_treeslice {
                             inode.push(Arc::clone(child));
                         }
 
-                        if !first_is_valid && inode.children().len() > 1 {
+                        if !first_is_valid && inode.len() > 1 {
                             inode.balance_first_child_with_second();
                             *invalid_nodes -= 1;
                         }
@@ -960,7 +955,7 @@ mod from_treeslice {
 
                         inode.push(last);
 
-                        if !last_is_valid && inode.children().len() > 1 {
+                        if !last_is_valid && inode.len() > 1 {
                             inode.balance_last_child_with_penultimate();
                             *invalid_nodes -= 1;
                         }

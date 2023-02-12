@@ -274,7 +274,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                                 .unwrap_or((leaf.as_slice(), leaf.summary()));
 
                             let n = std::cmp::min(
-                                inode.children().len() - idx - 1,
+                                inode.len() - idx - 1,
                                 self.whole_total - self.whole_yielded,
                             );
 
@@ -298,7 +298,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 
             *visited += 1;
 
-            if *visited == inode.children().len() {
+            if *visited == inode.len() {
                 self.path.pop();
             } else {
                 let inode = &inode.children()[*visited];
@@ -319,7 +319,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 
                 Node::Leaf(_) => {
                     let n = std::cmp::min(
-                        inode.children().len(),
+                        inode.len(),
                         self.whole_total - self.whole_yielded,
                     );
 
@@ -564,17 +564,17 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
         loop {
             match &**inode.last() {
                 Node::Internal(i) => {
-                    self.path.push((inode, inode.children().len() - 1));
+                    self.path.push((inode, inode.len() - 1));
                     inode = i;
                 },
 
                 Node::Leaf(_) => {
                     let n = std::cmp::min(
-                        inode.children().len(),
+                        inode.len(),
                         self.whole_total - self.whole_yielded,
                     );
 
-                    return &inode.children()[(inode.children().len() - n)..];
+                    return &inode.children()[(inode.len() - n)..];
                 },
             }
         }

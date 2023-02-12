@@ -39,13 +39,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(node.depth() < self.depth());
 
         if self.depth() > node.depth() + 1 {
-            let extra =
-                self.with_child_mut(self.children.len() - 1, |last| {
-                    let last = Arc::make_mut(last);
-                    // SAFETY: TODO
-                    let last = unsafe { last.as_mut_internal_unchecked() };
-                    last.append_at_depth(node)
-                })?;
+            let extra = self.with_child_mut(self.len() - 1, |last| {
+                let last = Arc::make_mut(last);
+                // SAFETY: TODO
+                let last = unsafe { last.as_mut_internal_unchecked() };
+                last.append_at_depth(node)
+            })?;
 
             node = Arc::new(Node::Internal(extra));
         }
@@ -59,28 +58,28 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             let mut other =
                 Self::from_children(self.split_off(Self::min_children() + 1));
             other.push(node);
-            debug_assert_eq!(Self::min_children(), other.children.len());
+            debug_assert_eq!(Self::min_children(), other.len());
             Some(other)
         }
     }
 
     pub(super) fn assert_invariants(&self) {
         assert!(
-            self.children().len() >= Self::min_children(),
+            self.len() >= Self::min_children(),
             "An internal node of depth {} was supposed to contain at least \
              {} children but actually contains {}",
             self.depth(),
             Self::min_children(),
-            self.children().len()
+            self.len()
         );
 
         assert!(
-            self.children().len() <= Self::max_children(),
+            self.len() <= Self::max_children(),
             "An internal node of depth {} was supposed to contain at most {} \
              children but actually contains {}",
             self.depth(),
             Self::max_children(),
-            self.children().len()
+            self.len()
         );
 
         let actual_leaves =
@@ -123,7 +122,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// function assumes that there are zero `Arc::clone`s of the first child.
     #[inline]
     pub(super) fn balance_first_child_with_second(&mut self) {
-        debug_assert!(self.children().len() >= 2);
+        debug_assert!(self.len() >= 2);
 
         // Check for early returns.
         if self.first().is_valid() {
@@ -136,9 +135,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             (Node::Internal(first), Node::Internal(second)) => {
                 // Move all the second child's children over to the first
                 // child, then remove the second child.
-                if first.children().len() + second.children().len()
-                    <= Self::max_children()
-                {
+                if first.len() + second.len() <= Self::max_children() {
                     first
                         .children
                         .extend(second.children.iter().map(Arc::clone));
@@ -152,8 +149,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 // Move the minimum number of children from the second child
                 // over to the first child, keeping both.
                 else {
-                    let to_first =
-                        Self::min_children() - first.children().len();
+                    let to_first = Self::min_children() - first.len();
 
                     let (to_first, keep_second) =
                         second.children().split_at(to_first);
@@ -216,14 +212,14 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// function assumes that there are zero `Arc::clone`s of the last child.
     #[inline]
     pub(super) fn balance_last_child_with_penultimate(&mut self) {
-        debug_assert!(self.children().len() >= 2);
+        debug_assert!(self.len() >= 2);
 
         // Check for early returns.
         if self.last().is_valid() {
             return;
         }
 
-        let last_idx = self.children.len() - 1;
+        let last_idx = self.len() - 1;
 
         let (penultimate, last) = self.two_mut(last_idx - 1, last_idx);
 
@@ -231,9 +227,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             (Node::Internal(penultimate), Node::Internal(last)) => {
                 // Move all the penultimate child's children over to the last
                 // child, then remove the penultimate child.
-                if penultimate.children().len() + last.children().len()
-                    <= Self::max_children()
-                {
+                if penultimate.len() + last.len() <= Self::max_children() {
                     for (idx, child) in penultimate.children.iter().enumerate()
                     {
                         last.children.insert(idx, Arc::clone(child));
@@ -248,11 +242,11 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 // Move the minimum number of children from the second child
                 // over to the first child, keeping both.
                 else {
-                    let to_last = Self::min_children() - last.children().len();
+                    let to_last = Self::min_children() - last.len();
 
                     let (keep_penultimate, to_last) = penultimate
                         .children()
-                        .split_at(penultimate.children.len() - to_last);
+                        .split_at(penultimate.len() - to_last);
 
                     for (idx, child) in to_last.iter().enumerate() {
                         last.insert(idx, Arc::clone(child));
@@ -310,7 +304,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         {
             first.balance_left_side();
 
-            if !first.has_enough_children() && self.children().len() > 1 {
+            if !first.has_enough_children() && self.len() > 1 {
                 self.balance_first_child_with_second();
             }
         }
@@ -328,7 +322,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         if let Node::Internal(last) = Arc::get_mut(self.last_mut()).unwrap() {
             last.balance_right_side();
 
-            if !last.has_enough_children() && self.children().len() > 1 {
+            if !last.has_enough_children() && self.len() > 1 {
                 self.balance_last_child_with_penultimate();
             }
         }
@@ -445,7 +439,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     #[inline]
     pub(super) fn has_enough_children(&self) -> bool {
-        self.children().len() >= Self::min_children()
+        self.len() >= Self::min_children()
     }
 
     #[inline]
@@ -464,32 +458,37 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     #[inline]
     pub(super) fn is_empty(&self) -> bool {
-        self.children.len() == 0
+        self.len() == 0
     }
 
     #[inline]
     pub(super) fn is_full(&self) -> bool {
-        self.children.len() == N
+        self.len() == N
     }
 
     #[inline]
     pub(super) fn is_overfull(&self) -> bool {
-        self.children.len() > N
+        self.len() > N
     }
 
     /// Returns a reference to the last child of this internal node.
     #[allow(dead_code)]
     #[inline]
     pub(super) fn last(&self) -> &Arc<Node<N, L>> {
-        let last_idx = self.children.len() - 1;
+        let last_idx = self.len() - 1;
         &self.children[last_idx]
     }
 
     /// Returns a mutable reference to the last child of this internal node.
     #[inline]
     pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
-        let last_idx = self.children.len() - 1;
+        let last_idx = self.len() - 1;
         &mut self.children[last_idx]
+    }
+
+    #[inline]
+    pub(super) fn len(&self) -> usize {
+        self.children.len()
     }
 
     #[inline]
@@ -541,7 +540,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &mut self,
         child_offset: usize,
     ) -> std::vec::Drain<'_, Arc<Node<N, L>>> {
-        debug_assert!(child_offset <= self.children.len());
+        debug_assert!(child_offset <= self.len());
 
         for child in &self.children[child_offset..] {
             self.summary -= child.summary();
@@ -563,7 +562,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         child_idx: usize,
         new_child: Arc<Node<N, L>>,
     ) -> Arc<Node<N, L>> {
-        debug_assert!(child_idx < self.children.len());
+        debug_assert!(child_idx < self.len());
         debug_assert_eq!(new_child.depth() + 1, self.depth());
 
         let to_swap = &self.children[child_idx];
@@ -581,7 +580,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// # Panics
     ///
     /// Will panic if `first_idx >= second_idx`  and if
-    /// `second_idx >= self.children.len()`.
+    /// `second_idx >= self.len()`.
     #[inline]
     fn two_mut(
         &mut self,
@@ -589,7 +588,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         second_idx: usize,
     ) -> (&mut Arc<Node<N, L>>, &mut Arc<Node<N, L>>) {
         debug_assert!(first_idx < second_idx);
-        debug_assert!(second_idx < self.children.len());
+        debug_assert!(second_idx < self.len());
 
         let split_at = first_idx + 1;
         let (first, second) = self.children.split_at_mut(split_at);
@@ -693,10 +692,9 @@ where
 {
     #[inline]
     fn len(&self) -> usize {
+        let remaining = self.children.len();
         let max_children = Inode::<N, L>::max_children();
-
-        self.children.len() / max_children
-            + ((self.children.len() % max_children != 0) as usize)
+        remaining / max_children + ((remaining % max_children != 0) as usize)
     }
 }
 
@@ -721,7 +719,7 @@ fn pretty_print_inode<const N: usize, L: Leaf>(
     )?;
 
     for (i, child) in inode.children().iter().enumerate() {
-        let is_last = i + 1 == inode.children.len();
+        let is_last = i + 1 == inode.len();
         let ident = if is_last { "└── " } else { "├── " };
         match &**child {
             Node::Internal(inode) => {

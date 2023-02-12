@@ -305,7 +305,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
             *child_idx += 1;
 
-            if *child_idx < inode.children().len() {
+            if *child_idx < inode.len() {
                 break &inode.children()[*child_idx];
             } else {
                 self.path.pop();
@@ -1101,7 +1101,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         loop {
             match &**node {
                 Node::Internal(inode) => {
-                    self.path.push((node, inode.children().len() - 1));
+                    self.path.push((node, inode.len() - 1));
                     node = inode.last();
                     continue;
                 },
@@ -1513,7 +1513,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
             child_idx += 1;
 
-            if child_idx < inode.children().len() {
+            if child_idx < inode.len() {
                 break &inode.children()[child_idx];
             } else {
                 path_idx -= 1;
