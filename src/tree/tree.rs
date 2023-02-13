@@ -119,10 +119,25 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         I: IntoIterator<Item = L>,
         L: Default,
     {
-        Self {
-            root: Self::root_from_leaves(leaves.into_iter())
-                .unwrap_or_default(),
-        }
+        let mut leaves =
+            leaves.into_iter().map(Lnode::from).map(Node::Leaf).map(Arc::new);
+
+        let Some(first) = leaves.next() else { return Self::default() };
+
+        let Some(second) = leaves.next() else { return Self { root: first } };
+
+        let leaves = {
+            let (lo, hi) = leaves.size_hint();
+            let mut l = Vec::with_capacity(2 + hi.unwrap_or(lo));
+            l.push(first);
+            l.push(second);
+            l.extend(leaves);
+            l
+        };
+
+        let root = Inode::from_equally_deep_nodes(leaves);
+
+        Self { root: Arc::new(Node::Internal(root)) }
     }
 
     /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
@@ -219,41 +234,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         &self.root
     }
 
-    /// TODO:
-    /// move this back to `Tree::from_leaves` once we don't use it in
-    /// tree_replace
-    /// TODO: docs
-    #[inline]
-    fn root_from_leaves<I>(mut leaves: I) -> Option<Arc<Node<FANOUT, L>>>
-    where
-        I: Iterator<Item = L>,
-    {
-        let first = leaves.next()?;
-        let first = Arc::new(Node::Leaf(Lnode::from(first)));
-
-        let Some(second) = leaves.next() else { return Some(first) };
-        let second = Arc::new(Node::Leaf(Lnode::from(second)));
-
-        let nodes = {
-            let (lo, hi) = leaves.size_hint();
-            let mut n = Vec::with_capacity(2 + hi.unwrap_or(lo));
-            n.push(first);
-            n.push(second);
-            n.extend(leaves.map(Lnode::from).map(Node::Leaf).map(Arc::new));
-            n
-        };
-
-        let mut root = Inode::from_equally_deep_nodes(nodes);
-
-        // TODO: if the last chunk had >= min_bytes we could avoid doing all of
-        // this.
-        root.balance_right_side();
-        let mut tree = Self { root: Arc::new(Node::Internal(root)) };
-        tree.pull_up_root();
-        Some(tree.root)
-        //
-    }
-
     /// Returns a slice of the `Tree` in the range of the given metric.
     #[inline]
     pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
@@ -282,6 +262,13 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         for<'d> &'d L::Slice: Default,
     {
         Units::from(self)
+    }
+
+    fn root_from_leaves<I>(mut leaves: I) -> Option<Arc<Node<FANOUT, L>>>
+    where
+        I: Iterator<Item = L>,
+    {
+        todo!();
     }
 }
 

@@ -670,7 +670,7 @@ where
             remaining
         };
 
-        debug_assert!(take >= min_children && take <= max_children,);
+        debug_assert!(take >= min_children && take <= max_children);
 
         debug_assert!(remaining >= take);
 
