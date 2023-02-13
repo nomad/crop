@@ -125,7 +125,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(self.len() >= 2);
 
         // Check for early returns.
-        if self.first().is_valid() {
+        if !self.first().is_underfilled() {
             return;
         }
 
@@ -165,8 +165,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
                     self.children[1] = second;
 
-                    debug_assert!(self.children[0].is_valid());
-                    debug_assert!(self.children[1].is_valid());
+                    debug_assert!(!self.children[0].is_underfilled());
+                    debug_assert!(!self.children[1].is_underfilled());
                 }
             },
 
@@ -215,7 +215,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(self.len() >= 2);
 
         // Check for early returns.
-        if self.last().is_valid() {
+        if !self.last().is_underfilled() {
             return;
         }
 
@@ -259,8 +259,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
                     self.children[last_idx - 1] = penultimate;
 
-                    debug_assert!(self.children[last_idx - 1].is_valid());
-                    debug_assert!(self.children[last_idx].is_valid());
+                    debug_assert!(
+                        !self.children[last_idx - 1].is_underfilled()
+                    );
+                    debug_assert!(!self.children[last_idx].is_underfilled());
                 }
             },
 
@@ -304,7 +306,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         {
             first.balance_left_side();
 
-            if !first.has_enough_children() && self.len() > 1 {
+            if !first.is_underfilled() && self.len() > 1 {
                 self.balance_first_child_with_second();
             }
         }
@@ -322,7 +324,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         if let Node::Internal(last) = Arc::get_mut(self.last_mut()).unwrap() {
             last.balance_right_side();
 
-            if !last.has_enough_children() && self.len() > 1 {
+            if !last.is_underfilled() && self.len() > 1 {
                 self.balance_last_child_with_penultimate();
             }
         }
@@ -438,7 +440,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn has_enough_children(&self) -> bool {
+    pub(super) fn is_underfilled(&self) -> bool {
         self.len() >= Self::min_children()
     }
 

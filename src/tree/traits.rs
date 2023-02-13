@@ -47,13 +47,15 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized {
     }
 }
 
-pub trait ReplaceableLeaf<M: Metric<Self>>: Leaf + Clone {
+pub trait ReplaceableLeaf<M: Metric<Self>>: Leaf {
+    type ExtraLeaves: ExactSizeIterator<Item = Self>;
+
     fn replace(
         &mut self,
         summary: &mut Self::Summary,
         range: std::ops::Range<M>,
         slice: &Self::Slice,
-    ) -> Option<(Self, Self::Summary)>;
+    ) -> Option<Self::ExtraLeaves>;
 }
 
 pub trait Metric<L: Leaf>:

@@ -320,6 +320,10 @@ impl Rope {
         let (start, end) =
             range_bounds_to_start_end(byte_range, 0, self.byte_len());
 
+        if start > end {
+            panic!("TODO");
+        }
+
         if end > self.byte_len() {
             panic!(
                 "Trying to edit past the end of the Rope: the byte length is \
@@ -329,10 +333,8 @@ impl Rope {
             );
         }
 
-        self.tree.replace(
-            ByteMetric(start)..ByteMetric(end),
-            RopeChunkIter::new(text.as_ref()).map(Into::into),
-        );
+        self.tree
+            .replace(ByteMetric(start)..ByteMetric(end), text.as_ref().into());
 
         #[cfg(debug_assertions)]
         self.assert_invariants();

@@ -62,6 +62,31 @@ impl RopeChunk {
     pub(super) const fn min_bytes() -> usize {
         ROPE_CHUNK_MIN_BYTES
     }
+
+    /// Splits the chunk at the given byte offset, returning the right side of
+    /// the split. The chunk will have `byte_offset` bytes after splitting.
+    ///
+    /// # Safety
+    ///
+    /// The function is unsafe because it does not check that `byte_offset` is
+    /// a valid char boundary, leaving that up to the caller.
+    unsafe fn split_off_unchecked(&mut self, byte_offset: usize) -> Self {
+        debug_assert!(self.is_char_boundary(byte_offset));
+        let rhs = self.as_mut_vec().split_off(byte_offset);
+        Self { text: String::from_utf8_unchecked(rhs) }
+    }
+
+    /// Removes all the contents after `byte_offset` from the chunk, leaving
+    /// the capacity untouched.
+    ///
+    /// # Safety
+    ///
+    /// The function is unsafe because it does not check that `byte_offset` is
+    /// a valid char boundary, leaving that up to the caller.
+    unsafe fn truncate_unchecked(&mut self, byte_offset: usize) {
+        debug_assert!(self.is_char_boundary(byte_offset));
+        self.as_mut_vec().truncate(byte_offset);
+    }
 }
 
 impl std::borrow::Borrow<ChunkSlice> for RopeChunk {
@@ -159,92 +184,6 @@ impl Leaf for RopeChunk {
 
             (left, Some(right))
         }
-    }
-}
-
-impl ReplaceableLeaf<ByteMetric> for RopeChunk {
-    #[inline]
-    fn replace(
-        &mut self,
-        summary: &mut ChunkSummary,
-        Range { start: ByteMetric(start), end: ByteMetric(end) }: Range<
-            ByteMetric,
-        >,
-        slice: &ChunkSlice,
-    ) -> Option<(Self, ChunkSummary)> {
-        // TODO: can we compute some of these summaries better? Check width
-        // of replaced range and slice to see if we can get it cheaper by
-        // substraction.
-
-        // TODO: if we already know that self.len() will overflow we can chop
-        // stuff off before calling `replace_range` and `insert_str`. Having
-        // less stuff on the rhs of the split will cause fewer bytes to be
-        // shifted to the right.
-
-        if end > start {
-            let removed: &ChunkSlice = self[start..end].into();
-            *summary -= &removed.summarize();
-            *summary += &slice.summarize();
-            self.replace_range(start..end, slice);
-        } else if !slice.is_empty() {
-            *summary += &slice.summarize();
-            self.insert_str(start, slice);
-        } else {
-            return None;
-        }
-
-        let split_point = end + slice.len();
-
-        if split_point < self.len() {
-            let extra = RopeChunk { text: self.split_off(split_point) };
-            let extra_summary = extra.summarize();
-            *summary -= &extra_summary;
-            Some((extra, extra_summary))
-        } else {
-            None
-        }
-
-        // if self.len() > Self::max_bytes() {
-        //     None
-
-        //     // // TODO: this should be the right-most byte that leaves the
-        //     // // returned node with Self::min_bytes bytes.
-        //     // let split_point =
-        //     //     adjust_split_point::<true>(self, Self::min_bytes());
-
-        //     // let extra = {
-        //     //     // NOTE: this is the body of [`String::split_off()`] but it
-        //     //     // skips the codepoint boundary check.
-
-        //     //     let v = unsafe { self.as_mut_vec() };
-        //     //     let v = v.split_off(split_point);
-
-        //     //     // SAFETY: `split_point` is a char boundary and the contents of
-        //     //     // the chunk from `split_point` until the end are valid UTF-8.
-        //     //     let text = unsafe { String::from_utf8_unchecked(v) };
-
-        //     //     RopeChunk { text }
-        //     // };
-
-        //     // // TODO: can we do better?
-        //     // let extra_summary = extra.summarize();
-
-        //     // *summary -= &extra_summary;
-
-        //     // debug_assert!(self.len() >= RopeChunk::chunk_min());
-        //     // debug_assert!(self.len() <= RopeChunk::chunk_max());
-        //     // debug_assert!(extra.len() >= RopeChunk::chunk_min());
-        //     // debug_assert!(extra.len() <= RopeChunk::chunk_max());
-
-        //     // // None
-
-        //     // Some((extra, extra_summary))
-        // } else if self.len() < Self::min_bytes() {
-        //     // todo!();
-        //     None
-        // } else {
-        //     None
-        // }
     }
 }
 
@@ -361,6 +300,138 @@ impl SubAssign<&Self> for ChunkSummary {
     }
 }
 
+impl ReplaceableLeaf<ByteMetric> for RopeChunk {
+    type ExtraLeaves = std::vec::IntoIter<Self>;
+
+    #[inline]
+    fn replace(
+        &mut self,
+        summary: &mut ChunkSummary,
+        range: Range<ByteMetric>,
+        mut slice: &ChunkSlice,
+    ) -> Option<Self::ExtraLeaves> {
+        let start = range.start.0;
+
+        let end = range.end.0;
+
+        if self.len() - (end - start) + slice.len() <= Self::max_bytes() {
+            if end > start {
+                // Compute the summary of the replaced range, either directly
+                // or by subtraction depending on which is cheaper.
+                let range_summary = if end - start < self.len() / 2 {
+                    <&ChunkSlice>::from(&self[start..end]).summarize()
+                } else {
+                    let up_to_start =
+                        <&ChunkSlice>::from(&self[..start]).summarize();
+
+                    let from_end =
+                        <&ChunkSlice>::from(&self[end..]).summarize();
+
+                    *summary - (up_to_start + from_end)
+                };
+
+                *summary -= &range_summary;
+                *summary += &slice.summarize();
+                self.replace_range(start..end, slice);
+            } else {
+                *summary += &slice.summarize();
+                self.insert_str(start, slice);
+            }
+
+            return None;
+        }
+
+        // SAFETY: `end` is a char boundary.
+        let mut last = unsafe { self.split_off_unchecked(end) };
+
+        // SAFETY: `start` is a char boundary.
+        unsafe { self.truncate_unchecked(start) };
+
+        debug_assert!(
+            self.len() + slice.len() + last.len() > Self::max_bytes()
+        );
+
+        let mut first = None;
+
+        if self.len() < Self::min_bytes() {
+            let mut missing = Self::min_bytes() - self.len();
+
+            // The number of bytes to take from the start of `slice` and add to
+            // `self`.
+            let take_from_slice = if missing > slice.len() {
+                slice.len()
+            } else {
+                adjust_split_point::<true>(slice, missing)
+            };
+
+            self.push_str(&slice[..take_from_slice]);
+            slice = slice[take_from_slice..].into();
+
+            // If the slice alone wasn't enough we need to take from `last`.
+            if missing > take_from_slice {
+                missing -= take_from_slice;
+
+                let take_from_last =
+                    adjust_split_point::<true>(&last, missing);
+
+                self.push_str(&last[..take_from_last]);
+                last.replace_range(..take_from_last, "");
+            }
+        } else if slice.len() + last.len() < Self::min_bytes() {
+            let missing = Self::min_bytes() - (slice.len() + last.len());
+
+            // We don't have to check that `self.len() > missing` because if we
+            // get here we have:
+            //
+            // ```
+            // a) self + slice + last > max_bytes = 2 * min_bytes
+            // b) slice + last < min_bytes
+            // ```
+            //
+            // =>
+            //
+            // ```
+            // a) self > 2 * min_bytes - slice - last
+            // b) -slice -last > -min_bytes
+            // ```
+            //
+            // and by substituting b) into a) we get
+            //
+            // ```
+            // self > 2 * min_bytes - min_bytes = min_bytes > missing
+            // ```
+
+            let keep_in_self =
+                adjust_split_point::<true>(&self, self.len() - missing);
+
+            // SAFETY: `keep_in_self` is a valid char boundary.
+            first = Some(unsafe { self.split_off_unchecked(keep_in_self) });
+        }
+
+        debug_assert!(
+            self.len() >= Self::min_bytes() && self.len() <= Self::max_bytes()
+        );
+
+        *summary = self.summarize();
+
+        debug_assert!(
+            first.as_ref().map(|f| f.len()).unwrap_or(0)
+                + slice.len()
+                + last.len()
+                >= Self::chunk_min()
+        );
+
+        let extras = extra_leaves::ExtraLeaves::new(first, slice, last);
+
+        // TODO: implement `ExactSizeIterator` on `ExtraLeaves` and see if it
+        // makes any difference.
+        //
+        // We collect into a Vec because `ExtraLeaves` is not an
+        // `ExactSizeIterator`.
+        Some(extras.collect::<Vec<_>>().into_iter())
+    }
+}
+
 pub(super) struct RopeChunkIter<'a> {
     text: &'a str,
     yielded: usize,
@@ -414,5 +485,106 @@ impl<'a> Iterator for RopeChunkIter<'a> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         let lo = (self.text.len() - self.yielded) / RopeChunk::max_bytes();
         (lo, Some(lo + 1))
+    }
+}
+
+mod extra_leaves {
+    use super::*;
+
+    /// TODO: docs
+    pub(super) struct ExtraLeaves<'a> {
+        first: Option<RopeChunk>,
+        yielded_first: bool,
+        slice: &'a ChunkSlice,
+        last: RopeChunk,
+        yielded: usize,
+        total: usize,
+    }
+
+    impl<'a> ExtraLeaves<'a> {
+        #[inline]
+        pub(super) fn new(
+            first: Option<RopeChunk>,
+            slice: &'a ChunkSlice,
+            last: RopeChunk,
+        ) -> Self {
+            Self {
+                total: slice.len() + last.len(),
+                yielded: 0,
+                yielded_first: false,
+                first,
+                slice,
+                last,
+            }
+        }
+
+        #[inline]
+        fn first(&mut self) -> RopeChunk {
+            debug_assert!(!self.yielded_first);
+
+            self.yielded_first = true;
+
+            if let Some(mut first) = self.first.take() {
+                debug_assert!(first.len() < RopeChunk::min_bytes());
+
+                if self.total <= RopeChunk::max_bytes() {
+                    first.push_str(self.slice);
+                    first.push_str(&self.last);
+                    first
+                } else {
+                    // let mut missing = RopeChunk::max_bytes() -
+                    // let take_from_slice =
+                    todo!();
+                }
+            } else {
+                self.next().unwrap()
+            }
+        }
+
+        #[inline]
+        fn next(&mut self) -> Option<RopeChunk> {
+            debug_assert!(self.yielded_first);
+            debug_assert!(self.first.is_none());
+
+            let mut remaining = self.total - self.yielded;
+
+            let chunk: RopeChunk = if remaining == 0 {
+                return None;
+            } else if remaining > RopeChunk::max_bytes() {
+                todo!();
+            } else {
+                debug_assert!(remaining >= RopeChunk::chunk_min());
+
+                // if remaining > self.last.len() {
+                //     // self[slice]
+                // } else {
+                // }
+
+                todo!();
+            };
+
+            self.yielded += chunk.len();
+
+            Some(chunk)
+        }
+    }
+
+    impl Iterator for ExtraLeaves<'_> {
+        type Item = RopeChunk;
+
+        #[inline]
+        fn next(&mut self) -> Option<Self::Item> {
+            if !self.yielded_first {
+                Some(self.first())
+            } else {
+                self.next()
+            }
+        }
+
+        #[inline]
+        fn size_hint(&self) -> (usize, Option<usize>) {
+            let lo = (self.total - self.yielded) / RopeChunk::max_bytes();
+            (lo, Some(lo + 1))
+        }
     }
 }

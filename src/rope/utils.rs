@@ -5,6 +5,7 @@ use super::iterators::Chunks;
 use super::rope_chunk::{ChunkSlice, ChunkSummary, RopeChunk};
 use crate::tree::Summarize;
 
+/// TODO: document panics, behaviour if candidate is > s.len()
 #[inline]
 pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
     s: &str,
