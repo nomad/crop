@@ -84,7 +84,7 @@ impl<L: Leaf> Lnode<L> {
         M: Metric<L>,
     {
         let extras = self.value.replace(&mut self.summary, range, slice)?;
-        Some(extras.map(Self::from))
+        Some(extras.into_iter().map(Self::from))
     }
 
     #[inline]

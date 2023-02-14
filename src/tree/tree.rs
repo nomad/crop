@@ -204,13 +204,13 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     #[inline]
     pub fn replace<M>(&mut self, range: Range<M>, slice: &L::Slice)
     where
-        M: Metric<L> + 'static,
-        L: ReplaceableLeaf<M> + Clone + 'static,
+        M: Metric<L>,
+        L: ReplaceableLeaf<M> + Clone,
     {
         let root = Arc::make_mut(&mut self.root);
 
         if let Some(extras) = tree_replace::some_name(root, range, slice) {
-            // debug_assert!(extras.iter().all(|n| n.depth() == root.depth()));
+            debug_assert!(extras.iter().all(|n| n.depth() == root.depth()));
 
             let old_root =
                 std::mem::replace(root, Node::Internal(Inode::empty()));
@@ -270,15 +270,11 @@ mod tree_replace {
         node: &mut Node<N, L>,
         mut range: Range<M>,
         slice: &L::Slice,
-    ) -> Option<Box<dyn ExactSizeIterator<Item = Arc<Node<N, L>>>>>
+    ) -> Option<Vec<Arc<Node<N, L>>>>
     where
-        M: Metric<L> + 'static,
-        L: ReplaceableLeaf<M> + Clone + 'static,
+        M: Metric<L>,
+        L: ReplaceableLeaf<M> + Clone,
     {
-        // NOTE: this function can return 3 different iterators, so we use
-        // dynamic dispatch to avoid having to collect them into a Vec between
-        // calls.
-
         match node {
             Node::Internal(inode) => {
                 // The index of the child containing the entire replacement
@@ -306,7 +302,7 @@ mod tree_replace {
                             })
                         } else {
                             do_stuff_with_deepest(inode, range, slice)
-                                .map(|extras| Box::new(extras) as _)
+                                .map(|extras| extras.collect())
                         };
 
                         break;
@@ -314,10 +310,10 @@ mod tree_replace {
                 }
 
                 if let Some(extras) = extras {
-                    // debug_assert!(extras
-                    //     .iter()
-                    //     .all(|n| n.depth()
-                    //         == inode.children()[child_idx].depth()));
+                    debug_assert!(extras
+                        .iter()
+                        .all(|n| n.depth()
+                            == inode.children()[child_idx].depth()));
 
                     if inode.len() + extras.len()
                         <= Inode::<N, L>::max_children()
@@ -342,8 +338,7 @@ mod tree_replace {
 
                     *inode = inodes.next().unwrap();
 
-                    let extras = inodes.map(Node::Internal).map(Arc::new);
-                    Some(Box::new(extras))
+                    Some(inodes.map(Node::Internal).map(Arc::new).collect())
                 } else if inode.children[child_idx].is_underfilled() {
                     // TODO: rebalance child_idx with either previous or next
                     // node.
@@ -355,7 +350,7 @@ mod tree_replace {
 
             Node::Leaf(leaf) => {
                 let extras = leaf.replace(range, slice)?;
-                Some(Box::new(extras.map(Node::Leaf).map(Arc::new)))
+                Some(extras.map(Node::Leaf).map(Arc::new).collect())
             },
         }
     }

@@ -48,16 +48,12 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized {
 }
 
 pub trait ReplaceableLeaf<M: Metric<Self>>: Leaf {
-    type ExtraLeaves: Iterator<Item = Self>
-        + ExactSizeIterator
-        + DoubleEndedIterator;
-
     fn replace(
         &mut self,
         summary: &mut Self::Summary,
         range: std::ops::Range<M>,
         slice: &Self::Slice,
-    ) -> Option<Self::ExtraLeaves>;
+    ) -> Option<Vec<Self>>;
 }
 
 pub trait Metric<L: Leaf>:
