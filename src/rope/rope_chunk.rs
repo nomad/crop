@@ -216,10 +216,10 @@ impl Default for &ChunkSlice {
     }
 }
 
-impl From<&str> for &ChunkSlice {
+impl<'a> From<&'a str> for &'a ChunkSlice {
     #[inline]
     fn from(text: &str) -> Self {
-        // SAFETY: a `ChunkSlice` has the same layout as a `str`.
+        // SAFETY: both the lifetime and the layout match.
         unsafe { &*(text as *const str as *const ChunkSlice) }
     }
 }
@@ -358,8 +358,9 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
         }
 
         // SAFETY: `end` is a char boundary.
-        let mut last: &ChunkSlice =
-            unsafe { self.split_off_unchecked(end) }.as_str().into();
+        let l = unsafe { self.split_off_unchecked(end) };
+
+        let mut last: &ChunkSlice = l.as_str().into();
 
         // SAFETY: `start` is a char boundary.
         unsafe { self.truncate_unchecked(start) };
@@ -498,6 +499,51 @@ impl<'a> Iterator for RopeChunkIter<'a> {
         let lo = (self.text.len() - self.yielded) / RopeChunk::max_bytes();
         (lo, Some(lo + 1))
     }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn rope_chunk_split_off() {
+        let mut r = RopeChunk::from("abcd");
+        let rhs = unsafe { r.split_off_unchecked(3) };
+        assert_eq!("abc", &*r);
+        assert_eq!("d", &*rhs);
+    }
+
+    #[test]
+    fn chunk_segmenter_0() {
+        let mut segments = RopeChunkIter::new("");
+        assert_eq!(None, segments.next());
+    }
+
+    #[test]
+    fn chunk_segmenter_1() {
+        let mut segments = RopeChunkIter::new("a");
+        assert_eq!("a", segments.next().unwrap());
+        assert_eq!(None, segments.next());
+    }
+
+    #[test]
+    fn chunk_segmenter_2() {
+        let mut segments = RopeChunkIter::new("abcde");
+        assert_eq!("abc", segments.next().unwrap());
+        assert_eq!("de", segments.next().unwrap());
+        assert_eq!(None, segments.next());
+    }
+
+    #[test]
+    fn chunk_segmenter_3() {
+        let mut segments = RopeChunkIter::new("abcdefghi");
+        assert_eq!("abcd", segments.next().unwrap());
+        assert_eq!("efg", segments.next().unwrap());
+        assert_eq!("hi", segments.next().unwrap());
+        assert_eq!(None, segments.next());
+    }
+
+    // TODO: test multibyte characters
 }
 
 mod extra_leaves {
@@ -697,11 +743,4 @@ mod extra_leaves {
         assert_eq!("ab", &*extras.next().unwrap());
         assert_eq!(None, extras.next());
     }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    // TODO: test ChunkSegmenter and ExtraLeaves
 }
