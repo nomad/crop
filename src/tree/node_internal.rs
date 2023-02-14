@@ -559,7 +559,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     /// TODO: docs
     #[inline]
-    pub(super) fn swap_child(
+    pub(super) fn swap(
         &mut self,
         child_idx: usize,
         new_child: Arc<Node<N, L>>,

@@ -76,7 +76,9 @@ impl<L: Leaf> Lnode<L> {
         &mut self,
         range: std::ops::Range<M>,
         slice: &L::Slice,
-    ) -> Option<impl ExactSizeIterator<Item = Self>>
+    ) -> Option<
+        impl Iterator<Item = Self> + ExactSizeIterator + DoubleEndedIterator,
+    >
     where
         L: ReplaceableLeaf<M>,
         M: Metric<L>,

@@ -48,7 +48,9 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized {
 }
 
 pub trait ReplaceableLeaf<M: Metric<Self>>: Leaf {
-    type ExtraLeaves: ExactSizeIterator<Item = Self>;
+    type ExtraLeaves: Iterator<Item = Self>
+        + ExactSizeIterator
+        + DoubleEndedIterator;
 
     fn replace(
         &mut self,
