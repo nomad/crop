@@ -341,6 +341,11 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
+    pub(super) fn children_mut(&mut self) -> &mut [Arc<Node<N, L>>] {
+        &mut self.children
+    }
+
+    #[inline]
     pub(super) fn depth(&self) -> usize {
         self.depth
     }
@@ -511,6 +516,44 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) const fn min_children() -> usize {
         N / 2
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub(super) fn prepend_at_depth(
+        &mut self,
+        mut node: Arc<Node<N, L>>,
+    ) -> Option<Self>
+    where
+        L: Clone,
+    {
+        debug_assert!(node.depth() < self.depth());
+
+        todo!();
+
+        // if self.depth() > node.depth() + 1 {
+        //     let extra = self.with_child_mut(self.len() - 1, |last| {
+        //         let last = Arc::make_mut(last);
+        //         // SAFETY: TODO
+        //         let last = unsafe { last.as_mut_internal_unchecked() };
+        //         last.append_at_depth(node)
+        //     })?;
+
+        //     node = Arc::new(Node::Internal(extra));
+        // }
+
+        // debug_assert_eq!(self.depth(), node.depth() + 1);
+
+        // if !self.is_full() {
+        //     self.push(node);
+        //     None
+        // } else {
+        //     let mut other =
+        //         Self::from_children(self.split_off(Self::min_children() + 1));
+        //     other.push(node);
+        //     debug_assert_eq!(Self::min_children(), other.len());
+        //     Some(other)
+        // }
     }
 
     /// Adds a node to the children, updating self's summary with the summary
