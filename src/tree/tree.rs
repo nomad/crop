@@ -184,10 +184,11 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     pub(super) fn pull_up_root(&mut self) {
         let root = &mut self.root;
 
-        while let Node::Internal(i) = Arc::get_mut(root).unwrap() {
-            if i.len() == 1 {
+        while let Node::Internal(inode) = Arc::get_mut(root).unwrap() {
+            if inode.len() == 1 {
                 let child = unsafe {
-                    i.children
+                    inode
+                        .children_mut()
                         .drain(..)
                         .next()
                         // SAFETY: there is exactly 1 child.
@@ -316,7 +317,7 @@ mod tree_replace {
 
         if let Some(extras) = extras {
             collapse_stuff(inode, child_idx + 1, extras)
-        } else if inode.children[child_idx].is_underfilled() {
+        } else if inode.children()[child_idx].is_underfilled() {
             // TODO: rebalance child_idx with either previous or next
             // node.
             None
@@ -356,7 +357,7 @@ mod tree_replace {
         let mut child_indexes = 0..inode.len();
 
         for (idx, child) in
-            child_indexes.by_ref().map(|idx| (idx, &inode.children[idx]))
+            child_indexes.by_ref().map(|idx| (idx, &inode.children()[idx]))
         {
             let child_measure = child.measure::<M>();
 
@@ -378,7 +379,7 @@ mod tree_replace {
         }
 
         for (idx, child) in
-            child_indexes.map(|idx| (idx, &inode.children[idx]))
+            child_indexes.map(|idx| (idx, &inode.children()[idx]))
         {
             let child_measure = child.measure::<M>();
 
@@ -522,7 +523,7 @@ mod tree_replace {
 
         let last = inode.split_off(insert_after).collect::<Vec<_>>();
 
-        let children = std::mem::take(&mut inode.children)
+        let children = std::mem::take(inode.children_mut())
             .into_iter()
             .exact_chain(children)
             .exact_chain(last);

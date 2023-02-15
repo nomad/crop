@@ -4,7 +4,7 @@ use super::{Leaf, Lnode, Metric, Node};
 
 #[derive(Clone)]
 pub(super) struct Inode<const N: usize, L: Leaf> {
-    pub(super) children: Vec<Arc<Node<N, L>>>,
+    children: Vec<Arc<Node<N, L>>>,
     summary: L::Summary,
     depth: usize,
     leaf_count: usize,
@@ -58,7 +58,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             let mut other =
                 Self::from_children(self.split_off(Self::min_children() + 1));
             other.push(node);
-            debug_assert_eq!(Self::min_children(), other.len());
+            debug_assert!(!self.is_underfilled());
+            debug_assert!(!other.is_underfilled());
             Some(other)
         }
     }
@@ -341,7 +342,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn children_mut(&mut self) -> &mut [Arc<Node<N, L>>] {
+    pub(super) fn children_mut(&mut self) -> &mut Vec<Arc<Node<N, L>>> {
         &mut self.children
     }
 
@@ -446,7 +447,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     #[inline]
     pub(super) fn is_underfilled(&self) -> bool {
-        self.len() >= Self::min_children()
+        self.len() < Self::min_children()
     }
 
     #[inline]
@@ -455,7 +456,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         child_offset: usize,
         child: Arc<Node<N, L>>,
     ) {
-        // debug_assert!(!self.is_full());
+        debug_assert!(!self.is_full());
         debug_assert_eq!(child.depth() + 1, self.depth());
 
         self.leaf_count += child.leaf_count();
@@ -470,29 +471,22 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     #[inline]
     pub(super) fn is_full(&self) -> bool {
-        self.len() == N
+        self.len() == Self::max_children()
     }
 
-    #[inline]
-    pub(super) fn is_overfull(&self) -> bool {
-        self.len() > N
-    }
-
-    /// Returns a reference to the last child of this internal node.
-    #[allow(dead_code)]
     #[inline]
     pub(super) fn last(&self) -> &Arc<Node<N, L>> {
         let last_idx = self.len() - 1;
         &self.children[last_idx]
     }
 
-    /// Returns a mutable reference to the last child of this internal node.
     #[inline]
     pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
         let last_idx = self.len() - 1;
         &mut self.children[last_idx]
     }
 
+    /// The number of children contained in this internal node.
     #[inline]
     pub(super) fn len(&self) -> usize {
         self.children.len()
@@ -529,31 +523,31 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     {
         debug_assert!(node.depth() < self.depth());
 
-        todo!();
+        if self.depth() > node.depth() + 1 {
+            let extra = self.with_child_mut(0, |first| {
+                let first = Arc::make_mut(first);
+                // SAFETY: TODO
+                let first = unsafe { first.as_mut_internal_unchecked() };
+                first.prepend_at_depth(node)
+            })?;
 
-        // if self.depth() > node.depth() + 1 {
-        //     let extra = self.with_child_mut(self.len() - 1, |last| {
-        //         let last = Arc::make_mut(last);
-        //         // SAFETY: TODO
-        //         let last = unsafe { last.as_mut_internal_unchecked() };
-        //         last.append_at_depth(node)
-        //     })?;
+            node = Arc::new(Node::Internal(extra));
+        }
 
-        //     node = Arc::new(Node::Internal(extra));
-        // }
+        debug_assert_eq!(self.depth(), node.depth() + 1);
 
-        // debug_assert_eq!(self.depth(), node.depth() + 1);
-
-        // if !self.is_full() {
-        //     self.push(node);
-        //     None
-        // } else {
-        //     let mut other =
-        //         Self::from_children(self.split_off(Self::min_children() + 1));
-        //     other.push(node);
-        //     debug_assert_eq!(Self::min_children(), other.len());
-        //     Some(other)
-        // }
+        if !self.is_full() {
+            self.insert(0, node);
+            None
+        } else {
+            let new_self =
+                Self::from_children(self.split_off(Self::min_children()));
+            let mut other = std::mem::replace(self, new_self);
+            other.insert(0, node);
+            debug_assert!(!self.is_underfilled());
+            debug_assert!(!other.is_underfilled());
+            Some(other)
+        }
     }
 
     /// Adds a node to the children, updating self's summary with the summary
@@ -579,7 +573,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.leaf_count -= child.leaf_count();
     }
 
-    /// TODO: docs
+    /// Removes all the nodes after `child_offset`, returning them. The inode
+    /// will have `child_offset` children after this function is called.
     #[inline]
     pub(super) fn split_off(
         &mut self,

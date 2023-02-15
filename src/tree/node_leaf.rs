@@ -57,11 +57,6 @@ impl<L: Leaf> Lnode<L> {
     }
 
     #[inline]
-    pub(super) fn is_empty(&self) -> bool {
-        self.base_measure() == L::BaseMetric::zero()
-    }
-
-    #[inline]
     pub(super) fn measure<M: Metric<L>>(&self) -> M {
         M::measure(self.summary())
     }
