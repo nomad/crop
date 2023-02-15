@@ -80,11 +80,20 @@ impl<L: Leaf> Lnode<L> {
         impl Iterator<Item = Self> + ExactSizeIterator + DoubleEndedIterator,
     >
     where
-        L: ReplaceableLeaf<M>,
         M: Metric<L>,
+        L: ReplaceableLeaf<M>,
     {
         let extras = self.value.replace(&mut self.summary, range, slice)?;
         Some(extras.into_iter().map(Self::from))
+    }
+
+    #[inline]
+    pub(super) fn remove<M>(&mut self, up_to: M)
+    where
+        M: Metric<L>,
+        L: ReplaceableLeaf<M>,
+    {
+        self.value.remove(&mut self.summary, up_to);
     }
 
     #[inline]

@@ -687,8 +687,8 @@ mod tree_replace {
             Node::Internal(inode) => inode,
 
             Node::Leaf(leaf) => {
-                // Remove range
-                todo!();
+                leaf.remove(replace_up_to);
+                return;
             },
         };
 

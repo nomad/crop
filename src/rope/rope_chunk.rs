@@ -441,6 +441,11 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
 
         Some(extra_leaves.collect())
     }
+
+    #[inline]
+    fn remove(&mut self, summary: &mut ChunkSummary, up_to: ByteMetric) {
+        self.replace(summary, ByteMetric(0)..up_to, "".into());
+    }
 }
 
 pub(super) struct RopeChunkIter<'a> {

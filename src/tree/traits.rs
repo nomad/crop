@@ -54,6 +54,8 @@ pub trait ReplaceableLeaf<M: Metric<Self>>: Leaf {
         range: std::ops::Range<M>,
         slice: &Self::Slice,
     ) -> Option<Vec<Self>>;
+
+    fn remove(&mut self, summary: &mut Self::Summary, up_to: M);
 }
 
 pub trait Metric<L: Leaf>:
