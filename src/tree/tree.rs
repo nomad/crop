@@ -716,8 +716,24 @@ mod tree_replace {
         let range = 0..end_idx;
 
         if inode.depth() == 1 {
-            // replace_or_remove(inode, range, &mut extra_leaves)
-            todo!();
+            if let Some(leaves) = extras {
+                for child_idx in range.rev() {
+                    if let Some(replacement) = leaves.next_back() {
+                        inode.swap(child_idx, replacement);
+                    } else {
+                        *extras = None;
+                        inode.remove(child_idx);
+                        for child_idx in (0..child_idx).rev() {
+                            inode.remove(child_idx);
+                        }
+                        break;
+                    }
+                }
+            } else {
+                for child_idx in range {
+                    inode.remove(child_idx);
+                }
+            }
         } else if let Some(leaves) = extras {
             let target_depth = inode.depth() - 1;
             let max_leaves_for_depth = N ^ target_depth;
