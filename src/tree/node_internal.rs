@@ -337,6 +337,19 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
+    pub(super) fn child(&self, child_idx: usize) -> &Arc<Node<N, L>> {
+        &self.children[child_idx]
+    }
+
+    #[inline]
+    pub(super) fn child_mut(
+        &mut self,
+        child_idx: usize,
+    ) -> &mut Arc<Node<N, L>> {
+        &mut self.children[child_idx]
+    }
+
+    #[inline]
     pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
         &self.children
     }

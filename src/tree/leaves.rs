@@ -301,7 +301,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
             if *visited == inode.len() {
                 self.path.pop();
             } else {
-                let inode = &inode.children()[*visited];
+                let inode = inode.child(*visited);
 
                 // SAFETY: the last internal node in `path` is always *2*
                 // levels above a leaf, so all its children are internal
@@ -552,7 +552,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
             } else {
                 *visited -= 1;
 
-                let inode = &inode.children()[*visited];
+                let inode = inode.child(*visited);
 
                 // SAFETY: the last internal node in `path` is always *2*
                 // levels above a leaf, so all its children are internal

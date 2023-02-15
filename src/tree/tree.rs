@@ -317,7 +317,7 @@ mod tree_replace {
 
         if let Some(extras) = extras {
             collapse_stuff(inode, child_idx + 1, extras)
-        } else if inode.children()[child_idx].is_underfilled() {
+        } else if inode.child(child_idx).is_underfilled() {
             // TODO: rebalance child_idx with either previous or next
             // node.
             None
@@ -354,10 +354,9 @@ mod tree_replace {
 
         let mut offset = M::zero();
 
-        let mut child_indexes = 0..inode.len();
+        let mut indexes = 0..inode.len();
 
-        for (idx, child) in
-            child_indexes.by_ref().map(|idx| (idx, &inode.children()[idx]))
+        for (idx, child) in indexes.by_ref().map(|idx| (idx, inode.child(idx)))
         {
             let child_measure = child.measure::<M>();
 
@@ -378,9 +377,7 @@ mod tree_replace {
             }
         }
 
-        for (idx, child) in
-            child_indexes.map(|idx| (idx, &inode.children()[idx]))
-        {
+        for (idx, child) in indexes.map(|idx| (idx, inode.child(idx))) {
             let child_measure = child.measure::<M>();
 
             offset += child_measure;
@@ -441,7 +438,7 @@ mod tree_replace {
                     } else {
                         let previous_inode = extras
                             .last_mut()
-                            .unwrap_or(&mut inode.children_mut()[end_idx - 1]);
+                            .unwrap_or(inode.child_mut(end_idx - 1));
 
                         let previous_inode = Arc::make_mut(previous_inode);
 
@@ -637,9 +634,8 @@ mod tree_replace {
 
                     let replacement = Arc::new(Node::Internal(replacement));
 
-                    let previous_child = Arc::make_mut(
-                        &mut inode.children_mut()[child_idx - 1],
-                    );
+                    let previous_child =
+                        Arc::make_mut(inode.child_mut(child_idx - 1));
 
                     let previous_child =
                         unsafe { previous_child.as_mut_internal_unchecked() };
@@ -743,9 +739,8 @@ mod tree_replace {
 
                     let replacement = Arc::new(Node::Internal(replacement));
 
-                    let next_child = Arc::make_mut(
-                        &mut inode.children_mut()[child_idx + 1],
-                    );
+                    let next_child =
+                        Arc::make_mut(inode.child_mut(child_idx + 1));
 
                     let next_child =
                         unsafe { next_child.as_mut_internal_unchecked() };

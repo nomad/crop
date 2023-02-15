@@ -306,7 +306,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             *child_idx += 1;
 
             if *child_idx < inode.len() {
-                break &inode.children()[*child_idx];
+                break inode.child(*child_idx);
             } else {
                 self.path.pop();
             }
@@ -444,7 +444,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
         // SAFETY: every node in the path is an internal node.
         let mut node =
-            unsafe { &inode.as_internal_unchecked().children()[child_idx] };
+            unsafe { inode.as_internal_unchecked().child(child_idx) };
 
         'outer: loop {
             match &**node {
@@ -488,7 +488,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             let inode = unsafe { node.as_internal_unchecked() };
 
             if child_idx > 0 {
-                break &inode.children()[child_idx - 1];
+                break inode.child(child_idx - 1);
             } else {
                 path_idx -= 1;
             }
@@ -717,7 +717,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             before += child_summary;
         }
 
-        offset += inode.children()[child_idx].base_measure();
+        offset += inode.child(child_idx).base_measure();
 
         // This will be the child of the root node that contains the last
         // slice.
@@ -1092,7 +1092,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
             if *child_idx > 0 {
                 *child_idx -= 1;
-                break &inode.children()[*child_idx];
+                break inode.child(*child_idx);
             } else {
                 self.path.pop();
             }
@@ -1514,7 +1514,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             child_idx += 1;
 
             if child_idx < inode.len() {
-                break &inode.children()[child_idx];
+                break inode.child(child_idx);
             } else {
                 path_idx -= 1;
             }
