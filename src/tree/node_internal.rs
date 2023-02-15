@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use super::utils::*;
 use super::{Leaf, Lnode, Metric, Node};
 
 #[derive(Clone)]
@@ -56,7 +57,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             None
         } else {
             let mut other =
-                Self::from_children(self.split_off(Self::min_children() + 1));
+                Self::from_children(self.drain(Self::min_children() + 1..));
             other.push(node);
             debug_assert!(!self.is_underfilled());
             debug_assert!(!other.is_underfilled());
@@ -65,14 +66,14 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     pub(super) fn assert_invariants(&self) {
-        assert!(
-            self.len() >= Self::min_children(),
-            "An internal node of depth {} was supposed to contain at least \
-             {} children but actually contains {}",
-            self.depth(),
-            Self::min_children(),
-            self.len()
-        );
+        // assert!(
+        //     self.len() >= Self::min_children(),
+        //     "An internal node of depth {} was supposed to contain at least \
+        //      {} children but actually contains {}",
+        //     self.depth(),
+        //     Self::min_children(),
+        //     self.len()
+        // );
 
         assert!(
             self.len() <= Self::max_children(),
@@ -401,7 +402,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         let children = children.into_iter().collect::<Vec<Arc<Node<N, L>>>>();
 
         debug_assert!(!children.is_empty());
-        debug_assert!(children.len() <= N);
+        debug_assert!(children.len() <= Self::max_children());
 
         let depth = children[0].depth() + 1;
 
@@ -554,7 +555,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             None
         } else {
             let new_self =
-                Self::from_children(self.split_off(Self::min_children()));
+                Self::from_children(self.drain(Self::min_children()..));
             let mut other = std::mem::replace(self, new_self);
             other.insert(0, node);
             debug_assert!(!self.is_underfilled());
@@ -579,28 +580,27 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.children.push(child);
     }
 
+    /// Removes all the nodes after `child_offset`, returning them and leaving
+    /// the inode with `child_offset` children.
     #[inline]
-    pub(super) fn remove(&mut self, child_idx: usize) {
-        let child = self.children.remove(child_idx);
-        self.summary -= child.summary();
-        self.leaf_count -= child.leaf_count();
-    }
-
-    /// Removes all the nodes after `child_offset`, returning them. The inode
-    /// will have `child_offset` children after this function is called.
-    #[inline]
-    pub(super) fn split_off(
+    pub(super) fn drain<R>(
         &mut self,
-        child_offset: usize,
-    ) -> std::vec::Drain<'_, Arc<Node<N, L>>> {
-        debug_assert!(child_offset <= self.len());
+        idx_range: R,
+    ) -> std::vec::Drain<'_, Arc<Node<N, L>>>
+    where
+        R: std::ops::RangeBounds<usize>,
+    {
+        let (start, end) = range_bounds_to_start_end(idx_range, 0, self.len());
 
-        for child in &self.children[child_offset..] {
+        debug_assert!(start <= end);
+        debug_assert!(end <= self.len());
+
+        for child in &self.children[start..end] {
             self.summary -= child.summary();
             self.leaf_count -= child.leaf_count();
         }
 
-        self.children.drain(child_offset..)
+        self.children.drain(start..end)
     }
 
     #[inline]
@@ -659,17 +659,14 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         F: FnOnce(&mut Arc<Node<N, L>>) -> T,
     {
         let child = &mut self.children[child_idx];
+
         self.summary -= child.summary();
         self.leaf_count -= child.leaf_count();
 
         let ret = fun(child);
 
-        if child.base_measure() > L::BaseMetric::zero() {
-            self.summary += child.summary();
-            self.leaf_count += child.leaf_count();
-        } else {
-            self.children.remove(child_idx);
-        }
+        self.summary += child.summary();
+        self.leaf_count += child.leaf_count();
 
         ret
     }

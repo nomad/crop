@@ -7,6 +7,7 @@ mod tree;
 mod tree_builder;
 mod tree_slice;
 mod units;
+mod utils;
 
 pub use leaves::Leaves;
 use node::Node;

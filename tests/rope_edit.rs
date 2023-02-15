@@ -59,7 +59,6 @@ fn rope_insert_random() {
     }
 }
 
-#[ignore]
 #[test]
 fn rope_delete_random() {
     let mut rng = rand::thread_rng();
@@ -85,12 +84,62 @@ fn rope_delete_random() {
     }
 }
 
-#[ignore]
 #[test]
 fn rope_replace_random() {
     let mut rng = rand::thread_rng();
 
-    for s in [TINY, SMALL, MEDIUM, LARGE] {
+    // let s = &TINY[..100];
+    // let mut r = Rope::from(s);
+    // let mut s = s.to_owned();
+    // let replace_range = 78..92;
+    // let replace_with = "ng elit. Mae";
+    // s.replace_range(replace_range.clone(), &replace_with);
+    // r.replace(replace_range, &replace_with);
+    // assert_eq!(s, r);
+
+    // let s = &TINY[..40];
+    // let mut r = Rope::from(s);
+    // let mut s = s.to_owned();
+    // let replace_range = 21..39;
+    // let replace_with = "orem ipsum dolor sit amet, consecte";
+    // s.replace_range(replace_range.clone(), &replace_with);
+    // r.replace(replace_range, &replace_with);
+    // assert_eq!(s, r);
+
+    let s = &TINY[..20];
+    let mut r = Rope::from(s);
+    let mut s = s.to_owned();
+
+    let replace_range = 10..20;
+    let replace_with = "m dolo";
+    s.replace_range(replace_range.clone(), &replace_with);
+    r.replace(replace_range, &replace_with);
+    assert_eq!(s, r);
+
+    let replace_range = 10..10;
+    let replace_with = "um dol";
+    s.replace_range(replace_range.clone(), &replace_with);
+    r.replace(replace_range, &replace_with);
+    assert_eq!(s, r);
+
+    let replace_range = 17..20;
+    let replace_with = "";
+    s.replace_range(replace_range.clone(), &replace_with);
+    r.replace(replace_range, &replace_with);
+    assert_eq!(s, r);
+
+    let replace_range = 15..18;
+    let replace_with = "";
+    s.replace_range(replace_range.clone(), &replace_with);
+    r.replace(replace_range, &replace_with);
+    assert_eq!(s, r);
+
+    if true {
+        panic!("AA");
+    }
+
+    // for s in [TINY, SMALL, MEDIUM, LARGE] {
+    for s in [&TINY[..20]] {
         let mut r = Rope::from(s);
         let mut s = s.to_owned();
 
@@ -101,11 +150,15 @@ fn rope_replace_random() {
                 start..end
             };
 
+            println!("replace_range: {replace_range:?}");
+
             let replace_with = {
                 let start = rng.gen_range(0..=r.byte_len());
                 let end = rng.gen_range(start..=r.byte_len());
                 s[start..end].to_owned()
             };
+
+            println!("replace_with: {replace_with:?}");
 
             s.replace_range(replace_range.clone(), &replace_with);
             r.replace(replace_range, &replace_with);

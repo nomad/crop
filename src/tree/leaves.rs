@@ -110,6 +110,7 @@ impl<const FANOUT: usize, L: Leaf> std::iter::FusedIterator
 {
 }
 
+#[derive(Debug)]
 struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](Self::initialize()).
@@ -358,6 +359,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
     }
 }
 
+#[derive(Debug)]
 struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](Self::initialize()).
