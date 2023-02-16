@@ -42,9 +42,9 @@ impl Rope {
             assert!(chunk.len() <= RopeChunk::chunk_max());
 
             // if ends_in_cr(chunk) {
-            //     if let Some(next) = chunks.peek().copied() {
-            //         assert!(!starts_with_lf(next));
-            //     }
+            if let Some(_next) = chunks.peek().copied() {
+                // assert!(!starts_with_lf(next));
+            }
             // }
         }
     }

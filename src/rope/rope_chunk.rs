@@ -387,8 +387,7 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
             if missing > take_from_slice {
                 missing -= take_from_slice;
 
-                let take_from_last =
-                    adjust_split_point::<true>(&last, missing);
+                let take_from_last = adjust_split_point::<true>(last, missing);
 
                 self.push_str(&last[..take_from_last]);
                 last = last[take_from_last..].into();
@@ -418,7 +417,7 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
             // ```
 
             let keep_in_self =
-                adjust_split_point::<true>(&self, self.len() - missing);
+                adjust_split_point::<true>(self, self.len() - missing);
 
             // SAFETY: `keep_in_self` is a valid char boundary.
             first = Some(unsafe { self.split_off_unchecked(keep_in_self) });
@@ -595,6 +594,7 @@ mod extra_leaves {
                 if first.len() + self.total <= RopeChunk::max_bytes() {
                     first.push_str(self.slice);
                     first.push_str(self.last);
+                    self.yielded = self.total;
                     first
                 } else {
                     let mut add_to_first =
@@ -620,7 +620,7 @@ mod extra_leaves {
                         add_to_first -= take_from_slice;
 
                         let take_from_last = adjust_split_point::<true>(
-                            &self.last,
+                            self.last,
                             add_to_first,
                         );
                         first.push_str(&self.last[..take_from_last]);
@@ -668,7 +668,7 @@ mod extra_leaves {
                     chunk_len -= take_from_slice;
 
                     let take_from_last =
-                        adjust_split_point::<true>(&self.last, chunk_len);
+                        adjust_split_point::<true>(self.last, chunk_len);
                     chunk.push_str(&self.last[..take_from_last]);
                     self.last = self.last[take_from_last..].into();
                 }
@@ -742,6 +742,15 @@ mod extra_leaves {
     #[test]
     fn extra_leaves_3() {
         let mut extras = ExtraLeaves::new(None, "a".into(), "b".into());
+
+        assert_eq!("ab", &*extras.next().unwrap());
+        assert_eq!(None, extras.next());
+    }
+
+    #[test]
+    fn extra_leaves_4() {
+        let mut extras =
+            ExtraLeaves::new(Some("a".into()), "b".into(), "".into());
 
         assert_eq!("ab", &*extras.next().unwrap());
         assert_eq!(None, extras.next());

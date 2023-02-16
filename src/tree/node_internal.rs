@@ -1,4 +1,4 @@
-use std::ops::RangeBounds;
+use std::ops::{Range, RangeBounds};
 use std::sync::Arc;
 
 use super::utils::*;
@@ -309,7 +309,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         {
             first.balance_left_side();
 
-            if !first.is_underfilled() && self.len() > 1 {
+            if first.is_underfilled() && self.len() > 1 {
                 self.balance_first_child_with_second();
             }
         }
@@ -327,7 +327,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         if let Node::Internal(last) = Arc::get_mut(self.last_mut()).unwrap() {
             last.balance_right_side();
 
-            if !last.is_underfilled() && self.len() > 1 {
+            if last.is_underfilled() && self.len() > 1 {
                 self.balance_last_child_with_penultimate();
             }
         }
@@ -341,14 +341,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn child(&self, child_idx: usize) -> &Arc<Node<N, L>> {
         &self.children[child_idx]
-    }
-
-    #[inline]
-    pub(super) fn child_mut(
-        &mut self,
-        child_idx: usize,
-    ) -> &mut Arc<Node<N, L>> {
-        &mut self.children[child_idx]
     }
 
     #[inline]
@@ -538,7 +530,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             return None;
         }
 
-        let last_children = self.drain(child_offset..).collect::<Vec<_>>();
+        let mut last_children =
+            self.drain(child_offset..).collect::<Vec<_>>().into_iter();
 
         debug_assert!(
             self.len() + children.len() + last_children.len()
@@ -546,7 +539,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         );
 
         while self.is_underfilled() {
-            self.push(children.next().unwrap());
+            let next = if let Some(next) = children.next() {
+                next
+            } else {
+                last_children.next().unwrap()
+            };
+            self.push(next);
         }
 
         let first_children =
@@ -612,6 +610,14 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         N
     }
 
+    /// The maximum number of leaves that can be fed to [`Self::from_nodes()`]
+    /// to get an internal node of the given depth.
+    #[inline]
+    pub(super) const fn max_leaves_for_depth(depth: usize) -> usize {
+        debug_assert!(depth <= u32::MAX as usize);
+        Self::max_children().pow(depth as _)
+    }
+
     #[inline]
     pub fn measure<M: Metric<L>>(&self) -> M {
         M::measure(self.summary())
@@ -622,9 +628,16 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         N / 2
     }
 
-    /// TODO: docs
+    /// The minimum number of leaves required by [`Self::from_nodes()`] to get
+    /// an internal node of the given depth.
     #[inline]
-    pub(super) fn prepend_at_depth(
+    pub(super) const fn min_leaves_for_depth(depth: usize) -> usize {
+        debug_assert!(depth <= u32::MAX as usize);
+        Self::max_children().pow((depth as u32) - 1) + 1
+    }
+
+    #[inline]
+    pub(super) fn _prepend_at_depth(
         &mut self,
         mut node: Arc<Node<N, L>>,
     ) -> Option<Self>
@@ -638,7 +651,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 let first = Arc::make_mut(first);
                 // SAFETY: TODO
                 let first = unsafe { first.as_mut_internal_unchecked() };
-                first.prepend_at_depth(node)
+                first._prepend_at_depth(node)
             })?;
 
             node = Arc::new(Node::Internal(extra));
@@ -679,35 +692,31 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// TODO: docs
     /// TODO: document that ends after len are valid.
     #[inline]
-    pub(super) fn replace_range_with_leaves<R, I>(
+    pub(super) fn replace_range_with_leaves<I>(
         &mut self,
-        child_range: R,
+        child_range: Range<usize>,
         leaves: &mut I,
     ) where
-        R: RangeBounds<usize>,
         I: Iterator<Item = Arc<Node<N, L>>> + ExactSizeIterator,
     {
-        let (start, end) =
-            range_bounds_to_start_end(child_range, 0, Self::max_children());
+        debug_assert!(child_range.start <= child_range.end);
+        debug_assert!(child_range.end <= self.len());
+
+        let end = child_range.end;
+
+        // TODO: refactor to add nodes until max_children if we can.
 
         if self.depth() == 1 {
-            for child_idx in start..end {
-                if let Some(leaf) = leaves.next() {
+            for child_idx in child_range {
+                if leaves.len() > 0 {
+                    let leaf = leaves.next().unwrap();
                     debug_assert!(leaf.is_leaf());
-
-                    if child_idx < self.len() {
-                        self.swap(child_idx, leaf);
-                    } else {
-                        self.push(leaf);
-                    }
+                    self.swap(child_idx, leaf);
                 } else {
-                    if end <= self.len() && child_idx < end {
-                        self.drain(child_idx..end);
-                    }
+                    self.drain(child_idx..end);
                     return;
                 }
             }
-
             return;
         }
 
@@ -715,16 +724,11 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         debug_assert!(target_depth > 0);
 
-        // The maximum number of leaves we can feed to `Self::from_nodes` to
-        // get an inode of the target depth.
-        let max_leaves_for_depth = Self::max_children() ^ target_depth;
+        let max_leaves_for_depth = Self::max_leaves_for_depth(target_depth);
 
-        // The minimum number of leaves required by `Self::from_nodes` to get
-        // an inode of the target depth.
-        let min_leaves_for_depth =
-            (Self::max_children() ^ (target_depth - 1)) + 1;
+        let min_leaves_for_depth = Self::min_leaves_for_depth(target_depth);
 
-        for child_idx in start..end {
+        for child_idx in child_range {
             if leaves.len() >= min_leaves_for_depth {
                 let inode = Arc::new(Node::Internal(Self::from_nodes(
                     leaves.take(max_leaves_for_depth),
@@ -732,43 +736,34 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
                 debug_assert_eq!(inode.depth(), target_depth);
 
-                if child_idx < self.len() {
-                    self.swap(child_idx, inode);
-                } else {
-                    self.push(inode);
-                }
+                self.swap(child_idx, inode);
             } else {
-                if end <= self.len() && child_idx < end {
-                    self.drain(child_idx..end);
-                }
+                self.drain(child_idx..end);
                 return;
             }
         }
-
-        todo!();
     }
 
     /// TODO: docs
     #[inline]
-    pub(super) fn replace_range_with_leaves_back<R, I>(
+    pub(super) fn replace_range_with_leaves_back<I>(
         &mut self,
-        child_range: R,
+        child_range: Range<usize>,
         leaves: &mut I,
     ) where
-        R: RangeBounds<usize>,
         I: Iterator<Item = Arc<Node<N, L>>>
             + ExactSizeIterator
             + DoubleEndedIterator,
     {
-        let (start, end) =
-            range_bounds_to_start_end(child_range, 0, Self::max_children());
+        debug_assert!(child_range.start <= child_range.end);
+        debug_assert!(child_range.end <= self.len());
 
-        debug_assert!(start <= end);
-        debug_assert!(end <= self.len());
+        let start = child_range.start;
 
         if self.depth() == 1 {
-            for child_idx in (start..end).rev() {
-                if let Some(leaf) = leaves.next_back() {
+            for child_idx in child_range.rev() {
+                if leaves.len() > 0 {
+                    let leaf = leaves.next_back().unwrap();
                     debug_assert!(leaf.is_leaf());
                     self.swap(child_idx, leaf);
                 } else {
@@ -783,20 +778,22 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         debug_assert!(target_depth > 0);
 
-        // The maximum number of leaves we can feed to `Self::from_nodes` to
-        // get an inode of the target depth.
-        let max_leaves_for_depth = Self::max_children() ^ target_depth;
+        let max_leaves_for_depth = Self::max_leaves_for_depth(target_depth);
 
-        // The minimum number of leaves required by `Self::from_nodes` to get
-        // an inode of the target depth.
-        let min_leaves_for_depth =
-            (Self::max_children() ^ (target_depth - 1)) + 1;
+        let min_leaves_for_depth = Self::min_leaves_for_depth(target_depth);
 
-        for child_idx in (start..end).rev() {
+        for child_idx in child_range.rev() {
             if leaves.len() >= min_leaves_for_depth {
-                let inode = Arc::new(Node::Internal(Self::from_nodes(
-                    leaves.rev().take(max_leaves_for_depth).rev(),
-                )));
+                let inode = {
+                    let l = leaves
+                        .rev()
+                        .take(max_leaves_for_depth)
+                        .collect::<Vec<_>>();
+
+                    Arc::new(Node::Internal(Self::from_nodes(
+                        l.into_iter().rev(),
+                    )))
+                };
 
                 debug_assert_eq!(inode.depth(), target_depth);
 

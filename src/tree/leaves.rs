@@ -43,7 +43,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
             forward: LeavesForward::from(tree),
             backward: LeavesBackward::from(tree),
             leaves_yielded: 0,
-            leaves_total: tree.root.leaf_count(),
+            leaves_total: tree.leaf_count(),
         }
     }
 }

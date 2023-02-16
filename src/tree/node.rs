@@ -167,7 +167,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     #[inline]
     pub(super) fn is_underfilled(&self) -> bool {
         match self {
-            Node::Internal(inode) => !inode.is_underfilled(),
+            Node::Internal(inode) => inode.is_underfilled(),
             Node::Leaf(leaf) => !leaf.is_big_enough(),
         }
     }
