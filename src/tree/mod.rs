@@ -11,9 +11,10 @@ mod utils;
 
 pub use leaves::Leaves;
 use node::Node;
-use node_internal::{ChildSegmenter, Inode};
+use node_internal::Inode;
 use node_leaf::Lnode;
 pub use traits::*;
+use tree::ExactChain;
 pub use tree::Tree;
 pub use tree_builder::TreeBuilder;
 pub use tree_slice::TreeSlice;

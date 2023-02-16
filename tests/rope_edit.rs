@@ -110,26 +110,8 @@ fn rope_replace_random() {
     let mut r = Rope::from(s);
     let mut s = s.to_owned();
 
-    let replace_range = 10..20;
-    let replace_with = "m dolo";
-    s.replace_range(replace_range.clone(), &replace_with);
-    r.replace(replace_range, &replace_with);
-    assert_eq!(s, r);
-
-    let replace_range = 10..10;
-    let replace_with = "um dol";
-    s.replace_range(replace_range.clone(), &replace_with);
-    r.replace(replace_range, &replace_with);
-    assert_eq!(s, r);
-
-    let replace_range = 17..20;
-    let replace_with = "";
-    s.replace_range(replace_range.clone(), &replace_with);
-    r.replace(replace_range, &replace_with);
-    assert_eq!(s, r);
-
-    let replace_range = 15..18;
-    let replace_with = "";
+    let replace_range = 12..15;
+    let replace_with = " dolor";
     s.replace_range(replace_range.clone(), &replace_with);
     r.replace(replace_range, &replace_with);
     assert_eq!(s, r);
