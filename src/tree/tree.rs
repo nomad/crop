@@ -208,17 +208,28 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
-        let root = Arc::make_mut(&mut self.root);
+        if let Some(extras) =
+            tree_replace::some_name(&mut self.root, range, slice)
+        {
+            debug_assert!(extras
+                .iter()
+                .all(|n| n.depth() == self.root.depth()));
 
-        if let Some(extras) = tree_replace::some_name(root, range, slice) {
-            debug_assert!(extras.iter().all(|n| n.depth() == root.depth()));
+            let old_root = {
+                let dummy = unsafe {
+                    std::mem::transmute::<_, Arc<Node<FANOUT, L>>>(&())
+                };
 
-            let old_root =
-                std::mem::replace(root, Node::Internal(Inode::empty()));
+                std::mem::replace(&mut self.root, dummy)
+            };
 
-            *root = Node::Internal(Inode::from_nodes(
-                std::iter::once(Arc::new(old_root)).exact_chain(extras),
-            ));
+            let new_root = Arc::new(Node::Internal(Inode::from_nodes(
+                std::iter::once(old_root).exact_chain(extras),
+            )));
+
+            let dummy = std::mem::replace(&mut self.root, new_root);
+
+            std::mem::forget(dummy);
         }
     }
 
@@ -268,7 +279,7 @@ mod tree_replace {
     /// TODO: docs
     #[inline]
     pub(super) fn some_name<const N: usize, M, L>(
-        node: &mut Node<N, L>,
+        arc_node: &mut Arc<Node<N, L>>,
         mut range: Range<M>,
         slice: &L::Slice,
     ) -> Option<Vec<Arc<Node<N, L>>>>
@@ -276,6 +287,8 @@ mod tree_replace {
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
+        let node = Arc::make_mut(arc_node);
+
         let inode = match node {
             Node::Internal(inode) => inode,
 
@@ -305,7 +318,7 @@ mod tree_replace {
                         offset -= child_measure;
                         range.start -= offset;
                         range.end -= offset;
-                        some_name(Arc::make_mut(child), range, slice)
+                        some_name(child, range, slice)
                     });
 
                     break;
@@ -315,16 +328,78 @@ mod tree_replace {
             }
         }
 
-        #[allow(clippy::if_same_then_else)]
+        let child = inode.child(child_idx);
+
+        // Case 1: there are some extra child nodes to insert *after* the child
+        // containing the replacement range.
         if let Some(extras) = extras {
+            debug_assert!(extras
+                .iter()
+                .all(|n| n.depth() == inode.depth() - 1));
+
             inode.insert_children(child_idx + 1, extras).map(|extras| {
                 extras.map(Node::Internal).map(Arc::new).collect()
             })
-        } else if inode.child(child_idx).is_underfilled() {
+        }
+        // Case 2: the child stayed at the same depth but it's now underfilled
+        // and needs to be rebalanced with another child.
+        else if child.depth() == inode.depth() - 1 && child.is_underfilled()
+        {
             // TODO: rebalance child_idx with either previous or next
             // node.
+            //
+            // Can this result in a single child after rebalancing? e.g. we
+            // have 2 child leaves that can be combined. In this case we need
+            // to pull up the root.
+
             None
-        } else {
+        }
+        // Case 3: the child is now at a lower depth than its siblings and
+        // needs to be appended/prepended to another child.
+        else if child.depth() < inode.depth() - 1 {
+            debug_assert!(inode.depth() >= 2);
+
+            let child = inode.remove(child_idx);
+
+            if child_idx > 0 {
+                let extra = inode.with_child_mut(child_idx - 1, |previous| {
+                    let previous = Arc::make_mut(previous);
+
+                    // SAFETY: the inode's depth is >= 2 so its children are
+                    // also inodes.
+                    let previous =
+                        unsafe { previous.as_mut_internal_unchecked() };
+
+                    previous.append_at_depth(child)
+                });
+
+                if let Some(extra) = extra {
+                    inode.insert(child_idx, Arc::new(Node::Internal(extra)));
+                }
+            } else {
+                let extra = inode.with_child_mut(0, |first| {
+                    let first = Arc::make_mut(first);
+
+                    // SAFETY: the inode's depth is >= 2 so its children are
+                    // also inodes.
+                    let first = unsafe { first.as_mut_internal_unchecked() };
+
+                    first.prepend_at_depth(child)
+                });
+
+                if let Some(extra) = extra {
+                    inode.insert(0, Arc::new(Node::Internal(extra)));
+                }
+            }
+
+            None
+        }
+        // Case 4: none of the above, the child is well balanced and we can
+        // simply return.
+        else {
+            debug_assert!(child.depth() == inode.depth() - 1);
+            debug_assert!(!child.is_underfilled());
+
             None
         }
     }

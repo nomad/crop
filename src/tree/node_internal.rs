@@ -637,7 +637,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn _prepend_at_depth(
+    pub(super) fn prepend_at_depth(
         &mut self,
         mut node: Arc<Node<N, L>>,
     ) -> Option<Self>
@@ -651,7 +651,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 let first = Arc::make_mut(first);
                 // SAFETY: TODO
                 let first = unsafe { first.as_mut_internal_unchecked() };
-                first._prepend_at_depth(node)
+                first.prepend_at_depth(node)
             })?;
 
             node = Arc::new(Node::Internal(extra));
@@ -687,6 +687,16 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.leaf_count += child.leaf_count();
         self.summary += child.summary();
         self.children.push(child);
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub(super) fn remove(&mut self, child_idx: usize) -> Arc<Node<N, L>> {
+        debug_assert!(child_idx < self.len());
+        let child = self.children.remove(child_idx);
+        self.leaf_count -= child.leaf_count();
+        self.summary -= child.summary();
+        child
     }
 
     /// TODO: docs

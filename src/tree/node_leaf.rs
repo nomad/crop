@@ -3,7 +3,7 @@ use super::{Leaf, Metric};
 
 #[derive(Clone, Default)]
 pub(super) struct Lnode<L: Leaf> {
-    pub(super) value: L,
+    value: L,
     summary: L::Summary,
 }
 
