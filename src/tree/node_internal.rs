@@ -513,7 +513,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &mut self,
         mut child_offset: usize,
         children: I,
-    ) -> Option<impl Iterator<Item = Self> + ExactSizeIterator>
+    ) -> Option<impl ExactSizeIterator<Item = Self>>
     where
         I: IntoIterator<Item = Arc<Node<N, L>>>,
         I::IntoIter: ExactSizeIterator,
@@ -557,7 +557,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 self.drain(self.len() - missing..).collect()
             };
 
-        debug_assert!(self.len() >= Self::min_children());
+        debug_assert!(!self.is_underfilled());
 
         debug_assert!(
             first_children.len() + children.len() + last_children.len()
@@ -589,7 +589,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
+    fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
         let last_idx = self.len() - 1;
         &mut self.children[last_idx]
     }
