@@ -317,13 +317,15 @@ impl SubAssign<&Self> for ChunkSummary {
 }
 
 impl ReplaceableLeaf<ByteMetric> for RopeChunk {
+    type ExtraLeaves = std::vec::IntoIter<Self>;
+
     #[inline]
     fn replace(
         &mut self,
         summary: &mut ChunkSummary,
         range: Range<ByteMetric>,
         mut slice: &ChunkSlice,
-    ) -> Option<Vec<Self>> {
+    ) -> Option<Self::ExtraLeaves> {
         let start = range.start.0;
 
         let end = range.end.0;
@@ -438,7 +440,7 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
 
         let extra_leaves = extra_leaves::ExtraLeaves::new(first, slice, last);
 
-        Some(extra_leaves.collect())
+        Some(extra_leaves.collect::<Vec<_>>().into_iter())
     }
 
     #[inline]

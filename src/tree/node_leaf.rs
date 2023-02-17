@@ -71,15 +71,14 @@ impl<L: Leaf> Lnode<L> {
         &mut self,
         range: std::ops::Range<M>,
         slice: &L::Slice,
-    ) -> Option<
-        impl Iterator<Item = Self> + ExactSizeIterator + DoubleEndedIterator,
-    >
+    ) -> Option<impl ExactSizeIterator<Item = Self>>
     where
         M: Metric<L>,
         L: ReplaceableLeaf<M>,
     {
-        let extras = self.value.replace(&mut self.summary, range, slice)?;
-        Some(extras.into_iter().map(Self::from))
+        self.value
+            .replace(&mut self.summary, range, slice)
+            .map(|leaves| leaves.map(Self::from))
     }
 
     #[inline]

@@ -740,13 +740,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         for child_idx in child_range {
             if leaves.len() >= min_leaves_for_depth {
-                let inode = Arc::new(Node::Internal(Self::from_nodes(
-                    leaves.take(max_leaves_for_depth),
-                )));
+                let inode =
+                    Self::from_nodes(leaves.take(max_leaves_for_depth));
 
                 debug_assert_eq!(inode.depth(), target_depth);
 
-                self.swap(child_idx, inode);
+                self.swap(child_idx, Arc::new(Node::Internal(inode)));
             } else {
                 self.drain(child_idx..end);
                 return;
@@ -756,15 +755,11 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     /// TODO: docs
     #[inline]
-    pub(super) fn replace_range_with_leaves_back<I>(
+    pub(super) fn replace_range_with_leaves_back(
         &mut self,
         child_range: Range<usize>,
-        leaves: &mut I,
-    ) where
-        I: Iterator<Item = Arc<Node<N, L>>>
-            + ExactSizeIterator
-            + DoubleEndedIterator,
-    {
+        leaves: &mut Vec<Arc<Node<N, L>>>,
+    ) {
         debug_assert!(child_range.start <= child_range.end);
         debug_assert!(child_range.end <= self.len());
 
@@ -773,7 +768,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         if self.depth() == 1 {
             for child_idx in child_range.rev() {
                 if leaves.len() > 0 {
-                    let leaf = leaves.next_back().unwrap();
+                    let leaf = leaves.pop().unwrap();
                     debug_assert!(leaf.is_leaf());
                     self.swap(child_idx, leaf);
                 } else {
@@ -794,20 +789,14 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         for child_idx in child_range.rev() {
             if leaves.len() >= min_leaves_for_depth {
-                let inode = {
-                    let l = leaves
-                        .rev()
-                        .take(max_leaves_for_depth)
-                        .collect::<Vec<_>>();
+                let drain = std::cmp::min(leaves.len(), max_leaves_for_depth);
 
-                    Arc::new(Node::Internal(Self::from_nodes(
-                        l.into_iter().rev(),
-                    )))
-                };
+                let inode =
+                    Self::from_nodes(leaves.drain(leaves.len() - drain..));
 
                 debug_assert_eq!(inode.depth(), target_depth);
 
-                self.swap(child_idx, inode);
+                self.swap(child_idx, Arc::new(Node::Internal(inode)));
             } else {
                 self.drain(start..child_idx + 1);
                 return;

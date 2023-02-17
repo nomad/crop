@@ -455,6 +455,9 @@ mod tree_replace {
             }
         }
 
+        let mut extra_leaves =
+            extra_leaves.map(|leaves| leaves.collect::<Vec<_>>());
+
         for (idx, child) in indexes.map(|idx| (idx, inode.child(idx))) {
             let child_measure = child.measure::<M>();
 
@@ -475,8 +478,8 @@ mod tree_replace {
             }
         }
 
-        let mut extra_leaves = if let Some(extras) = extra_leaves {
-            extras
+        let mut extra_leaves = if let Some(leaves) = extra_leaves {
+            leaves.into_iter()
         } else {
             inode.drain(start_idx + 1..end_idx);
             // TODO: handle start, end being underfilled
@@ -589,11 +592,7 @@ mod tree_replace {
         node: &mut Node<N, L>,
         replace_from: M,
         slice: &L::Slice,
-    ) -> Option<
-        impl Iterator<Item = Arc<Node<N, L>>>
-            + ExactSizeIterator
-            + DoubleEndedIterator,
-    >
+    ) -> Option<impl ExactSizeIterator<Item = Arc<Node<N, L>>>>
     where
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
@@ -658,16 +657,13 @@ mod tree_replace {
 
     /// TODO: docs
     #[inline]
-    fn replace_last_rec<const N: usize, M, L, I>(
+    fn replace_last_rec<const N: usize, M, L>(
         node: &mut Node<N, L>,
         replace_up_to: M,
-        extra_leaves: &mut Option<I>,
+        extra_leaves: &mut Option<Vec<Arc<Node<N, L>>>>,
     ) where
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
-        I: Iterator<Item = Arc<Node<N, L>>>
-            + DoubleEndedIterator
-            + ExactSizeIterator,
     {
         let inode = match node {
             Node::Internal(inode) => inode,
