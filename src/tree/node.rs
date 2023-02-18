@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::traits::*;
 use super::{Inode, Lnode};
 
@@ -261,10 +263,36 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub fn measure<M: Metric<L>>(&self) -> M {
+    pub(super) fn measure<M: Metric<L>>(&self) -> M {
         match self {
             Node::Internal(inode) => inode.measure(),
             Node::Leaf(leaf) => leaf.measure(),
+        }
+    }
+
+    /// Continuously replaces the node with its single child. Note that an
+    /// internal node might become a leaf node after calling this.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the root has a strong counter > 1.
+    #[inline]
+    pub(super) fn replace_with_single_child(node: &mut Arc<Self>) {
+        while let Self::Internal(inode) = Arc::get_mut(node).unwrap() {
+            if inode.len() == 1 {
+                let child = unsafe {
+                    inode
+                        .children_mut()
+                        .drain(..)
+                        .next()
+                        // SAFETY: there is exactly 1 child.
+                        .unwrap_unchecked()
+                };
+
+                *node = child;
+            } else {
+                break;
+            }
         }
     }
 

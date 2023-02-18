@@ -169,11 +169,9 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
             root.balance_right_side();
         }
 
-        let mut tree = Tree { root };
+        Node::replace_with_single_child(&mut root);
 
-        tree.pull_up_root();
-
-        tree
+        Tree { root }
     }
 
     #[allow(dead_code)]

@@ -42,9 +42,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(node.depth() < self.depth());
 
         if self.depth() > node.depth() + 1 {
+            debug_assert!(self.depth() >= 2);
+
             let extra = self.with_child_mut(self.len() - 1, |last| {
                 let last = Arc::make_mut(last);
-                // SAFETY: TODO
+                // SAFETY: this inode's depth is >= 2 so its children are
+                // also inodes.
                 let last = unsafe { last.as_mut_internal_unchecked() };
                 last.append_at_depth(node)
             })?;
@@ -125,6 +128,16 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn balance(&mut self, other: &mut Self) {
         debug_assert_eq!(self.depth(), other.depth());
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub(super) fn balance_two_children(
+        &mut self,
+        first_idx: usize,
+        second_idx: usize,
+    ) {
+        todo!();
     }
 
     /// Balances the first child using the contents of the second child,
@@ -326,6 +339,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// # Panics
     ///
     /// Panics if the `Arc` enclosing the first child has a strong counter > 1.
+    #[inline]
     pub(super) fn balance_left_side(&mut self)
     where
         L: BalancedLeaf,
@@ -335,10 +349,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         if let Node::Internal(first) = Arc::get_mut(self.first_mut()).unwrap()
         {
             first.balance_left_side();
-
-            if first.is_underfilled() && self.len() > 1 {
-                self.balance_first_child_with_second();
-            }
         }
     }
 
@@ -348,6 +358,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// # Panics
     ///
     /// Panics if the `Arc` enclosing the last child has a strong counter > 1.
+    #[inline]
     pub(super) fn balance_right_side(&mut self)
     where
         L: BalancedLeaf,
@@ -356,10 +367,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         if let Node::Internal(last) = Arc::get_mut(self.last_mut()).unwrap() {
             last.balance_right_side();
-
-            if last.is_underfilled() && self.len() > 1 {
-                self.balance_last_child_with_penultimate();
-            }
         }
     }
 
@@ -677,9 +684,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(node.depth() < self.depth());
 
         if self.depth() > node.depth() + 1 {
+            debug_assert!(self.depth() >= 2);
+
             let extra = self.with_child_mut(0, |first| {
                 let first = Arc::make_mut(first);
-                // SAFETY: TODO
+                // SAFETY: this inode's depth is >= 2 so its children are
+                // also inodes.
                 let first = unsafe { first.as_mut_internal_unchecked() };
                 first.prepend_at_depth(node)
             })?;

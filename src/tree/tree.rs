@@ -60,11 +60,8 @@ impl<const FANOUT: usize, L: BalancedLeaf> From<TreeSlice<'_, FANOUT, L>>
                 first
             }
         } else {
-            return from_treeslice::into_tree_root(slice);
+            from_treeslice::into_tree_root(slice)
         };
-
-        #[cfg(debug_assertions)]
-        (Tree { root: Arc::clone(&root) }).assert_invariants();
 
         Tree { root }
     }
@@ -170,35 +167,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     #[inline]
     pub fn measure<M: Metric<L>>(&self) -> M {
         M::measure(self.summary())
-    }
-
-    /// TODO: move this away?
-    ///
-    /// Continuously replaces the root with its first child as long as the root
-    /// is an internal node with a single child.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `Arc` enclosing the root has a strong counter > 1.
-    #[inline]
-    pub(super) fn pull_up_root(&mut self) {
-        let root = &mut self.root;
-
-        while let Node::Internal(inode) = Arc::get_mut(root).unwrap() {
-            if inode.len() == 1 {
-                let child = unsafe {
-                    inode
-                        .children_mut()
-                        .drain(..)
-                        .next()
-                        // SAFETY: there is exactly 1 child.
-                        .unwrap_unchecked()
-                };
-                *root = child;
-            } else {
-                break;
-            }
-        }
     }
 
     /// TODO: docs
@@ -338,12 +306,13 @@ mod tree_replace {
         // and needs to be rebalanced with another child.
         else if child.depth() == inode.depth() - 1 && child.is_underfilled()
         {
-            // TODO: rebalance child_idx with either previous or next
-            // node.
-            //
-            // Can this result in a single child after rebalancing? e.g. we
-            // have 2 child leaves that can be combined. In this case we need
-            // to pull up the root.
+            if child_idx > 0 {
+                inode.balance_two_children(child_idx - 1, child_idx);
+            } else {
+                inode.balance_two_children(0, 1);
+            }
+
+            Node::replace_with_single_child(node);
 
             None
         }
@@ -775,19 +744,19 @@ mod from_treeslice {
     #[inline]
     pub(super) fn into_tree_root<const N: usize, L: BalancedLeaf>(
         slice: TreeSlice<'_, N, L>,
-    ) -> Tree<N, L> {
+    ) -> Arc<Node<N, L>> {
         debug_assert!(slice.leaf_count() >= 3);
 
         let (root, invalid_in_first, invalid_in_last) = cut_tree_slice(slice);
 
-        let mut tree = Tree { root: Arc::new(Node::Internal(root)) };
+        let mut root = Arc::new(Node::Internal(root));
 
         if invalid_in_first > 0 {
             {
                 // Safety : `root` was just enclosed in a `Node::Internal`
                 // variant.
                 let root = unsafe {
-                    Arc::get_mut(&mut tree.root)
+                    Arc::get_mut(&mut root)
                         .unwrap()
                         .as_mut_internal_unchecked()
                 };
@@ -795,7 +764,7 @@ mod from_treeslice {
                 root.balance_left_side();
             }
 
-            tree.pull_up_root();
+            Node::replace_with_single_child(&mut root);
         }
 
         if invalid_in_last > 0 {
@@ -806,7 +775,7 @@ mod from_treeslice {
                 // should have already been handled before calling this
                 // function.
                 let root = unsafe {
-                    Arc::get_mut(&mut tree.root)
+                    Arc::get_mut(&mut root)
                         .unwrap()
                         .as_mut_internal_unchecked()
                 };
@@ -814,13 +783,10 @@ mod from_treeslice {
                 root.balance_right_side();
             }
 
-            tree.pull_up_root();
+            Node::replace_with_single_child(&mut root);
         }
 
-        #[cfg(debug_assertions)]
-        tree.assert_invariants();
-
-        tree
+        root
     }
 
     /// Returns a `(Root, InvalidFirst, InvalidLast)` tuple where:

@@ -344,10 +344,15 @@ impl Rope {
 impl From<RopeSlice<'_>> for Rope {
     #[inline]
     fn from(rope_slice: RopeSlice<'_>) -> Rope {
-        Rope {
-            tree: Tree::from(rope_slice.tree_slice),
+        let rope = Self {
             last_byte_is_newline: rope_slice.last_byte_is_newline,
-        }
+            tree: Tree::from(rope_slice.tree_slice),
+        };
+
+        #[cfg(debug_assertions)]
+        rope.assert_invariants();
+
+        rope
     }
 }
 
