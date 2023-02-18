@@ -1,8 +1,9 @@
 use std::ops::{Range, RangeBounds};
 use std::sync::Arc;
 
+use super::traits::*;
 use super::utils::*;
-use super::{ExactChain, Leaf, Lnode, Metric, Node};
+use super::{ExactChain, Lnode, Node};
 
 #[derive(Clone)]
 pub(super) struct Inode<const N: usize, L: Leaf> {
@@ -36,7 +37,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         mut node: Arc<Node<N, L>>,
     ) -> Option<Self>
     where
-        L: Clone,
+        L: BalancedLeaf + Clone,
     {
         debug_assert!(node.depth() < self.depth());
 
@@ -52,6 +53,17 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
 
         debug_assert_eq!(self.depth(), node.depth() + 1);
+
+        if node.is_underfilled() {
+            self.with_child_mut(self.len() - 1, |last| {
+                Arc::make_mut(last).balance(Arc::make_mut(&mut node));
+                debug_assert!(!last.is_underfilled());
+            });
+
+            if node.is_empty() {
+                return None;
+            }
+        }
 
         if !self.is_full() {
             self.push(node);
@@ -109,6 +121,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
     }
 
+    /// TODO: docs
+    #[inline]
+    pub(super) fn balance(&mut self, other: &mut Self) {
+        debug_assert_eq!(self.depth(), other.depth());
+    }
+
     /// Balances the first child using the contents of the second child,
     /// possibly merging them together if necessary.
     ///
@@ -124,7 +142,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// - the `Arc` enclosing the first child has a strong counter > 1. This
     /// function assumes that there are zero `Arc::clone`s of the first child.
     #[inline]
-    pub(super) fn balance_first_child_with_second(&mut self) {
+    pub(super) fn balance_first_child_with_second(&mut self)
+    where
+        L: BalancedLeaf,
+    {
         debug_assert!(self.len() >= 2);
 
         // Check for early returns.
@@ -214,7 +235,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// - the `Arc` enclosing the last child has a strong counter > 1. This
     /// function assumes that there are zero `Arc::clone`s of the last child.
     #[inline]
-    pub(super) fn balance_last_child_with_penultimate(&mut self) {
+    pub(super) fn balance_last_child_with_penultimate(&mut self)
+    where
+        L: BalancedLeaf,
+    {
         debug_assert!(self.len() >= 2);
 
         // Check for early returns.
@@ -302,7 +326,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// # Panics
     ///
     /// Panics if the `Arc` enclosing the first child has a strong counter > 1.
-    pub(super) fn balance_left_side(&mut self) {
+    pub(super) fn balance_left_side(&mut self)
+    where
+        L: BalancedLeaf,
+    {
         self.balance_first_child_with_second();
 
         if let Node::Internal(first) = Arc::get_mut(self.first_mut()).unwrap()
@@ -321,7 +348,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// # Panics
     ///
     /// Panics if the `Arc` enclosing the last child has a strong counter > 1.
-    pub(super) fn balance_right_side(&mut self) {
+    pub(super) fn balance_right_side(&mut self)
+    where
+        L: BalancedLeaf,
+    {
         self.balance_last_child_with_penultimate();
 
         if let Node::Internal(last) = Arc::get_mut(self.last_mut()).unwrap() {
@@ -642,7 +672,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         mut node: Arc<Node<N, L>>,
     ) -> Option<Self>
     where
-        L: Clone,
+        L: BalancedLeaf + Clone,
     {
         debug_assert!(node.depth() < self.depth());
 
@@ -658,6 +688,18 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
 
         debug_assert_eq!(self.depth(), node.depth() + 1);
+
+        if node.is_underfilled() {
+            self.with_child_mut(0, |first| {
+                Arc::make_mut(&mut node).balance(Arc::make_mut(first));
+                debug_assert!(!node.is_underfilled());
+            });
+
+            if self.first().is_empty() {
+                self.swap(0, node);
+                return None;
+            }
+        }
 
         if !self.is_full() {
             self.insert(0, node);
@@ -708,7 +750,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         leaves: &mut I,
     ) where
         I: Iterator<Item = Arc<Node<N, L>>> + ExactSizeIterator,
-        L: Clone,
+        L: BalancedLeaf + Clone,
     {
         debug_assert!(child_range.start <= child_range.end);
         debug_assert!(child_range.end <= self.len());
@@ -792,7 +834,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         child_range: Range<usize>,
         leaves: &mut Vec<Arc<Node<N, L>>>,
     ) where
-        L: Clone,
+        L: BalancedLeaf + Clone,
     {
         debug_assert!(child_range.start <= child_range.end);
         debug_assert!(child_range.end <= self.len());
@@ -831,7 +873,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 debug_assert_eq!(inode.depth(), target_depth);
 
                 self.swap(child_idx, Arc::new(Node::Internal(inode)));
-            } else if leaves.len() > 0 {
+            } else if !leaves.is_empty() {
                 let last = if leaves.len() == 1 {
                     leaves.pop().unwrap()
                 } else {

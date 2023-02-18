@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use smallvec::SmallVec;
 
-use super::{Inode, Leaf, Lnode, Node, Tree};
+use super::traits::*;
+use super::{Inode, Lnode, Node, Tree};
 
 /// An incremental [`Tree`] builder.
 #[derive(Clone)]
@@ -106,7 +107,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
     #[inline]
     pub fn build(mut self) -> Tree<FANOUT, L>
     where
-        L: Default,
+        L: BalancedLeaf + Default,
     {
         if self.stack.is_empty() {
             if self.leaves.is_empty() {

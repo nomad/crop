@@ -34,6 +34,12 @@ impl Default for RopeChunk {
 }
 
 impl RopeChunk {
+    #[inline]
+    fn as_slice(&self) -> &ChunkSlice {
+        use std::borrow::Borrow;
+        self.borrow()
+    }
+
     /// The number of bytes `RopeChunk`s must always stay under.
     pub(super) const fn chunk_max() -> usize {
         // We can exceed the max by 3 bytes at most, which happens when the
@@ -125,81 +131,6 @@ impl std::ops::DerefMut for RopeChunk {
     #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.text
-    }
-}
-
-impl Summarize for RopeChunk {
-    type Summary = ChunkSummary;
-
-    #[inline]
-    fn summarize(&self) -> Self::Summary {
-        ChunkSummary {
-            bytes: self.text.len(),
-            line_breaks: str_indices::lines_lf::count_breaks(&self.text),
-        }
-    }
-}
-
-impl Leaf for RopeChunk {
-    type BaseMetric = ByteMetric;
-
-    type Slice = ChunkSlice;
-
-    #[inline]
-    fn is_big_enough(&self, summary: &ChunkSummary) -> bool {
-        summary.bytes >= RopeChunk::min_bytes()
-    }
-
-    #[inline]
-    fn balance_slices<'a>(
-        (left, left_summary): (&'a ChunkSlice, &'a ChunkSummary),
-        (right, right_summary): (&'a ChunkSlice, &'a ChunkSummary),
-    ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
-        if left.len() >= Self::min_bytes() && right.len() >= Self::min_bytes()
-        {
-            (
-                (left.to_owned(), *left_summary),
-                Some((right.to_owned(), *right_summary)),
-            )
-        }
-        // If both slices can fit in a single chunk we join them.
-        else if left.len() + right.len() <= Self::max_bytes() {
-            let mut left = left.to_owned();
-            left.push_str(right);
-
-            let mut left_summary = *left_summary;
-            left_summary += right_summary;
-
-            ((left, left_summary), None)
-        }
-        // If the left side is lacking we take text from the right side.
-        else if left.len() < Self::min_bytes() {
-            debug_assert!(right.len() > Self::min_bytes());
-
-            let (left, right) = balance_left_with_right(
-                left,
-                left_summary,
-                right,
-                right_summary,
-            );
-
-            (left, Some(right))
-        }
-        // Viceversa, if the right side is lacking we take text from the left
-        // side.
-        else {
-            debug_assert!(right.len() < Self::min_bytes());
-            debug_assert!(left.len() > Self::min_bytes());
-
-            let (left, right) = balance_right_with_left(
-                left,
-                left_summary,
-                right,
-                right_summary,
-            );
-
-            (left, Some(right))
-        }
     }
 }
 
@@ -316,6 +247,21 @@ impl SubAssign<&Self> for ChunkSummary {
     }
 }
 
+impl Summarize for RopeChunk {
+    type Summary = ChunkSummary;
+
+    #[inline]
+    fn summarize(&self) -> Self::Summary {
+        self.as_slice().summarize()
+    }
+}
+
+impl Leaf for RopeChunk {
+    type BaseMetric = ByteMetric;
+
+    type Slice = ChunkSlice;
+}
+
 impl BalancedLeaf for RopeChunk {
     #[inline]
     fn is_underfilled(_: &ChunkSlice, summary: &ChunkSummary) -> bool {
@@ -327,11 +273,9 @@ impl BalancedLeaf for RopeChunk {
         (left, left_summary): (&mut Self, &mut ChunkSummary),
         (right, right_summary): (&mut Self, &mut ChunkSummary),
     ) {
-        use std::borrow::Borrow;
-
         let (a, b) = Self::balance_slices(
-            ((&*left).borrow(), left_summary),
-            ((&*right).borrow(), right_summary),
+            (left.as_slice(), left_summary),
+            (right.as_slice(), right_summary),
         );
 
         *left = a.0;
@@ -341,6 +285,58 @@ impl BalancedLeaf for RopeChunk {
 
         *right = b.0;
         *right_summary = b.1;
+    }
+
+    #[inline]
+    fn balance_slices<'a>(
+        (left, left_summary): (&'a ChunkSlice, &'a ChunkSummary),
+        (right, right_summary): (&'a ChunkSlice, &'a ChunkSummary),
+    ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
+        if left.len() >= Self::min_bytes() && right.len() >= Self::min_bytes()
+        {
+            (
+                (left.to_owned(), *left_summary),
+                Some((right.to_owned(), *right_summary)),
+            )
+        }
+        // If both slices can fit in a single chunk we join them.
+        else if left.len() + right.len() <= Self::max_bytes() {
+            let mut left = left.to_owned();
+            left.push_str(right);
+
+            let mut left_summary = *left_summary;
+            left_summary += right_summary;
+
+            ((left, left_summary), None)
+        }
+        // If the left side is lacking we take text from the right side.
+        else if left.len() < Self::min_bytes() {
+            debug_assert!(right.len() > Self::min_bytes());
+
+            let (left, right) = balance_left_with_right(
+                left,
+                left_summary,
+                right,
+                right_summary,
+            );
+
+            (left, Some(right))
+        }
+        // Viceversa, if the right side is lacking we take text from the left
+        // side.
+        else {
+            debug_assert!(right.len() < Self::min_bytes());
+            debug_assert!(left.len() > Self::min_bytes());
+
+            let (left, right) = balance_right_with_left(
+                left,
+                left_summary,
+                right,
+                right_summary,
+            );
+
+            (left, Some(right))
+        }
     }
 }
 

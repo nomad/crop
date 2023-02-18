@@ -70,11 +70,6 @@ impl<L: Leaf> Lnode<L> {
     }
 
     #[inline]
-    pub(super) fn is_big_enough(&self) -> bool {
-        self.value.is_big_enough(self.summary())
-    }
-
-    #[inline]
     pub(super) fn is_empty(&self) -> bool {
         self.base_measure() == L::BaseMetric::zero()
     }

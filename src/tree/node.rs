@@ -1,4 +1,5 @@
-use super::{Inode, Leaf, Lnode, Metric, SlicingMetric};
+use super::traits::*;
+use super::{Inode, Lnode};
 
 #[derive(Clone)]
 pub(super) enum Node<const N: usize, L: Leaf> {
@@ -121,6 +122,24 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
+    pub(super) fn balance(&mut self, other: &mut Self)
+    where
+        L: BalancedLeaf,
+    {
+        debug_assert_eq!(self.depth(), other.depth());
+
+        match (self, other) {
+            (Node::Internal(left), Node::Internal(right)) => {
+                left.balance(right)
+            },
+
+            (Node::Leaf(left), Node::Leaf(right)) => left.balance(right),
+
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline]
     pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: SlicingMetric<L>,
@@ -170,6 +189,14 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
+    pub(super) fn is_empty(&self) -> bool {
+        match self {
+            Node::Internal(inode) => inode.is_empty(),
+            Node::Leaf(leaf) => leaf.is_empty(),
+        }
+    }
+
+    #[inline]
     pub(super) fn is_internal(&self) -> bool {
         matches!(self, Node::Internal(_))
     }
@@ -180,10 +207,13 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn is_underfilled(&self) -> bool {
+    pub(super) fn is_underfilled(&self) -> bool
+    where
+        L: BalancedLeaf,
+    {
         match self {
             Node::Internal(inode) => inode.is_underfilled(),
-            Node::Leaf(leaf) => !leaf.is_big_enough(),
+            Node::Leaf(leaf) => leaf.is_underfilled(),
         }
     }
 

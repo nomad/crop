@@ -21,13 +21,17 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized {
     type Slice: ?Sized
         + Summarize<Summary = <Self as Summarize>::Summary>
         + ToOwned<Owned = Self>;
+}
 
+pub trait BalancedLeaf: Leaf {
     /// Returns `true` if the leaf is big enough on its own, `false` if it
     /// should be balanced with another leaf slice to become valid.
-    #[allow(unused_variables)]
-    fn is_big_enough(&self, summary: &Self::Summary) -> bool {
-        true
-    }
+    fn is_underfilled(slice: &Self::Slice, summary: &Self::Summary) -> bool;
+
+    fn balance(
+        left: (&mut Self, &mut Self::Summary),
+        right: (&mut Self, &mut Self::Summary),
+    );
 
     /// Balances two leaves.
     ///
@@ -42,18 +46,7 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized {
     fn balance_slices<'a>(
         first: (&'a Self::Slice, &'a Self::Summary),
         second: (&'a Self::Slice, &'a Self::Summary),
-    ) -> ((Self, Self::Summary), Option<(Self, Self::Summary)>) {
-        unimplemented!();
-    }
-}
-
-pub trait BalancedLeaf: Leaf {
-    fn is_underfilled(slice: &Self::Slice, summary: &Self::Summary) -> bool;
-
-    fn balance(
-        left: (&mut Self, &mut Self::Summary),
-        right: (&mut Self, &mut Self::Summary),
-    );
+    ) -> ((Self, Self::Summary), Option<(Self, Self::Summary)>);
 }
 
 pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {

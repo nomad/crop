@@ -27,7 +27,7 @@ impl<const FANOUT: usize, L: Leaf> std::fmt::Debug for Tree<FANOUT, L> {
     }
 }
 
-impl<const FANOUT: usize, L: Leaf> From<TreeSlice<'_, FANOUT, L>>
+impl<const FANOUT: usize, L: BalancedLeaf> From<TreeSlice<'_, FANOUT, L>>
     for Tree<FANOUT, L>
 {
     #[inline]
@@ -694,8 +694,8 @@ mod tree_replace {
                 leaf.remove(replace_up_to);
 
                 if leaf.is_underfilled() {
-                    if let Some(extra_leaves) = extra_leaves {
-                        let mut last = extra_leaves.pop().unwrap();
+                    if let Some(leaves) = extra_leaves {
+                        let mut last = leaves.pop().unwrap();
                         debug_assert!(last.is_leaf());
 
                         let l = {
@@ -708,10 +708,14 @@ mod tree_replace {
                         if leaf.is_empty() {
                             std::mem::swap(leaf, l)
                         } else {
-                            extra_leaves.push(last)
+                            leaves.push(last)
                         }
 
                         debug_assert!(!leaf.is_underfilled());
+
+                        if leaves.is_empty() {
+                            *extra_leaves = None;
+                        }
                     }
                 }
 
@@ -747,7 +751,7 @@ mod tree_replace {
 
         if let Some(leaves) = extra_leaves {
             inode.replace_range_with_leaves_back(0..end_idx, leaves);
-            if leaves.len() == 0 {
+            if leaves.is_empty() {
                 *extra_leaves = None;
             }
         } else {
@@ -769,7 +773,7 @@ mod from_treeslice {
     /// NOTE: can only be called if the slice has a leaf count of at least 3.
     /// Leaf counts of 1 or 2 should be handled before calling this function.
     #[inline]
-    pub(super) fn into_tree_root<const N: usize, L: Leaf>(
+    pub(super) fn into_tree_root<const N: usize, L: BalancedLeaf>(
         slice: TreeSlice<'_, N, L>,
     ) -> Tree<N, L> {
         debug_assert!(slice.leaf_count() >= 3);
@@ -843,7 +847,7 @@ mod from_treeslice {
     /// it's ok to call `Arc::get_mut` on them. The nodes in the middle will
     /// usually be `Arc::clone`d from the slice.
     #[inline]
-    fn cut_tree_slice<const N: usize, L: Leaf>(
+    fn cut_tree_slice<const N: usize, L: BalancedLeaf>(
         slice: TreeSlice<'_, N, L>,
     ) -> (Inode<N, L>, usize, usize) {
         debug_assert!(slice.leaf_count() >= 3);
@@ -919,7 +923,7 @@ mod from_treeslice {
     }
 
     #[inline]
-    fn cut_first_rec<const N: usize, L: Leaf>(
+    fn cut_first_rec<const N: usize, L: BalancedLeaf>(
         node: &Arc<Node<N, L>>,
         take_from: L::BaseMetric,
         start_slice: &L::Slice,
@@ -975,7 +979,7 @@ mod from_treeslice {
             Node::Leaf(_) => {
                 let lnode = Lnode::new(start_slice.to_owned(), start_summary);
 
-                if !lnode.is_big_enough() {
+                if lnode.is_underfilled() {
                     *invalid_nodes += 1;
                 }
 
@@ -985,7 +989,7 @@ mod from_treeslice {
     }
 
     #[inline]
-    fn cut_last_rec<const N: usize, L: Leaf>(
+    fn cut_last_rec<const N: usize, L: BalancedLeaf>(
         node: &Arc<Node<N, L>>,
         take_up_to: L::BaseMetric,
         end_slice: &L::Slice,
@@ -1036,7 +1040,7 @@ mod from_treeslice {
             Node::Leaf(_) => {
                 let lnode = Lnode::new(end_slice.to_owned(), end_summary);
 
-                if !lnode.is_big_enough() {
+                if lnode.is_underfilled() {
                     *invalid_nodes = 1;
                 }
 
