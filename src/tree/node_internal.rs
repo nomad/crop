@@ -708,18 +708,18 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         leaves: &mut I,
     ) where
         I: Iterator<Item = Arc<Node<N, L>>> + ExactSizeIterator,
+        L: Clone,
     {
         debug_assert!(child_range.start <= child_range.end);
         debug_assert!(child_range.end <= self.len());
 
-        let end = child_range.end;
-
         // TODO: refactor to add nodes until max_children if we can.
+
+        let end = child_range.end;
 
         if self.depth() == 1 {
             for child_idx in child_range {
-                if leaves.len() > 0 {
-                    let leaf = leaves.next().unwrap();
+                if let Some(leaf) = leaves.next() {
                     debug_assert!(leaf.is_leaf());
                     self.swap(child_idx, leaf);
                 } else {
@@ -746,6 +746,38 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 debug_assert_eq!(inode.depth(), target_depth);
 
                 self.swap(child_idx, Arc::new(Node::Internal(inode)));
+            } else if leaves.len() > 0 {
+                let last = if leaves.len() == 1 {
+                    leaves.next().unwrap()
+                } else {
+                    Arc::new(Node::Internal(Self::from_nodes(leaves.by_ref())))
+                };
+
+                debug_assert!(last.depth() < target_depth);
+
+                if child_idx == 0 {
+                    panic!("TODO: explain why");
+                }
+
+                let last = self.with_child_mut(child_idx - 1, |previous| {
+                    let previous = {
+                        let n = Arc::make_mut(previous);
+                        unsafe { n.as_mut_internal_unchecked() }
+                    };
+
+                    previous.append_at_depth(last)
+                });
+
+                if let Some(last) = last {
+                    self.swap(child_idx, Arc::new(Node::Internal(last)));
+                    self.drain(child_idx + 1..end);
+                } else {
+                    self.drain(child_idx..end);
+                }
+
+                debug_assert_eq!(0, leaves.len());
+
+                return;
             } else {
                 self.drain(child_idx..end);
                 return;
@@ -759,16 +791,19 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &mut self,
         child_range: Range<usize>,
         leaves: &mut Vec<Arc<Node<N, L>>>,
-    ) {
+    ) where
+        L: Clone,
+    {
         debug_assert!(child_range.start <= child_range.end);
         debug_assert!(child_range.end <= self.len());
+
+        // TODO: refactor to add nodes until max_children if we can.
 
         let start = child_range.start;
 
         if self.depth() == 1 {
             for child_idx in child_range.rev() {
-                if leaves.len() > 0 {
-                    let leaf = leaves.pop().unwrap();
+                if let Some(leaf) = leaves.pop() {
                     debug_assert!(leaf.is_leaf());
                     self.swap(child_idx, leaf);
                 } else {
@@ -789,14 +824,47 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         for child_idx in child_range.rev() {
             if leaves.len() >= min_leaves_for_depth {
-                let drain = std::cmp::min(leaves.len(), max_leaves_for_depth);
-
-                let inode =
-                    Self::from_nodes(leaves.drain(leaves.len() - drain..));
+                let inode = Self::from_nodes(leaves.drain(
+                    leaves.len().saturating_sub(max_leaves_for_depth)..,
+                ));
 
                 debug_assert_eq!(inode.depth(), target_depth);
 
                 self.swap(child_idx, Arc::new(Node::Internal(inode)));
+            } else if leaves.len() > 0 {
+                let last = if leaves.len() == 1 {
+                    leaves.pop().unwrap()
+                } else {
+                    Arc::new(Node::Internal(Self::from_nodes(
+                        leaves.drain(..),
+                    )))
+                };
+
+                debug_assert!(last.depth() < target_depth);
+
+                if child_idx == self.len() - 1 {
+                    panic!("TODO: explain why");
+                }
+
+                let last = self.with_child_mut(child_idx + 1, |next| {
+                    let next = {
+                        let n = Arc::make_mut(next);
+                        unsafe { n.as_mut_internal_unchecked() }
+                    };
+
+                    next.prepend_at_depth(last)
+                });
+
+                if let Some(last) = last {
+                    self.swap(child_idx, Arc::new(Node::Internal(last)));
+                    self.drain(start..child_idx);
+                } else {
+                    self.drain(start..child_idx + 1);
+                }
+
+                debug_assert_eq!(0, leaves.len());
+
+                return;
             } else {
                 self.drain(start..child_idx + 1);
                 return;
