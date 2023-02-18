@@ -433,9 +433,9 @@ mod tree_replace {
 
         let mut extra_leaves = None;
 
-        let mut invalid_in_start = 0;
+        let mut start_should_rebalance = false;
 
-        let mut invalid_in_end = 0;
+        let mut end_should_rebalance = false;
 
         let mut offset = M::zero();
 
@@ -455,6 +455,7 @@ mod tree_replace {
                         Arc::make_mut(child),
                         range.start + child_measure - offset,
                         slice,
+                        &mut start_should_rebalance,
                     )
                 });
 
@@ -481,6 +482,7 @@ mod tree_replace {
                         Arc::make_mut(child),
                         range.end + child_measure - offset,
                         &mut extra_leaves,
+                        &mut end_should_rebalance,
                     )
                 });
 
@@ -488,7 +490,7 @@ mod tree_replace {
             }
         }
 
-        if invalid_in_start + invalid_in_end > 0 {
+        if start_should_rebalance || end_should_rebalance {
             debug_assert!(extra_leaves.is_none());
 
             inode.drain(start_idx + 1..end_idx);
@@ -600,6 +602,7 @@ mod tree_replace {
         node: &mut Node<N, L>,
         replace_from: M,
         slice: &L::Slice,
+        should_rebalance: &mut bool,
     ) -> Option<impl ExactSizeIterator<Item = Arc<Node<N, L>>>>
     where
         M: Metric<L>,
@@ -617,8 +620,13 @@ mod tree_replace {
                 // TODO: make `Leaf::replace()` generic over a `RangeBounds<M>`
                 // instead of `Range<M>`?
                 let range = replace_from..leaf.measure::<M>();
-                let extra_leaves = leaf.replace(range, slice)?;
-                return Some(extra_leaves.map(Node::Leaf).map(Arc::new));
+
+                return if let Some(extra_leaves) = leaf.replace(range, slice) {
+                    Some(extra_leaves.map(Node::Leaf).map(Arc::new))
+                } else {
+                    *should_rebalance |= leaf.is_underfilled();
+                    None
+                };
             },
         };
 
@@ -643,6 +651,7 @@ mod tree_replace {
                         Arc::make_mut(child),
                         replace_from + child_measure - offset,
                         slice,
+                        should_rebalance,
                     )
                 });
 
@@ -650,7 +659,7 @@ mod tree_replace {
             }
         }
 
-        if let Some(mut extra_leaves) = extra_leaves {
+        let extra_leaves = if let Some(mut extra_leaves) = extra_leaves {
             inode.replace_range_with_leaves(
                 start_idx + 1..inode.len(),
                 &mut extra_leaves,
@@ -660,7 +669,11 @@ mod tree_replace {
         } else {
             inode.drain(start_idx + 1..);
             None
-        }
+        };
+
+        *should_rebalance |= inode.is_underfilled();
+
+        extra_leaves
     }
 
     /// TODO: docs
@@ -669,6 +682,7 @@ mod tree_replace {
         node: &mut Node<N, L>,
         replace_up_to: M,
         extra_leaves: &mut Option<Vec<Arc<Node<N, L>>>>,
+        should_rebalance: &mut bool,
     ) where
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
@@ -678,6 +692,30 @@ mod tree_replace {
 
             Node::Leaf(leaf) => {
                 leaf.remove(replace_up_to);
+
+                if leaf.is_underfilled() {
+                    if let Some(extra_leaves) = extra_leaves {
+                        let mut last = extra_leaves.pop().unwrap();
+                        debug_assert!(last.is_leaf());
+
+                        let l = {
+                            let l = Arc::get_mut(&mut last).unwrap();
+                            unsafe { l.as_mut_leaf_unchecked() }
+                        };
+
+                        l.balance(leaf);
+
+                        if leaf.is_empty() {
+                            std::mem::swap(leaf, l)
+                        } else {
+                            extra_leaves.push(last)
+                        }
+
+                        debug_assert!(!leaf.is_underfilled());
+                    }
+                }
+
+                *should_rebalance = leaf.is_underfilled();
                 return;
             },
         };
@@ -699,6 +737,7 @@ mod tree_replace {
                         Arc::make_mut(child),
                         replace_up_to - offset,
                         extra_leaves,
+                        should_rebalance,
                     )
                 });
 
@@ -714,6 +753,8 @@ mod tree_replace {
         } else {
             inode.drain(..end_idx);
         }
+
+        *should_rebalance |= inode.is_underfilled();
     }
 }
 

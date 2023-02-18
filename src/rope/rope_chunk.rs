@@ -4,7 +4,7 @@ use std::str;
 
 use super::metrics::ByteMetric;
 use super::utils::*;
-use crate::tree::{Leaf, ReplaceableLeaf, Summarize};
+use crate::tree::{BalancedLeaf, Leaf, ReplaceableLeaf, Summarize};
 
 #[cfg(all(not(test), not(feature = "integration_tests")))]
 const ROPE_CHUNK_MAX_BYTES: usize = 1024;
@@ -313,6 +313,34 @@ impl SubAssign<&Self> for ChunkSummary {
     fn sub_assign(&mut self, rhs: &Self) {
         self.bytes -= rhs.bytes;
         self.line_breaks -= rhs.line_breaks;
+    }
+}
+
+impl BalancedLeaf for RopeChunk {
+    #[inline]
+    fn is_underfilled(_: &ChunkSlice, summary: &ChunkSummary) -> bool {
+        summary.bytes < Self::min_bytes()
+    }
+
+    #[inline]
+    fn balance(
+        (left, left_summary): (&mut Self, &mut ChunkSummary),
+        (right, right_summary): (&mut Self, &mut ChunkSummary),
+    ) {
+        use std::borrow::Borrow;
+
+        let (a, b) = Self::balance_slices(
+            ((&*left).borrow(), left_summary),
+            ((&*right).borrow(), right_summary),
+        );
+
+        *left = a.0;
+        *left_summary = a.1;
+
+        let b = b.unwrap_or_default();
+
+        *right = b.0;
+        *right_summary = b.1;
     }
 }
 

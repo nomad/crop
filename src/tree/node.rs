@@ -101,6 +101,21 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
+    pub(super) unsafe fn as_mut_leaf_unchecked(&mut self) -> &mut Lnode<L> {
+        debug_assert!(
+            self.is_leaf(),
+            "A node was expected to be a leaf but it's an internal node. This \
+            is a logic bug in crop. Please file an issue at \
+            https://github.com/noib3/crop."
+        );
+
+        match self {
+            Node::Internal(_) => std::hint::unreachable_unchecked(),
+            Node::Leaf(leaf) => leaf,
+        }
+    }
+
+    #[inline]
     pub fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }

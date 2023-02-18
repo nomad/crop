@@ -37,7 +37,6 @@ impl<L: Leaf> From<(L, L::Summary)> for Lnode<L> {
 
 impl<L: Leaf> Lnode<L> {
     pub(super) fn assert_invariants(&self) {
-        // assert!(self.is_big_enough());
         assert_eq!(self.summary, self.value.summarize());
     }
 
@@ -47,13 +46,37 @@ impl<L: Leaf> Lnode<L> {
     }
 
     #[inline]
+    pub(super) fn balance(&mut self, other: &mut Self)
+    where
+        L: BalancedLeaf,
+    {
+        L::balance(
+            (&mut self.value, &mut self.summary),
+            (&mut other.value, &mut other.summary),
+        )
+    }
+
+    #[inline]
     pub fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
     #[inline]
+    pub(super) fn is_underfilled(&self) -> bool
+    where
+        L: BalancedLeaf,
+    {
+        L::is_underfilled(self.as_slice(), self.summary())
+    }
+
+    #[inline]
     pub(super) fn is_big_enough(&self) -> bool {
         self.value.is_big_enough(self.summary())
+    }
+
+    #[inline]
+    pub(super) fn is_empty(&self) -> bool {
+        self.base_measure() == L::BaseMetric::zero()
     }
 
     #[inline]

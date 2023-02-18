@@ -47,7 +47,16 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized {
     }
 }
 
-pub trait ReplaceableLeaf<M: Metric<Self>>: Leaf {
+pub trait BalancedLeaf: Leaf {
+    fn is_underfilled(slice: &Self::Slice, summary: &Self::Summary) -> bool;
+
+    fn balance(
+        left: (&mut Self, &mut Self::Summary),
+        right: (&mut Self, &mut Self::Summary),
+    );
+}
+
+pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
     type ExtraLeaves: ExactSizeIterator<Item = Self>;
 
     fn replace(
