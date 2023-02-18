@@ -137,7 +137,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         first_idx: usize,
         second_idx: usize,
     ) {
-        todo!();
+        // todo!();
     }
 
     /// Balances the first child using the contents of the second child,
@@ -330,43 +330,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 // they must be of the same kind.
                 unsafe { std::hint::unreachable_unchecked() }
             },
-        }
-    }
-
-    /// Recursively balances the first child all the way down to the deepest
-    /// inode.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `Arc` enclosing the first child has a strong counter > 1.
-    #[inline]
-    pub(super) fn balance_left_side(&mut self)
-    where
-        L: BalancedLeaf,
-    {
-        self.balance_first_child_with_second();
-
-        if let Node::Internal(first) = Arc::get_mut(self.first_mut()).unwrap()
-        {
-            first.balance_left_side();
-        }
-    }
-
-    /// Recursively balances the last child all the way down to the deepest
-    /// inode.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the `Arc` enclosing the last child has a strong counter > 1.
-    #[inline]
-    pub(super) fn balance_right_side(&mut self)
-    where
-        L: BalancedLeaf,
-    {
-        self.balance_last_child_with_penultimate();
-
-        if let Node::Internal(last) = Arc::get_mut(self.last_mut()).unwrap() {
-            last.balance_right_side();
         }
     }
 
@@ -626,7 +589,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
+    pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
         let last_idx = self.len() - 1;
         &mut self.children[last_idx]
     }

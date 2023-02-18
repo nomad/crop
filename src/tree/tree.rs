@@ -464,7 +464,9 @@ mod tree_replace {
 
             inode.drain(start_idx + 1..end_idx);
 
-            // TODO: rebalance start on end
+            // balance_start_end(&mut inode, start_idx);
+
+            Node::replace_with_single_child(node);
 
             return None;
         }
@@ -755,13 +757,23 @@ mod from_treeslice {
             {
                 // Safety : `root` was just enclosed in a `Node::Internal`
                 // variant.
-                let root = unsafe {
+                let mut inode = unsafe {
                     Arc::get_mut(&mut root)
                         .unwrap()
                         .as_mut_internal_unchecked()
                 };
 
-                root.balance_left_side();
+                loop {
+                    inode.balance_first_child_with_second();
+
+                    if let Node::Internal(first) =
+                        Arc::get_mut(inode.first_mut()).unwrap()
+                    {
+                        inode = first;
+                    } else {
+                        break;
+                    }
+                }
             }
 
             Node::replace_with_single_child(&mut root);
@@ -774,13 +786,23 @@ mod from_treeslice {
                 // TreeSlice would've had to span 2 leaves, and that case case
                 // should have already been handled before calling this
                 // function.
-                let root = unsafe {
+                let mut inode = unsafe {
                     Arc::get_mut(&mut root)
                         .unwrap()
                         .as_mut_internal_unchecked()
                 };
 
-                root.balance_right_side();
+                loop {
+                    inode.balance_last_child_with_penultimate();
+
+                    if let Node::Internal(last) =
+                        Arc::get_mut(inode.last_mut()).unwrap()
+                    {
+                        inode = last;
+                    } else {
+                        break;
+                    }
+                }
             }
 
             Node::replace_with_single_child(&mut root);
