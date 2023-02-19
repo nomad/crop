@@ -14,8 +14,11 @@ graphemes = ["unicode-segmentation"]
 simd = ["str_indices/simd"]
 
 # Private features
-integration_tests = []
-it = ["integration_tests"]
+small_chunks = []
+fanout_4 = []
+fanout_24 = []
+deep_trees = ["small_chunks", "fanout_4"]
+dp = ["deep_trees"]
 
 [dependencies]
 smallvec = { version = "1.10.0", features = ["const_generics"] }

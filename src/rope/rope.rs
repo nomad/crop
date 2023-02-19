@@ -7,11 +7,14 @@ use super::utils::*;
 use crate::tree::Tree;
 use crate::RopeSlice;
 
-#[cfg(not(any(test, feature = "integration_tests")))]
+#[cfg(all(any(test, feature = "fanout_4"), not(feature = "fanout_24")))]
+const ROPE_FANOUT: usize = 4;
+
+#[cfg(not(any(test, feature = "fanout_4", feature = "fanout_24")))]
 const ROPE_FANOUT: usize = 8;
 
-#[cfg(any(test, feature = "integration_tests"))]
-const ROPE_FANOUT: usize = 4;
+#[cfg(feature = "fanout_24")]
+const ROPE_FANOUT: usize = 24;
 
 /// A UTF-8 text rope.
 ///

@@ -6,11 +6,11 @@ use super::metrics::ByteMetric;
 use super::utils::*;
 use crate::tree::{Leaf, Summarize};
 
-#[cfg(all(not(test), not(feature = "integration_tests")))]
-const ROPE_CHUNK_MAX_BYTES: usize = 1024;
-
-#[cfg(any(test, feature = "integration_tests"))]
+#[cfg(any(test, feature = "small_chunks"))]
 const ROPE_CHUNK_MAX_BYTES: usize = 4;
+
+#[cfg(not(any(test, feature = "small_chunks")))]
+const ROPE_CHUNK_MAX_BYTES: usize = 1024;
 
 const ROPE_CHUNK_MIN_BYTES: usize = ROPE_CHUNK_MAX_BYTES / 2;
 

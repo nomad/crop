@@ -33,7 +33,7 @@ fn graphemes_iter_ascii() {
 /// ├── "🇮"
 /// └── "🇴"
 #[ignore]
-#[cfg(feature = "graphemes")]
+#[cfg(all(feature = "graphemes", feature = "small_chunks"))]
 #[test]
 fn graphemes_iter_two_flags() {
     let r = Rope::from("🇷🇸🇮🇴");
