@@ -269,7 +269,7 @@ impl BalancedLeaf for RopeChunk {
     }
 
     #[inline]
-    fn balance(
+    fn balance_leaves(
         (left, left_summary): (&mut Self, &mut ChunkSummary),
         (right, right_summary): (&mut Self, &mut ChunkSummary),
     ) {

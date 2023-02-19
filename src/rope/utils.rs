@@ -1,5 +1,4 @@
 use std::fmt::Write;
-use std::ops::{Bound, RangeBounds};
 
 use super::iterators::Chunks;
 use super::rope_chunk::{ChunkSlice, ChunkSummary, RopeChunk};
@@ -294,30 +293,6 @@ pub(super) fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
 #[inline]
 pub(super) fn last_byte_is_newline(s: &str) -> bool {
     !s.is_empty() && s.as_bytes()[s.len() - 1] == b'\n'
-}
-
-#[inline]
-pub(super) fn range_bounds_to_start_end<B>(
-    range: B,
-    lo: usize,
-    hi: usize,
-) -> (usize, usize)
-where
-    B: RangeBounds<usize>,
-{
-    let start = match range.start_bound() {
-        Bound::Included(&n) => n,
-        Bound::Excluded(&n) => n + 1,
-        Bound::Unbounded => lo,
-    };
-
-    let end = match range.end_bound() {
-        Bound::Included(&n) => n + 1,
-        Bound::Excluded(&n) => n,
-        Bound::Unbounded => hi,
-    };
-
-    (start, end)
 }
 
 /// Returns a tuple `(to_add, rest)`, where `to_add` is the largest left

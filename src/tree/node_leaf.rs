@@ -50,14 +50,14 @@ impl<L: Leaf> Lnode<L> {
     where
         L: BalancedLeaf,
     {
-        L::balance(
+        L::balance_leaves(
             (&mut self.value, &mut self.summary),
             (&mut other.value, &mut other.summary),
         )
     }
 
     #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
+    pub(super) fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
@@ -85,6 +85,15 @@ impl<L: Leaf> Lnode<L> {
     }
 
     #[inline]
+    pub(super) fn remove<M>(&mut self, up_to: M)
+    where
+        M: Metric<L>,
+        L: ReplaceableLeaf<M>,
+    {
+        self.value.remove(&mut self.summary, up_to);
+    }
+
+    #[inline]
     pub(super) fn replace<M>(
         &mut self,
         range: std::ops::Range<M>,
@@ -96,16 +105,7 @@ impl<L: Leaf> Lnode<L> {
     {
         self.value
             .replace(&mut self.summary, range, slice)
-            .map(|leaves| leaves.map(Self::from))
-    }
-
-    #[inline]
-    pub(super) fn remove<M>(&mut self, up_to: M)
-    where
-        M: Metric<L>,
-        L: ReplaceableLeaf<M>,
-    {
-        self.value.remove(&mut self.summary, up_to);
+            .map(|extra_leaves| extra_leaves.map(Self::from))
     }
 
     #[inline]

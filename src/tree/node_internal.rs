@@ -2,8 +2,8 @@ use std::ops::RangeBounds;
 use std::sync::Arc;
 
 use super::traits::*;
-use super::utils::*;
 use super::{ExactChain, Lnode, Node};
+use crate::range_bounds_to_start_end;
 
 #[derive(Clone)]
 pub(super) struct Inode<const N: usize, L: Leaf> {
@@ -30,7 +30,11 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Inode<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Inode<N, L> {
-    /// TODO: docs
+    /// Appends the node at the right depth.
+    ///
+    /// If all the nodes on the right side of the subtree up to the one to
+    /// which `node` should be appended are already full this will return a new
+    /// inode at the same depth as `self` to be inserted right after `self`.
     #[inline]
     pub(super) fn append_at_depth(
         &mut self,
@@ -74,9 +78,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         } else {
             let mut other =
                 Self::from_children(self.drain(Self::min_children() + 1..));
+
             other.push(node);
+
             debug_assert!(!self.is_underfilled());
             debug_assert!(!other.is_underfilled());
+
             Some(other)
         }
     }
@@ -124,7 +131,13 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
     }
 
-    /// TODO: docs
+    /// Balances itself with another inode at the same depth. Note that `other`
+    /// can be left empty if the children of the two inodes can fit in a single
+    /// inode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `other` is at a different depth.
     #[inline]
     pub(super) fn balance(&mut self, other: &mut Self) {
         debug_assert_eq!(self.depth(), other.depth());
@@ -166,7 +179,15 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         );
     }
 
-    /// TODO: docs
+    /// Balances the child at `child_idx` with the previous child, unless
+    /// `child_idx` is 0 in which case it'll be balanced with the second child.
+    ///
+    /// Note that if the balancing causes one of the children to be empty that
+    /// child will be removed.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this inode contains a single child.
     #[inline]
     pub(super) fn balance_child(&mut self, child_idx: usize)
     where
@@ -268,7 +289,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// Balances the first child using the contents of the second child,
     /// possibly merging them together if necessary.
     ///
-    /// NOTE: when the first and second children are leaves this inode's
+    /// Note that when the first and second children are leaves this inode's
     /// [`leaf_count()`] may decrease by 1.
     ///
     /// # Panics
@@ -279,8 +300,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     ///
     /// - the `Arc` enclosing the first child has a strong counter > 1. This
     /// function assumes that there are zero `Arc::clone`s of the first child.
-    ///
-    /// TODO: this should belong in the `from_tree_slice` module.
     #[inline]
     pub(super) fn balance_first_child_with_second(&mut self)
     where
@@ -362,8 +381,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// Balances the last child using the contents of the penultimate (i.e.
     /// second to last) child, possibly merging them together if necessary.
     ///
-    /// NOTE: when the penultimate and last children are leaves this inode's
-    /// [`leaf_count()`] may decrease by 1.
+    /// Note that when the penultimate and last children are leaves this
+    /// inode's [`leaf_count()`] may decrease by 1.
     ///
     /// # Panics
     ///
@@ -374,8 +393,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     ///
     /// - the `Arc` enclosing the last child has a strong counter > 1. This
     /// function assumes that there are zero `Arc::clone`s of the last child.
-    ///
-    /// TODO: this should belong in the `from_tree_slice` module.
     #[inline]
     pub(super) fn balance_last_child_with_penultimate(&mut self)
     where
@@ -478,11 +495,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub(super) fn children_mut(&mut self) -> &mut Vec<Arc<Node<N, L>>> {
-        &mut self.children
-    }
-
-    #[inline]
     pub(super) fn depth(&self) -> usize {
         self.depth
     }
@@ -520,20 +532,20 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if the inode is empty.
     #[inline]
     pub(super) fn first(&self) -> &Arc<Node<N, L>> {
         &self.children[0]
     }
 
-    /// Creates a new internal node from its children.
-    ///
-    /// NOTE: this function assumes that `children` yields less than
-    /// `Self::max_children()` nodes and that all the nodes have the same
-    /// depth.
+    /// Creates a new inode from its children.
     ///
     /// # Panics
     ///
-    /// Will panic if `children` yields zero nodes.
+    /// Panics if `children` yields zero nodes, more than `max_children` nodes
+    /// or nodes at different depths.
     #[inline]
     pub(super) fn from_children<I>(children: I) -> Self
     where
@@ -557,7 +569,16 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         Self { children, depth, leaf_count, summary }
     }
 
-    /// TODO: docs
+    /// Constructs a new inode from an arbitrarily long sequence of nodes.
+    ///
+    /// Note that unlike [`Self::from_children()`] the `nodes` iterator is
+    /// allowed to yield more that `max_children` nodes without causing a
+    /// panic.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `nodes` yields less than 2 nodes or if it yields nodes at
+    /// different depths.
     #[inline]
     pub(super) fn from_nodes<I>(nodes: I) -> Self
     where
@@ -566,7 +587,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     {
         let nodes = nodes.into_iter();
 
-        debug_assert!(nodes.len() > 0);
+        // TODO: uncomment once `DiocanSegmenter` yields Arc<Nodes>.
+        // debug_assert!(nodes.len() > 1);
 
         if nodes.len() <= Self::max_children() {
             return Self::from_children(nodes);
@@ -594,29 +616,29 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.len() < Self::min_children()
     }
 
-    /// Inserts a child node at `child_offset`, i.e. the new child will have
-    /// `child_offset` sibiling nodes to its left.
+    /// Inserts a child node at `child_offset`, so that the new child will have
+    /// `child_offset` sibiling nodes to its left. Note that if this inode was
+    /// empty its depth will then be `child.depth() + 1`.
     ///
     /// # Panics
     ///
-    /// The function can panic if the inode is already full or if the depth of
-    /// the child is not `N - 1` where `N` is the depth of the inode.
+    /// Panics if the inode is already full or if `child` is a depth different
+    /// than `self.depth() - 1` if the inode already contained some children.
     #[inline]
     pub(super) fn insert(
         &mut self,
         child_offset: usize,
         child: Arc<Node<N, L>>,
     ) {
-        debug_assert!(!self.is_full());
-        debug_assert!(self.is_empty() || child.depth() + 1 == self.depth());
-
-        self.leaf_count += child.leaf_count();
-        self.summary += child.summary();
-
         if self.is_empty() {
             self.depth = child.depth() + 1;
         }
 
+        debug_assert!(!self.is_full());
+        debug_assert_eq!(child.depth() + 1, self.depth());
+
+        self.leaf_count += child.leaf_count();
+        self.summary += child.summary();
         self.children.insert(child_offset, child);
     }
 
@@ -667,22 +689,22 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     /// Inserts a sequence of child nodes at the given offset, so that the
-    /// first child will have `child_offset` siblings nodes to its left.
+    /// first child yielded by the iterator will have `child_offset` siblings
+    /// nodes to its left.
     ///
     /// If the input iterator yields more children than its possible to fit in
-    /// this inode, the function will return an iterator over other inodes at
-    /// the same depth of this inode and all with a valid number of child
-    /// nodes.
+    /// this inode this function will return an iterator over other inodes at
+    /// the same depth of this inode and all with a valid number of children.
     ///
     /// Finally, this function may split this inode's children if necessary,
     /// meaning the childen nodes on the right side of the split (i.e. in the
-    /// range `(child_offset + 1)..inode.len()`) will be the last contained in
-    /// the last inodes yielded fy the iterator.
+    /// range `(child_offset + 1)..inode.len()`) will be the in last inode
+    /// yielded by the output iterator.
     ///
     /// # Panics
     ///
-    /// This function may panic if `chilrden` yields nodes at depths other than
-    /// `N - 1`, where `N` is the depth of this inode.
+    /// Panics if `children` yields nodes at depths other than
+    /// `self.depth() - 1`.
     #[inline]
     pub(super) fn insert_children<I>(
         &mut self,
@@ -791,6 +813,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         min
     }
 
+    /// Prepends the node at the right depth.
+    ///
+    /// If all the nodes on the left side of the subtree up to the one to
+    /// which `node` should be prepended are already full this will return a
+    /// new inode at the same depth as `self` to be inserted right before
+    /// `self`.
     #[inline]
     pub(super) fn prepend_at_depth(
         &mut self,
@@ -843,8 +871,13 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
     }
 
-    /// Adds a node to the children, updating self's summary with the summary
-    /// coming from the new node.
+    /// Pushes a new node to this inode's children. Note that if this inode was
+    /// empty its depth will then be `child.depth() + 1`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the inode is already full or if `child` is a depth different
+    /// than `self.depth() - 1` if the inode already contained some children.
     #[inline]
     pub(super) fn push(&mut self, child: Arc<Node<N, L>>) {
         if self.is_empty() {
@@ -859,7 +892,11 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.children.push(child);
     }
 
-    /// TODO: docs
+    /// Removes the child at `child_idx`, returning it.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `child_idx` is greater or equal to the length of this inode.
     #[inline]
     pub(super) fn remove(&mut self, child_idx: usize) -> Arc<Node<N, L>> {
         debug_assert!(child_idx < self.len());
@@ -874,7 +911,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &self.summary
     }
 
-    /// TODO: docs
+    /// Swaps the child at `child_idx` with a new child.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `child_idx` is greater or equal to the length of this inode
+    /// or if the new child is at a depth different than `self.depth() - 1`.
     #[inline]
     pub(super) fn swap(
         &mut self,
@@ -914,7 +956,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         (&mut first[first_idx], &mut second[second_idx - split_at])
     }
 
-    /// TODO: docs
+    /// Calls a function taking a mutable reference to the child at `child_idx`
+    /// making sure this inode's summary and leaf count are updated correctly
+    /// in case that child's summary or leaf count change as a result of
+    /// calling `fun`.
     #[inline]
     pub(super) fn with_child_mut<F, T>(
         &mut self,

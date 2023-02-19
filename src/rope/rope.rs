@@ -5,7 +5,7 @@ use super::metrics::{ByteMetric, RawLineMetric};
 use super::rope_chunk::{RopeChunk, RopeChunkIter};
 use super::utils::*;
 use crate::tree::Tree;
-use crate::RopeSlice;
+use crate::{range_bounds_to_start_end, RopeSlice};
 
 #[cfg(not(any(test, feature = "integration_tests")))]
 const ROPE_FANOUT: usize = 8;

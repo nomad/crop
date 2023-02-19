@@ -5,8 +5,8 @@ use crate::tree::{Inode, Leaf, Metric, Node, Tree, TreeSlice};
 /// An iterator over the leaves of `Tree`s and `TreeSlice`s.
 pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
     /*
-      Just like the `Units` iterator, this iterator is also implemented using
-      two independent iterators advancing in opposite directions.
+      This iterator is implemented using two independent iterators advancing in
+      opposite directions.
     */
     #[rustfmt::skip]
 
@@ -124,7 +124,7 @@ struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// there is one) is 2.
     path: Vec<(&'a Inode<N, L>, usize)>,
 
-    /// The current leaf bunch.
+    /// The current leaves.
     leaves: &'a [Arc<Node<N, L>>],
 
     /// The index of the next leaf in [`leaves`](Self::leaves) that'll be
@@ -139,16 +139,16 @@ struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// we're iterating over a `TreeSlice`.
     last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
 
-    /// The base measure between the start of the tree under `root` and the
-    /// first leaf in the iterating range.
+    /// The base offset of [`first_slice`](Self::first_slice), or zero if we're
+    /// iterating over a `Tree`.
     base_offset: L::BaseMetric,
 
-    /// The number of **whole** leaves yielded so far.
-    whole_yielded: usize,
-
-    /// The number of **whole** leaves this iterator will yield. All leaves are
+    /// The number of whole leaf slices yielded so far. All leaf slices are
     /// considered whole except for the first and last leaf slices of
     /// `TreeSlice`s.
+    whole_yielded: usize,
+
+    /// The number of whole leaf slices this iterator will yield.
     whole_total: usize,
 }
 
@@ -373,7 +373,7 @@ struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// there is one) is 2.
     path: Vec<(&'a Inode<N, L>, usize)>,
 
-    /// The current leaf bunch.
+    /// The current leaves.
     leaves: &'a [Arc<Node<N, L>>],
 
     /// The index of the last leaf in [`leaves`](Self::leaves) that was yielded
@@ -388,16 +388,17 @@ struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// we're iterating over a `TreeSlice`.
     last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
 
-    /// The base measure between the last leaf in the iterating range and the
-    /// end of the tree under `root`.
+    /// The base measure between the end of [`last_slice`](Self::last_slice)
+    /// and the end of the subtree under [`root`](Self::root), or zero if we're
+    /// iterating over a `Tree`.
     base_offset: L::BaseMetric,
 
-    /// The number of **whole** leaves yielded so far.
-    whole_yielded: usize,
-
-    /// The number of **whole** leaves this iterator will yield. All leaves are
+    /// The number of whole leaf slices yielded so far. All leaf slices are
     /// considered whole except for the first and last leaf slices of
     /// `TreeSlice`s.
+    whole_yielded: usize,
+
+    /// The number of whole leaf slices this iterator will yield.
     whole_total: usize,
 }
 

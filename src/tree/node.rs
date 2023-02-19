@@ -38,8 +38,8 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Node<N, L> {
-    /// Checks the invariants of the node, and if it's internal it calls itself
-    /// recursively on all of its children.
+    /// Asserts the invariants of this node, then if it's an inode it calls
+    /// itself recursively on all of its children.
     pub(super) fn assert_invariants(&self) {
         match self {
             Node::Internal(inode) => {
@@ -118,6 +118,9 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    /// # Panics
+    ///
+    /// Panics if `other` is at a different depth.
     #[inline]
     pub(super) fn balance(&mut self, other: &mut Self)
     where
@@ -137,12 +140,12 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
+    pub(super) fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
     #[inline]
-    pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
+    pub(super) fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: SlicingMetric<L>,
         M2: Metric<L>,
@@ -220,7 +223,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
+    pub(super) fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
     where
         M: Metric<L>,
     {
@@ -270,8 +273,9 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
-    /// Continuously replaces the node with its single child. Note that an
-    /// internal node might become a leaf node after calling this.
+    /// Continuously replaces the node its child qs long as it's an internal
+    /// node with a single child. Note that an inode might become a leaf node
+    /// after calling this.
     ///
     /// # Panics
     ///
@@ -280,16 +284,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     pub(super) fn replace_with_single_child(node: &mut Arc<Self>) {
         while let Self::Internal(inode) = Arc::get_mut(node).unwrap() {
             if inode.len() == 1 {
-                let child = unsafe {
-                    inode
-                        .children_mut()
-                        .drain(..)
-                        .next()
-                        // SAFETY: there is exactly 1 child.
-                        .unwrap_unchecked()
-                };
-
-                *node = child;
+                *node = Arc::clone(inode.first());
             } else {
                 break;
             }

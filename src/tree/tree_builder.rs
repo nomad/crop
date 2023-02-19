@@ -24,7 +24,7 @@ pub struct TreeBuilder<const FANOUT: usize, L: Leaf> {
     /// level containing inodes of depth one less than the previous level;
     ///
     /// - every inode at every stack level is completely full, i.e. for every
-    /// inode it holds `inode.leaf_count() == FANOUT**(inode.depth())`;
+    /// inode it holds `inode.leaf_count() == max_children ^ inode.depth()`;
     ///
     /// - all the inodes in the last stack level (assuming there are any) have
     /// a depth of 1.
@@ -161,12 +161,12 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
         {
             // SAFETY: the only way the root can be a leaf node is if
             // the stack is empty and `self.leaves` contains a single leaf,
-            // and that case has already been handled.
-            let inode = unsafe {
+            // and that case was handled at the start of this function.
+            let root = unsafe {
                 Arc::get_mut(&mut root).unwrap().as_mut_internal_unchecked()
             };
 
-            inode.balance_right_side();
+            root.balance_right_side();
         }
 
         Node::replace_with_single_child(&mut root);

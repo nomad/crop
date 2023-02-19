@@ -85,8 +85,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         }
     }
 
-    /// Returns the base measure of this `Tree` obtained by summing up the
-    /// base measures of all its leaves.
     #[inline]
     pub fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
@@ -94,8 +92,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
     /// Returns the `M2`-measure of all the leaves before `up_to` plus the
     /// `M2`-measure of the left sub-slice of the leaf at `up_to`.
-    ///
-    /// NOTE: this function doesn't do any bounds checks.
     #[inline]
     pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
@@ -108,7 +104,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
     /// Creates a new `Tree` from a sequence of leaves.
     ///
-    /// NOTE: if the iterator doesn't yield any items the `Tree` will contain a
+    /// If the iterator doesn't yield any items the `Tree` will contain a
     /// single leaf with its default value.
     #[inline]
     pub fn from_leaves<I>(leaves: I) -> Self
@@ -139,8 +135,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
     /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
     /// plus the `M`-measure of all the leaves before it.
-    ///
-    /// NOTE: this function doesn't do any bounds checks.
     #[inline]
     pub fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
     where
@@ -169,7 +163,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M::measure(self.summary())
     }
 
-    /// TODO: docs
+    /// Replaces a range of the `Tree` with the given leaf slice.
     #[inline]
     pub fn replace<M>(&mut self, range: Range<M>, slice: &L::Slice)
     where
@@ -233,8 +227,11 @@ mod from_treeslice {
 
     /// Converts a `TreeSlice` into the root of an equivalent `Tree`.
     ///
-    /// NOTE: can only be called if the slice has a leaf count of at least 3.
-    /// Leaf counts of 1 or 2 should be handled before calling this function.
+    /// # Panics
+    ///
+    /// This function can only be called if the slice has a leaf count of at
+    /// least 3. Leaf counts of 1 or 2 should be handled before calling this
+    /// function and will cause a panic.
     #[inline]
     pub(super) fn into_tree_root<const N: usize, L: BalancedLeaf>(
         slice: TreeSlice<'_, N, L>,
@@ -283,29 +280,22 @@ mod from_treeslice {
         root
     }
 
-    /// Returns a `(Root, InvalidFirst, InvalidLast)` tuple where:
+    /// Returns a `(root, invalid_first, invalid_last)` tuple where:
     ///
-    /// - `Root`: the internal node obtained by removing all the nodes before
+    /// - `root` is the internal node obtained by removing all the nodes before
     /// `slice.before` and after `slice.before + slice.base_measure`,
     ///
-    /// - `Invalid{First,Last}`: the number of invalid nodes contained in the
-    /// subtree of the first and last child, respectively.
+    /// - `invalid_{first,last}` are the number of invalid nodes contained in
+    /// the subtrees of the first and last child, respectively.
     ///
-    /// NOTE: this function can only be called if the slice has a leaf count of
-    /// at least 3.
+    /// Note that all the `Arc`s enclosing the nodes on the left and right side
+    /// of the subtree under `root` are guaranteed to have a strong count of 1,
+    /// so it's ok to call `Arc::get_mut().unwrap()` on them, while the nodes
+    /// in the middle will usually be `Arc::clone`d from the slice.
     ///
-    /// NOTE: `Root` is guaranteed to have the same depth as the root of the
-    /// slice.
+    /// # Panics
     ///
-    /// NOTE: `Root` is guaranteed to have at least 2 children.
-    ///
-    /// NOTE: both `InvalidFirst` and `InvalidLast` are guaranteed to be less
-    /// than or equal to the depth of `Root`.
-    ///
-    /// NOTE: the `Arc` enclosing the first and last children all the way to
-    /// the bottom of the inode are guaranteed to have a strong count of 1, so
-    /// it's ok to call `Arc::get_mut` on them. The nodes in the middle will
-    /// usually be `Arc::clone`d from the slice.
+    /// Panics if the slice has a leaf count less than 3.
     #[inline]
     fn cut_tree_slice<const N: usize, L: BalancedLeaf>(
         slice: TreeSlice<'_, N, L>,
@@ -382,6 +372,7 @@ mod from_treeslice {
         (root, invalid_first, invalid_last)
     }
 
+    /// TODO: docs
     #[inline]
     fn cut_first_rec<const N: usize, L: BalancedLeaf>(
         node: &Arc<Node<N, L>>,
@@ -448,6 +439,7 @@ mod from_treeslice {
         }
     }
 
+    /// TODO: docs
     #[inline]
     fn cut_last_rec<const N: usize, L: BalancedLeaf>(
         node: &Arc<Node<N, L>>,
@@ -1442,6 +1434,7 @@ mod tree_replace {
                 if remaining == 0 {
                     None
                 } else if remaining < self.min_leaves_for_depth {
+                    // TODO: return the leaf if remaining is 1.
                     let last = Inode::from_nodes(self.leaves.by_ref());
 
                     debug_assert!(

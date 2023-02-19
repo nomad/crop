@@ -7,7 +7,6 @@ mod tree;
 mod tree_builder;
 mod tree_slice;
 mod units;
-mod utils;
 
 use iter_chain::ExactChain;
 pub use leaves::Leaves;
@@ -21,9 +20,9 @@ pub use tree_slice::TreeSlice;
 pub use units::Units;
 
 mod iter_chain {
-    //! Implements the `Chain` iterator, which is just like
+    //! This module contains a `Chain` iterator similar to
     //! [`std::iter::Chain`] except it implements `ExactSizeIterator` when
-    //! the first and second iterators are both `ExactSizeIterator`.
+    //! the iterators being chained are both `ExactSizeIterator`.
     //!
     //! See [1] or [2] for why this is needed.
     //!

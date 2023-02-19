@@ -5,6 +5,7 @@ use super::metrics::{ByteMetric, RawLineMetric};
 use super::rope_chunk::RopeChunk;
 use super::utils::*;
 use super::Rope;
+use crate::range_bounds_to_start_end;
 use crate::tree::TreeSlice;
 
 /// An immutable slice of a [`Rope`](crate::Rope).
