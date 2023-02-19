@@ -225,667 +225,6 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     }
 }
 
-mod tree_replace {
-    //! This module handles the logic used in [`Tree::replace()`].
-
-    use super::*;
-
-    /// This is recursive.
-    ///
-    /// TODO: docs
-    #[inline]
-    pub(super) fn some_name<const N: usize, M, L>(
-        node: &mut Arc<Node<N, L>>,
-        mut range: Range<M>,
-        slice: &L::Slice,
-    ) -> Option<Vec<Arc<Node<N, L>>>>
-    where
-        M: Metric<L>,
-        L: ReplaceableLeaf<M> + Clone,
-    {
-        let Node::Internal(inode) = Arc::make_mut(node) else {
-            return do_stuff_with_deepest(node, range, slice)
-        };
-
-        // The index of the child containing the entire replacement range.
-        let mut child_idx = 0;
-
-        let mut extras = None;
-
-        let mut offset = M::zero();
-
-        for (idx, child) in inode.children().iter().enumerate() {
-            let child_measure = child.measure::<M>();
-
-            offset += child_measure;
-
-            if offset >= range.start {
-                if offset >= range.end {
-                    child_idx = idx;
-
-                    extras = inode.with_child_mut(idx, |child| {
-                        offset -= child_measure;
-                        range.start -= offset;
-                        range.end -= offset;
-                        some_name(child, range, slice)
-                    });
-
-                    break;
-                } else {
-                    return do_stuff_with_deepest(node, range, slice);
-                };
-            }
-        }
-
-        let child = inode.child(child_idx);
-
-        // Case 1: there are some extra child nodes to insert *after* the child
-        // containing the replacement range.
-        if let Some(extras) = extras {
-            debug_assert!(extras
-                .iter()
-                .all(|n| n.depth() == inode.depth() - 1));
-
-            inode.insert_children(child_idx + 1, extras).map(|extras| {
-                extras.map(Node::Internal).map(Arc::new).collect()
-            })
-        }
-        // Case 2: the child stayed at the same depth but it's now underfilled
-        // and needs to be rebalanced with one if its siblings.
-        else if child.depth() == inode.depth() - 1 && child.is_underfilled()
-        {
-            inode.balance_child(child_idx);
-            Node::replace_with_single_child(node);
-            None
-        }
-        // Case 3: the child is now at a lower depth than its siblings and
-        // needs to be appended/prepended to another child.
-        else if child.depth() < inode.depth() - 1 {
-            debug_assert!(inode.depth() >= 2);
-            let child = inode.remove(child_idx);
-            inode.insert_at_depth(child_idx, child);
-            Node::replace_with_single_child(node);
-            None
-        }
-        // Case 4: none of the above, the child is well balanced and we can
-        // simply return.
-        else {
-            debug_assert!(child.depth() == inode.depth() - 1);
-            debug_assert!(!child.is_underfilled());
-            None
-        }
-    }
-
-    /// This is not recursive. The only the code that handles the first final
-    /// branches are.
-    ///
-    /// Returns a vector of nodes that should be pushed back onto the Tree
-    /// after this node.
-    ///
-    /// TODO: docs
-    #[inline]
-    fn do_stuff_with_deepest<const N: usize, M, L>(
-        node: &mut Arc<Node<N, L>>,
-        range: Range<M>,
-        slice: &L::Slice,
-    ) -> Option<Vec<Arc<Node<N, L>>>>
-    where
-        M: Metric<L>,
-        L: ReplaceableLeaf<M> + Clone,
-    {
-        let inode = match Arc::make_mut(node) {
-            Node::Internal(inode) => inode,
-
-            Node::Leaf(leaf) => {
-                return leaf.replace(range, slice).map(|extras| {
-                    extras.map(Node::Leaf).map(Arc::new).collect()
-                });
-            },
-        };
-
-        let (
-            start_idx,
-            end_idx,
-            start_should_rebalance,
-            end_should_rebalance,
-            extra_leaves,
-        ) = replace_range_in_inode(inode, range, slice);
-
-        let Some(mut extra_leaves) = extra_leaves else {
-            inode.drain(start_idx+1..end_idx);
-
-            if start_should_rebalance || end_should_rebalance {
-                inode_fix_seam(
-                    inode,
-                    start_idx,
-                    start_should_rebalance,
-                    end_should_rebalance,
-                );
-
-                Node::replace_with_single_child(node);
-            }
-
-            return None;
-        };
-
-        // If there are some extra leaves to insert then the subtrees
-        // containing the start and end of the replacement range must be
-        // balanced.
-        debug_assert!(!(start_should_rebalance || end_should_rebalance));
-
-        inode.replace_range_with_leaves_back(
-            start_idx + 1..end_idx,
-            &mut extra_leaves,
-        );
-
-        if extra_leaves.is_empty() {
-            return None;
-        }
-
-        let extras = if inode.depth() == 1 {
-            extra_leaves
-        } else {
-            let mut extra_leaves = extra_leaves.into_iter();
-
-            let target_depth = inode.depth() - 1;
-
-            let max_leaves_for_depth =
-                Inode::<N, L>::max_leaves_for_depth(target_depth);
-
-            let min_leaves_for_depth =
-                Inode::<N, L>::min_leaves_for_depth(target_depth);
-
-            let mut extras = Vec::new();
-
-            while extra_leaves.len() >= min_leaves_for_depth {
-                let extra = Inode::from_nodes(
-                    extra_leaves.by_ref().take(max_leaves_for_depth),
-                );
-
-                debug_assert_eq!(extra.depth(), target_depth);
-
-                extras.push(Arc::new(Node::Internal(extra)))
-            }
-
-            if extra_leaves.len() > 0 {
-                let last = if extra_leaves.len() == 1 {
-                    extra_leaves.next().unwrap()
-                } else {
-                    Arc::new(Node::Internal(Inode::from_nodes(
-                        extra_leaves.by_ref(),
-                    )))
-                };
-
-                inode.with_child_mut(start_idx, |start| {
-                    let previous_node = {
-                        let n = extras.last_mut().unwrap_or(start);
-                        let n = Arc::make_mut(n);
-                        unsafe { n.as_mut_internal_unchecked() }
-                    };
-
-                    debug_assert!(last.depth() < previous_node.depth());
-
-                    if let Some(extra) = previous_node.append_at_depth(last) {
-                        extras.push(Arc::new(Node::Internal(extra)));
-                    }
-                })
-            }
-
-            debug_assert!(extra_leaves.len() == 0);
-
-            extras
-        };
-
-        debug_assert!(extras.iter().all(|n| n.depth() == inode.depth() - 1));
-
-        inode
-            .insert_children(start_idx + 1, extras)
-            .map(|extras| extras.map(Node::Internal).map(Arc::new).collect())
-    }
-
-    /// TODO: docs
-    #[allow(clippy::type_complexity)]
-    #[inline]
-    fn replace_range_in_inode<const N: usize, M, L>(
-        inode: &mut Inode<N, L>,
-        range: Range<M>,
-        slice: &L::Slice,
-    ) -> (usize, usize, bool, bool, Option<Vec<Arc<Node<N, L>>>>)
-    where
-        M: Metric<L>,
-        L: ReplaceableLeaf<M> + Clone,
-    {
-        let mut start_idx = 0;
-        let mut end_idx = 0;
-        let mut start_should_rebalance = false;
-        let mut end_should_rebalance = false;
-        let mut extra_leaves = None;
-
-        let mut offset = M::zero();
-        let mut indexes = 0..inode.len();
-
-        for (idx, child) in indexes.by_ref().map(|idx| (idx, inode.child(idx)))
-        {
-            let child_measure = child.measure::<M>();
-
-            offset += child_measure;
-
-            if offset >= range.start {
-                start_idx = idx;
-
-                extra_leaves = inode.with_child_mut(start_idx, |child| {
-                    replace_first_rec(
-                        Arc::make_mut(child),
-                        range.start + child_measure - offset,
-                        slice,
-                        &mut start_should_rebalance,
-                    )
-                });
-
-                break;
-            }
-        }
-
-        let mut extra_leaves = extra_leaves.map(|leaves| {
-            let l = leaves.collect::<Vec<_>>();
-            debug_assert!(l.iter().all(|l| l.is_leaf()));
-            l
-        });
-
-        for (idx, child) in indexes.map(|idx| (idx, inode.child(idx))) {
-            let child_measure = child.measure::<M>();
-
-            offset += child_measure;
-
-            if offset >= range.end {
-                end_idx = idx;
-
-                inode.with_child_mut(end_idx, |child| {
-                    replace_last_rec(
-                        Arc::make_mut(child),
-                        range.end + child_measure - offset,
-                        &mut extra_leaves,
-                        &mut end_should_rebalance,
-                    )
-                });
-
-                break;
-            }
-        }
-
-        (
-            start_idx,
-            end_idx,
-            start_should_rebalance,
-            end_should_rebalance,
-            extra_leaves,
-        )
-    }
-
-    /// TODO: docs
-    #[inline]
-    fn replace_first_rec<const N: usize, M, L>(
-        node: &mut Node<N, L>,
-        replace_from: M,
-        slice: &L::Slice,
-        should_rebalance: &mut bool,
-    ) -> Option<impl ExactSizeIterator<Item = Arc<Node<N, L>>>>
-    where
-        M: Metric<L>,
-        L: ReplaceableLeaf<M> + Clone,
-    {
-        let inode = match node {
-            Node::Internal(inode) => inode,
-
-            Node::Leaf(leaf) => {
-                // NOTE: the end of the range is wrong for metrics other than
-                // the BaseMetric because there might be some `M`-remainder
-                // that is not part of the range. This is not a problem for now
-                // because `Rope::replace()` uses the ByteMetric.
-                //
-                // TODO: make `Leaf::replace()` generic over a `RangeBounds<M>`
-                // instead of `Range<M>`?
-                let range = replace_from..leaf.measure::<M>();
-
-                return if let Some(extra_leaves) = leaf.replace(range, slice) {
-                    Some(extra_leaves.map(Node::Leaf).map(Arc::new))
-                } else {
-                    *should_rebalance |= leaf.is_underfilled();
-                    None
-                };
-            },
-        };
-
-        // The index of the child containing the start of the replacement
-        // range.
-        let mut start_idx = 0;
-
-        let mut extra_leaves = None;
-
-        let mut offset = M::zero();
-
-        for (idx, child) in inode.children().iter().enumerate() {
-            let child_measure = child.measure::<M>();
-
-            offset += child_measure;
-
-            if offset >= replace_from {
-                start_idx = idx;
-
-                extra_leaves = inode.with_child_mut(start_idx, |child| {
-                    replace_first_rec(
-                        Arc::make_mut(child),
-                        replace_from + child_measure - offset,
-                        slice,
-                        should_rebalance,
-                    )
-                });
-
-                break;
-            }
-        }
-
-        let extra_leaves = if let Some(mut extra_leaves) = extra_leaves {
-            inode.replace_range_with_leaves(
-                start_idx + 1..inode.len(),
-                &mut extra_leaves,
-            );
-
-            (extra_leaves.len() > 0).then_some(extra_leaves)
-        } else {
-            inode.drain(start_idx + 1..);
-            None
-        };
-
-        *should_rebalance |= inode.is_underfilled();
-
-        extra_leaves
-    }
-
-    /// TODO: docs
-    #[inline]
-    fn replace_last_rec<const N: usize, M, L>(
-        node: &mut Node<N, L>,
-        replace_up_to: M,
-        extra_leaves: &mut Option<Vec<Arc<Node<N, L>>>>,
-        should_rebalance: &mut bool,
-    ) where
-        M: Metric<L>,
-        L: ReplaceableLeaf<M> + Clone,
-    {
-        let inode = match node {
-            Node::Internal(inode) => inode,
-
-            Node::Leaf(leaf) => {
-                leaf.remove(replace_up_to);
-
-                if leaf.is_underfilled() {
-                    if let Some(leaves) = extra_leaves {
-                        let mut last = leaves.pop().unwrap();
-                        debug_assert!(last.is_leaf());
-
-                        let l = {
-                            let l = Arc::get_mut(&mut last).unwrap();
-                            unsafe { l.as_mut_leaf_unchecked() }
-                        };
-
-                        l.balance(leaf);
-
-                        if leaf.is_empty() {
-                            std::mem::swap(leaf, l)
-                        } else {
-                            leaves.push(last)
-                        }
-
-                        debug_assert!(!leaf.is_underfilled());
-
-                        if leaves.is_empty() {
-                            *extra_leaves = None;
-                        }
-                    }
-                }
-
-                *should_rebalance = leaf.is_underfilled();
-                return;
-            },
-        };
-
-        let mut end_idx = 0;
-
-        let mut offset = inode.measure::<M>();
-
-        for (idx, child) in inode.children().iter().enumerate().rev() {
-            let child_measure = child.measure::<M>();
-
-            offset -= child_measure;
-
-            if offset < replace_up_to {
-                end_idx = idx;
-
-                inode.with_child_mut(end_idx, |child| {
-                    replace_last_rec(
-                        Arc::make_mut(child),
-                        replace_up_to - offset,
-                        extra_leaves,
-                        should_rebalance,
-                    )
-                });
-
-                break;
-            }
-        }
-
-        if let Some(leaves) = extra_leaves {
-            inode.replace_range_with_leaves_back(0..end_idx, leaves);
-            if leaves.is_empty() {
-                *extra_leaves = None;
-            }
-        } else {
-            inode.drain(..end_idx);
-        }
-
-        *should_rebalance |= inode.is_underfilled();
-    }
-
-    #[inline]
-    fn inode_fix_seam<const N: usize, L>(
-        inode: &mut Inode<N, L>,
-        start_idx: usize,
-        start_should_rebalance: bool,
-        end_should_rebalance: bool,
-    ) where
-        L: BalancedLeaf + Clone,
-    {
-        debug_assert!(start_idx < inode.len() - 1);
-        debug_assert!(start_should_rebalance | end_should_rebalance);
-
-        let end_idx = start_idx + 1;
-
-        if start_should_rebalance {
-            inode.with_child_mut(start_idx, |start| {
-                Node::replace_with_single_child(start);
-
-                if let Node::Internal(inode) = Arc::make_mut(start) {
-                    inode.balance_right_side();
-                    Node::replace_with_single_child(start);
-                }
-            })
-        }
-
-        if end_should_rebalance {
-            inode.with_child_mut(end_idx, |end| {
-                Node::replace_with_single_child(end);
-
-                if let Node::Internal(inode) = &mut Arc::make_mut(end) {
-                    inode.balance_left_side();
-                    Node::replace_with_single_child(end);
-                }
-            })
-        }
-
-        let original_depth = inode.depth() - 1;
-
-        let start_depth = inode.child(start_idx).depth();
-
-        let end_depth = inode.child(end_idx).depth();
-
-        use std::cmp::Ordering::*;
-
-        match (original_depth.cmp(&start_depth), start_depth.cmp(&end_depth)) {
-            (Equal, Equal) => {
-                // Rebalance start and end, then rebalance start with
-                // previous/next sibling.
-                inode.balance_child(end_idx);
-
-                if inode.len() > 1 {
-                    inode.balance_child(start_idx);
-                }
-            },
-
-            (Equal, Greater) => {
-                // Append end on start, then rebalance start with previous/next
-                // sibling.
-
-                let end = inode.remove(end_idx);
-
-                let end = inode.with_child_mut(start_idx, |start| {
-                    let start = Arc::make_mut(start);
-                    let start = unsafe { start.as_mut_internal_unchecked() };
-                    start.append_at_depth(end)
-                });
-
-                if let Some(end) = end {
-                    debug_assert_eq!(end.depth(), original_depth);
-                    inode.insert(end_idx, Arc::new(Node::Internal(end)));
-                }
-
-                if inode.len() > 1 {
-                    inode.balance_child(start_idx);
-                }
-            },
-
-            (Greater, Equal) => {
-                let mut end = inode.remove(end_idx);
-                let mut start = inode.remove(start_idx);
-
-                Arc::make_mut(&mut start).balance(Arc::make_mut(&mut end));
-
-                if !end.is_empty() {
-                    let i = Inode::from_children([start, end]);
-
-                    if inode.is_empty() {
-                        *inode = i
-                    } else if inode.depth() == i.depth() + 1 {
-                        inode.insert(start_idx, Arc::new(Node::Internal(i)));
-                        inode.balance_child(start_idx);
-                    } else {
-                        inode.insert_at_depth(
-                            start_idx,
-                            Arc::new(Node::Internal(i)),
-                        );
-                    }
-                } else if inode.is_empty() {
-                    inode.insert(0, start);
-                } else {
-                    inode.insert_at_depth(start_idx, start);
-                }
-            },
-
-            (Greater, Greater) => {
-                let end = inode.remove(end_idx);
-                let mut start = inode.remove(start_idx);
-
-                let end = {
-                    let s = Arc::make_mut(&mut start);
-                    let s = unsafe { s.as_mut_internal_unchecked() };
-                    s.append_at_depth(end)
-                };
-
-                if let Some(end) = end {
-                    let i = Inode::from_children([
-                        start,
-                        Arc::new(Node::Internal(end)),
-                    ]);
-
-                    if inode.is_empty() {
-                        *inode = i;
-                    } else if inode.depth() == i.depth() + 1 {
-                        inode.insert(start_idx, Arc::new(Node::Internal(i)));
-                        inode.balance_child(start_idx);
-                    } else {
-                        inode.insert_at_depth(
-                            start_idx,
-                            Arc::new(Node::Internal(i)),
-                        );
-                    }
-                } else if inode.is_empty() {
-                    inode.insert(0, start);
-                } else {
-                    inode.insert_at_depth(start_idx, start);
-                }
-            },
-
-            (Greater, Less) if end_depth == original_depth => {
-                // Prepend start on end, then rebalance end with previous/next
-                // sibling.
-
-                let start = inode.remove(start_idx);
-
-                let start = inode.with_child_mut(start_idx, |end| {
-                    let end = Arc::make_mut(end);
-                    let end = unsafe { end.as_mut_internal_unchecked() };
-                    end.prepend_at_depth(start)
-                });
-
-                if let Some(start) = start {
-                    inode.insert(start_idx, Arc::new(Node::Internal(start)));
-                    inode.balance_child(end_idx);
-                } else if inode.len() > 1 {
-                    inode.balance_child(start_idx);
-                }
-            },
-
-            (Greater, Less) => {
-                debug_assert!(original_depth > end_depth);
-
-                let mut end = inode.remove(end_idx);
-                let start = inode.remove(start_idx);
-
-                let start = {
-                    let e = Arc::make_mut(&mut end);
-                    let e = unsafe { e.as_mut_internal_unchecked() };
-                    e.prepend_at_depth(start)
-                };
-
-                if let Some(start) = start {
-                    let i = Inode::from_children([
-                        Arc::new(Node::Internal(start)),
-                        end,
-                    ]);
-
-                    if inode.is_empty() {
-                        *inode = i;
-                    } else if inode.depth() == i.depth() + 1 {
-                        inode.insert(start_idx, Arc::new(Node::Internal(i)));
-                        inode.balance_child(start_idx);
-                    } else {
-                        inode.insert_at_depth(
-                            start_idx,
-                            Arc::new(Node::Internal(i)),
-                        );
-                    }
-                } else if inode.is_empty() {
-                    inode.insert(0, end);
-                } else {
-                    inode.insert_at_depth(start_idx, end);
-                }
-            },
-
-            _ => unreachable!(),
-        }
-    }
-}
-
 mod from_treeslice {
     //! This module handles the logic used to convert `TreeSlice`s into
     //! `Tree`s.
@@ -1171,83 +510,1049 @@ mod from_treeslice {
     }
 }
 
-pub(crate) use iter_chain::ExactChain;
+mod tree_replace {
+    //! This module handles the logic used in [`Tree::replace()`].
 
-mod iter_chain {
-    //! Implements the `Chain` iterator, which is just like
-    //! [`std::iter::Chain`] except it implements `ExactSizeIterator` when
-    //! the first and second iterators are both `ExactSizeIterator`.
-    //!
-    //! See [1] or [2] for why this is needed.
-    //!
-    //! [1]: https://github.com/rust-lang/rust/issues/34433
-    //! [2]: https://github.com/rust-lang/rust/pull/66531
+    use super::*;
 
-    pub(crate) struct Chain<T, U> {
-        chain: std::iter::Chain<T, U>,
-        yielded: usize,
-        total: usize,
-    }
-
-    pub(crate) trait ExactChain<I>:
-        ExactSizeIterator<Item = I>
-    {
-        fn exact_chain<U>(self, other: U) -> Chain<Self, U::IntoIter>
-        where
-            Self: Sized,
-            U: IntoIterator<Item = I>,
-            U::IntoIter: ExactSizeIterator;
-    }
-
-    impl<I, T> ExactChain<I> for T
+    /// This is recursive.
+    ///
+    /// TODO: docs
+    #[inline]
+    pub(super) fn some_name<const N: usize, M, L>(
+        node: &mut Arc<Node<N, L>>,
+        mut range: Range<M>,
+        slice: &L::Slice,
+    ) -> Option<Vec<Arc<Node<N, L>>>>
     where
-        T: ExactSizeIterator<Item = I>,
+        M: Metric<L>,
+        L: ReplaceableLeaf<M> + Clone,
     {
-        #[inline]
-        fn exact_chain<U>(self, other: U) -> Chain<Self, U::IntoIter>
-        where
-            Self: Sized,
-            U: IntoIterator<Item = I>,
-            U::IntoIter: ExactSizeIterator,
+        let Node::Internal(inode) = Arc::make_mut(node) else {
+            return do_stuff_with_deepest(node, range, slice)
+        };
+
+        // The index of the child containing the entire replacement range.
+        let mut child_idx = 0;
+
+        let mut extras = None;
+
+        let mut offset = M::zero();
+
+        for (idx, child) in inode.children().iter().enumerate() {
+            let child_measure = child.measure::<M>();
+
+            offset += child_measure;
+
+            if offset >= range.start {
+                if offset >= range.end {
+                    child_idx = idx;
+
+                    extras = inode.with_child_mut(idx, |child| {
+                        offset -= child_measure;
+                        range.start -= offset;
+                        range.end -= offset;
+                        some_name(child, range, slice)
+                    });
+
+                    break;
+                } else {
+                    return do_stuff_with_deepest(node, range, slice);
+                };
+            }
+        }
+
+        let child = inode.child(child_idx);
+
+        // Case 1: there are some extra child nodes to insert *after* the child
+        // containing the replacement range.
+        if let Some(extras) = extras {
+            debug_assert!(extras
+                .iter()
+                .all(|n| n.depth() == inode.depth() - 1));
+
+            inode.insert_children(child_idx + 1, extras).map(|extras| {
+                extras.map(Node::Internal).map(Arc::new).collect()
+            })
+        }
+        // Case 2: the child stayed at the same depth but it's now underfilled
+        // and needs to be rebalanced with one if its siblings.
+        else if child.depth() == inode.depth() - 1 && child.is_underfilled()
         {
-            let other = other.into_iter();
-            Chain {
-                yielded: 0,
-                total: self.len() + other.len(),
-                chain: self.chain(other),
+            inode.balance_child(child_idx);
+            Node::replace_with_single_child(node);
+            None
+        }
+        // Case 3: the child is now at a lower depth than its siblings and
+        // needs to be appended/prepended to another child.
+        else if child.depth() < inode.depth() - 1 {
+            debug_assert!(inode.depth() >= 2);
+            let child = inode.remove(child_idx);
+            inode.insert_at_depth(child_idx, child);
+            Node::replace_with_single_child(node);
+            None
+        }
+        // Case 4: none of the above, the child is well balanced and we can
+        // simply return.
+        else {
+            debug_assert!(child.depth() == inode.depth() - 1);
+            debug_assert!(!child.is_underfilled());
+            None
+        }
+    }
+
+    /// This is not recursive. The only the code that handles the first final
+    /// branches are.
+    ///
+    /// Returns a vector of nodes that should be pushed back onto the Tree
+    /// after this node.
+    ///
+    /// TODO: docs
+    #[inline]
+    fn do_stuff_with_deepest<const N: usize, M, L>(
+        node: &mut Arc<Node<N, L>>,
+        range: Range<M>,
+        slice: &L::Slice,
+    ) -> Option<Vec<Arc<Node<N, L>>>>
+    where
+        M: Metric<L>,
+        L: ReplaceableLeaf<M> + Clone,
+    {
+        let inode = match Arc::make_mut(node) {
+            Node::Internal(inode) => inode,
+
+            Node::Leaf(leaf) => {
+                return leaf.replace(range, slice).map(|extras| {
+                    extras.map(Node::Leaf).map(Arc::new).collect()
+                });
+            },
+        };
+
+        let (
+            start_idx,
+            end_idx,
+            start_should_rebalance,
+            end_should_rebalance,
+            extra_leaves,
+        ) = inode_replace_range(inode, range, slice);
+
+        let Some(mut extra_leaves) = extra_leaves else {
+            inode.drain(start_idx+1..end_idx);
+
+            if start_should_rebalance || end_should_rebalance {
+                inode_fix_seam(
+                    inode,
+                    start_idx,
+                    start_should_rebalance,
+                    end_should_rebalance,
+                );
+
+                Node::replace_with_single_child(node);
+            }
+
+            return None;
+        };
+
+        // If there are some extra leaves to insert then the subtrees
+        // containing the start and end of the replacement range must be
+        // balanced.
+        debug_assert!(!(start_should_rebalance || end_should_rebalance));
+
+        inode_replace_range_with_leaves_back(
+            inode,
+            start_idx + 1..end_idx,
+            &mut extra_leaves,
+        );
+
+        if extra_leaves.is_empty() {
+            return None;
+        }
+
+        let extras = if inode.depth() == 1 {
+            extra_leaves
+        } else {
+            let mut extra_leaves = extra_leaves.into_iter();
+
+            let target_depth = inode.depth() - 1;
+
+            let mut extras =
+                DiocanSegmenter::new(extra_leaves.by_ref(), target_depth)
+                    .map(Node::Internal)
+                    .map(Arc::new)
+                    .collect::<Vec<_>>();
+
+            debug_assert!(extra_leaves.len() == 0);
+
+            let mut last = extras.pop().unwrap();
+
+            // If the depth is ok but there aren't enough children:
+            //
+            // if there's another node in extra use it to rebalance it.
+            // if not use the start node.
+            //
+            // If the depth is < than the target
+            //
+            // if there's another node in extra use it to append at depth.
+            // if not use the start node to rebalance it.
+
+            if last.depth() == target_depth && !last.is_underfilled() {
+                extras.push(last)
+            } else {
+                inode.with_child_mut(start_idx, |start| {
+                    let previous_node = {
+                        let n = extras.last_mut().unwrap_or(start);
+                        let n = Arc::make_mut(n);
+                        unsafe { n.as_mut_internal_unchecked() }
+                    };
+
+                    if last.depth() == previous_node.depth() {
+                        debug_assert!(last.is_underfilled());
+
+                        let l = {
+                            let n = Arc::make_mut(&mut last);
+                            unsafe { n.as_mut_internal_unchecked() }
+                        };
+
+                        previous_node.balance(l);
+
+                        if !l.is_empty() {
+                            debug_assert!(!l.is_underfilled());
+                            extras.push(last)
+                        }
+                    } else if let Some(extra) =
+                        previous_node.append_at_depth(last)
+                    {
+                        extras.push(Arc::new(Node::Internal(extra)));
+                    }
+                });
+            }
+
+            extras
+        };
+
+        debug_assert!(extras.iter().all(|n| n.depth() == inode.depth() - 1));
+
+        inode
+            .insert_children(start_idx + 1, extras)
+            .map(|extras| extras.map(Node::Internal).map(Arc::new).collect())
+    }
+
+    /// TODO: docs
+    #[allow(clippy::type_complexity)]
+    #[inline]
+    fn inode_replace_range<const N: usize, M, L>(
+        inode: &mut Inode<N, L>,
+        range: Range<M>,
+        slice: &L::Slice,
+    ) -> (usize, usize, bool, bool, Option<Vec<Arc<Node<N, L>>>>)
+    where
+        M: Metric<L>,
+        L: ReplaceableLeaf<M> + Clone,
+    {
+        let mut start_idx = 0;
+        let mut end_idx = 0;
+        let mut start_should_rebalance = false;
+        let mut end_should_rebalance = false;
+        let mut extra_leaves = None;
+
+        let mut offset = M::zero();
+        let mut indexes = 0..inode.len();
+
+        for (idx, child) in indexes.by_ref().map(|idx| (idx, inode.child(idx)))
+        {
+            let child_measure = child.measure::<M>();
+
+            offset += child_measure;
+
+            if offset >= range.start {
+                start_idx = idx;
+
+                extra_leaves = inode.with_child_mut(start_idx, |child| {
+                    replace_first_rec(
+                        Arc::make_mut(child),
+                        range.start + child_measure - offset,
+                        slice,
+                        &mut start_should_rebalance,
+                    )
+                });
+
+                break;
+            }
+        }
+
+        let mut extra_leaves = extra_leaves.map(|leaves| {
+            let l = leaves.collect::<Vec<_>>();
+            debug_assert!(l.iter().all(|l| l.is_leaf()));
+            l
+        });
+
+        for (idx, child) in indexes.map(|idx| (idx, inode.child(idx))) {
+            let child_measure = child.measure::<M>();
+
+            offset += child_measure;
+
+            if offset >= range.end {
+                end_idx = idx;
+
+                inode.with_child_mut(end_idx, |child| {
+                    replace_last_rec(
+                        Arc::make_mut(child),
+                        range.end + child_measure - offset,
+                        &mut extra_leaves,
+                        &mut end_should_rebalance,
+                    )
+                });
+
+                break;
+            }
+        }
+
+        (
+            start_idx,
+            end_idx,
+            start_should_rebalance,
+            end_should_rebalance,
+            extra_leaves,
+        )
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn replace_first_rec<const N: usize, M, L>(
+        node: &mut Node<N, L>,
+        replace_from: M,
+        slice: &L::Slice,
+        should_rebalance: &mut bool,
+    ) -> Option<impl ExactSizeIterator<Item = Arc<Node<N, L>>>>
+    where
+        M: Metric<L>,
+        L: ReplaceableLeaf<M> + Clone,
+    {
+        let inode = match node {
+            Node::Internal(inode) => inode,
+
+            Node::Leaf(leaf) => {
+                // NOTE: the end of the range is wrong for metrics other than
+                // the BaseMetric because there might be some `M`-remainder
+                // that is not part of the range. This is not a problem for now
+                // because `Rope::replace()` uses the ByteMetric.
+                //
+                // TODO: make `Leaf::replace()` generic over a `RangeBounds<M>`
+                // instead of `Range<M>`?
+                let range = replace_from..leaf.measure::<M>();
+
+                return if let Some(extra_leaves) = leaf.replace(range, slice) {
+                    Some(extra_leaves.map(Node::Leaf).map(Arc::new))
+                } else {
+                    *should_rebalance |= leaf.is_underfilled();
+                    None
+                };
+            },
+        };
+
+        // The index of the child containing the start of the replacement
+        // range.
+        let mut start_idx = 0;
+
+        let mut extra_leaves = None;
+
+        let mut offset = M::zero();
+
+        for (idx, child) in inode.children().iter().enumerate() {
+            let child_measure = child.measure::<M>();
+
+            offset += child_measure;
+
+            if offset >= replace_from {
+                start_idx = idx;
+
+                extra_leaves = inode.with_child_mut(start_idx, |child| {
+                    replace_first_rec(
+                        Arc::make_mut(child),
+                        replace_from + child_measure - offset,
+                        slice,
+                        should_rebalance,
+                    )
+                });
+
+                break;
+            }
+        }
+
+        let extra_leaves = if let Some(mut extra_leaves) = extra_leaves {
+            inode_replace_range_with_leaves(
+                inode,
+                start_idx + 1..inode.len(),
+                &mut extra_leaves,
+            );
+
+            (extra_leaves.len() > 0).then_some(extra_leaves)
+        } else {
+            inode.drain(start_idx + 1..);
+            None
+        };
+
+        *should_rebalance |= inode.is_underfilled();
+
+        extra_leaves
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn replace_last_rec<const N: usize, M, L>(
+        node: &mut Node<N, L>,
+        replace_up_to: M,
+        extra_leaves: &mut Option<Vec<Arc<Node<N, L>>>>,
+        should_rebalance: &mut bool,
+    ) where
+        M: Metric<L>,
+        L: ReplaceableLeaf<M> + Clone,
+    {
+        let inode = match node {
+            Node::Internal(inode) => inode,
+
+            Node::Leaf(leaf) => {
+                leaf.remove(replace_up_to);
+
+                if leaf.is_underfilled() {
+                    if let Some(leaves) = extra_leaves {
+                        let mut last = leaves.pop().unwrap();
+                        debug_assert!(last.is_leaf());
+
+                        let l = {
+                            let l = Arc::get_mut(&mut last).unwrap();
+                            unsafe { l.as_mut_leaf_unchecked() }
+                        };
+
+                        l.balance(leaf);
+
+                        if leaf.is_empty() {
+                            std::mem::swap(leaf, l)
+                        } else {
+                            leaves.push(last)
+                        }
+
+                        debug_assert!(!leaf.is_underfilled());
+
+                        if leaves.is_empty() {
+                            *extra_leaves = None;
+                        }
+                    }
+                }
+
+                *should_rebalance = leaf.is_underfilled();
+                return;
+            },
+        };
+
+        let mut end_idx = 0;
+
+        let mut offset = inode.measure::<M>();
+
+        for (idx, child) in inode.children().iter().enumerate().rev() {
+            let child_measure = child.measure::<M>();
+
+            offset -= child_measure;
+
+            if offset < replace_up_to {
+                end_idx = idx;
+
+                inode.with_child_mut(end_idx, |child| {
+                    replace_last_rec(
+                        Arc::make_mut(child),
+                        replace_up_to - offset,
+                        extra_leaves,
+                        should_rebalance,
+                    )
+                });
+
+                break;
+            }
+        }
+
+        if let Some(leaves) = extra_leaves {
+            inode_replace_range_with_leaves_back(inode, 0..end_idx, leaves);
+
+            if leaves.is_empty() {
+                *extra_leaves = None;
+            }
+        } else {
+            inode.drain(..end_idx);
+        }
+
+        *should_rebalance |= inode.is_underfilled();
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn inode_replace_range_with_leaves<const N: usize, L, I>(
+        inode: &mut Inode<N, L>,
+        child_range: Range<usize>,
+        leaves: &mut I,
+    ) where
+        I: Iterator<Item = Arc<Node<N, L>>> + ExactSizeIterator,
+        L: BalancedLeaf + Clone,
+    {
+        debug_assert!(child_range.start >= 1);
+        debug_assert!(child_range.start <= child_range.end);
+        debug_assert!(child_range.end <= inode.len());
+
+        // TODO: refactor to add nodes until max_children if we can.
+
+        let end = child_range.end;
+
+        if inode.depth() == 1 {
+            for child_idx in child_range {
+                if let Some(leaf) = leaves.next() {
+                    debug_assert!(leaf.is_leaf());
+                    inode.swap(child_idx, leaf);
+                } else {
+                    inode.drain(child_idx..end);
+                    return;
+                }
+            }
+        } else {
+            let target_depth = inode.depth() - 1;
+
+            let mut replacements =
+                DiocanSegmenter::new(leaves.by_ref(), target_depth);
+
+            for child_idx in child_range {
+                if let Some(replacement) = replacements.next() {
+                    if replacement.depth() == target_depth
+                        && !replacement.is_underfilled()
+                    {
+                        inode.swap(
+                            child_idx,
+                            Arc::new(Node::Internal(replacement)),
+                        );
+                    } else {
+                        let mut last = replacement;
+
+                        let last =
+                            inode.with_child_mut(child_idx - 1, |previous| {
+                                let previous_child = {
+                                    let n = Arc::make_mut(previous);
+                                    unsafe { n.as_mut_internal_unchecked() }
+                                };
+
+                                if last.depth() == previous_child.depth() {
+                                    debug_assert!(last.is_underfilled());
+
+                                    previous_child.balance(&mut last);
+
+                                    (!last.is_empty()).then_some(last)
+                                } else {
+                                    previous_child.append_at_depth(Arc::new(
+                                        Node::Internal(last),
+                                    ))
+                                }
+                            });
+
+                        if let Some(last) = last {
+                            let last = Arc::new(Node::Internal(last));
+                            inode.swap(child_idx, last);
+                            inode.drain(child_idx + 1..end);
+                        } else {
+                            inode.drain(child_idx..end);
+                        }
+
+                        debug_assert_eq!(0, leaves.len());
+
+                        return;
+                    }
+                } else {
+                    inode.drain(child_idx..end);
+                    return;
+                }
             }
         }
     }
 
-    impl<T, I1, I2> Iterator for Chain<I1, I2>
-    where
-        I1: ExactSizeIterator<Item = T>,
-        I2: ExactSizeIterator<Item = T>,
+    /// TODO: docs
+    #[inline]
+    fn inode_replace_range_with_leaves_back<const N: usize, L>(
+        inode: &mut Inode<N, L>,
+        child_range: Range<usize>,
+        leaves: &mut Vec<Arc<Node<N, L>>>,
+    ) where
+        L: BalancedLeaf + Clone,
     {
-        type Item = T;
+        debug_assert!(child_range.start <= child_range.end);
+        debug_assert!(child_range.end < inode.len());
 
-        #[inline]
-        fn next(&mut self) -> Option<Self::Item> {
-            let item = self.chain.next()?;
-            self.yielded += 1;
-            Some(item)
-        }
+        // TODO: refactor to add nodes until max_children if we can.
 
-        #[inline]
-        fn size_hint(&self) -> (usize, Option<usize>) {
-            let exact = self.len();
-            (exact, Some(exact))
+        let start = child_range.start;
+
+        if inode.depth() == 1 {
+            for child_idx in child_range.rev() {
+                if let Some(leaf) = leaves.pop() {
+                    debug_assert!(leaf.is_leaf());
+                    inode.swap(child_idx, leaf);
+                } else {
+                    inode.drain(start..child_idx + 1);
+                    return;
+                }
+            }
+        } else {
+            let target_depth = inode.depth() - 1;
+
+            let mut replacements =
+                DiocanSegmenterBack::new(leaves, target_depth);
+
+            for child_idx in child_range.rev() {
+                if let Some(replacement) = replacements.next() {
+                    if replacement.depth() == target_depth
+                        && !replacement.is_underfilled()
+                    {
+                        inode.swap(
+                            child_idx,
+                            Arc::new(Node::Internal(replacement)),
+                        );
+                    } else {
+                        let mut last = replacement;
+
+                        let last =
+                            inode.with_child_mut(child_idx + 1, |next| {
+                                let next_child = {
+                                    let n = Arc::make_mut(next);
+                                    unsafe { n.as_mut_internal_unchecked() }
+                                };
+
+                                if last.depth() == next_child.depth() {
+                                    debug_assert!(last.is_underfilled());
+
+                                    last.balance(next_child);
+
+                                    if next_child.is_empty() {
+                                        *next = Arc::new(Node::Internal(last));
+                                        None
+                                    } else {
+                                        Some(last)
+                                    }
+                                } else {
+                                    next_child.prepend_at_depth(Arc::new(
+                                        Node::Internal(last),
+                                    ))
+                                }
+                            });
+
+                        if let Some(last) = last {
+                            let last = Arc::new(Node::Internal(last));
+                            inode.swap(child_idx, last);
+                            inode.drain(start..child_idx);
+                        } else {
+                            inode.drain(start..child_idx + 1);
+                        }
+
+                        debug_assert_eq!(0, leaves.len());
+
+                        return;
+                    }
+                } else {
+                    inode.drain(start..child_idx + 1);
+                    return;
+                }
+            }
         }
     }
 
-    impl<T, I1, I2> ExactSizeIterator for Chain<I1, I2>
-    where
-        I1: ExactSizeIterator<Item = T>,
-        I2: ExactSizeIterator<Item = T>,
+    /// TODO: docs
+    #[inline]
+    fn inode_fix_seam<const N: usize, L>(
+        inode: &mut Inode<N, L>,
+        start_idx: usize,
+        start_should_rebalance: bool,
+        end_should_rebalance: bool,
+    ) where
+        L: BalancedLeaf + Clone,
     {
-        #[inline]
-        fn len(&self) -> usize {
-            self.total - self.yielded
+        debug_assert!(start_idx < inode.len() - 1);
+        debug_assert!(start_should_rebalance | end_should_rebalance);
+
+        let end_idx = start_idx + 1;
+
+        if start_should_rebalance {
+            inode.with_child_mut(start_idx, |start| {
+                Node::replace_with_single_child(start);
+
+                if let Node::Internal(inode) = Arc::make_mut(start) {
+                    inode.balance_right_side();
+                    Node::replace_with_single_child(start);
+                }
+            })
+        }
+
+        if end_should_rebalance {
+            inode.with_child_mut(end_idx, |end| {
+                Node::replace_with_single_child(end);
+
+                if let Node::Internal(inode) = &mut Arc::make_mut(end) {
+                    inode.balance_left_side();
+                    Node::replace_with_single_child(end);
+                }
+            })
+        }
+
+        let original_depth = inode.depth() - 1;
+
+        let start_depth = inode.child(start_idx).depth();
+
+        let end_depth = inode.child(end_idx).depth();
+
+        use std::cmp::Ordering::*;
+
+        match (original_depth.cmp(&start_depth), start_depth.cmp(&end_depth)) {
+            (Equal, Equal) => {
+                // Rebalance start and end, then rebalance start with
+                // previous/next sibling.
+                inode.balance_child(end_idx);
+
+                if inode.len() > 1 {
+                    inode.balance_child(start_idx);
+                }
+            },
+
+            (Equal, Greater) => {
+                // Append end on start, then rebalance start with previous/next
+                // sibling.
+
+                let end = inode.remove(end_idx);
+
+                let end = inode.with_child_mut(start_idx, |start| {
+                    let start = Arc::make_mut(start);
+                    let start = unsafe { start.as_mut_internal_unchecked() };
+                    start.append_at_depth(end)
+                });
+
+                if let Some(end) = end {
+                    debug_assert_eq!(end.depth(), original_depth);
+                    inode.insert(end_idx, Arc::new(Node::Internal(end)));
+                }
+
+                if inode.len() > 1 {
+                    inode.balance_child(start_idx);
+                }
+            },
+
+            (Greater, Equal) => {
+                let mut end = inode.remove(end_idx);
+                let mut start = inode.remove(start_idx);
+
+                Arc::make_mut(&mut start).balance(Arc::make_mut(&mut end));
+
+                if !end.is_empty() {
+                    let i = Inode::from_children([start, end]);
+
+                    if inode.is_empty() {
+                        *inode = i
+                    } else if inode.depth() == i.depth() + 1 {
+                        inode.insert(start_idx, Arc::new(Node::Internal(i)));
+                        inode.balance_child(start_idx);
+                    } else {
+                        inode.insert_at_depth(
+                            start_idx,
+                            Arc::new(Node::Internal(i)),
+                        );
+                    }
+                } else if inode.is_empty() {
+                    inode.insert(0, start);
+                } else {
+                    inode.insert_at_depth(start_idx, start);
+                }
+            },
+
+            (Greater, Greater) => {
+                let end = inode.remove(end_idx);
+                let mut start = inode.remove(start_idx);
+
+                let end = {
+                    let s = Arc::make_mut(&mut start);
+                    let s = unsafe { s.as_mut_internal_unchecked() };
+                    s.append_at_depth(end)
+                };
+
+                if let Some(end) = end {
+                    let i = Inode::from_children([
+                        start,
+                        Arc::new(Node::Internal(end)),
+                    ]);
+
+                    if inode.is_empty() {
+                        *inode = i;
+                    } else if inode.depth() == i.depth() + 1 {
+                        inode.insert(start_idx, Arc::new(Node::Internal(i)));
+                        inode.balance_child(start_idx);
+                    } else {
+                        inode.insert_at_depth(
+                            start_idx,
+                            Arc::new(Node::Internal(i)),
+                        );
+                    }
+                } else if inode.is_empty() {
+                    inode.insert(0, start);
+                } else {
+                    inode.insert_at_depth(start_idx, start);
+                }
+            },
+
+            (Greater, Less) if end_depth == original_depth => {
+                // Prepend start on end, then rebalance end with previous/next
+                // sibling.
+
+                let start = inode.remove(start_idx);
+
+                let start = inode.with_child_mut(start_idx, |end| {
+                    let end = Arc::make_mut(end);
+                    let end = unsafe { end.as_mut_internal_unchecked() };
+                    end.prepend_at_depth(start)
+                });
+
+                if let Some(start) = start {
+                    inode.insert(start_idx, Arc::new(Node::Internal(start)));
+                    inode.balance_child(end_idx);
+                } else if inode.len() > 1 {
+                    inode.balance_child(start_idx);
+                }
+            },
+
+            (Greater, Less) => {
+                debug_assert!(original_depth > end_depth);
+
+                let mut end = inode.remove(end_idx);
+                let start = inode.remove(start_idx);
+
+                let start = {
+                    let e = Arc::make_mut(&mut end);
+                    let e = unsafe { e.as_mut_internal_unchecked() };
+                    e.prepend_at_depth(start)
+                };
+
+                if let Some(start) = start {
+                    let i = Inode::from_children([
+                        Arc::new(Node::Internal(start)),
+                        end,
+                    ]);
+
+                    if inode.is_empty() {
+                        *inode = i;
+                    } else if inode.depth() == i.depth() + 1 {
+                        inode.insert(start_idx, Arc::new(Node::Internal(i)));
+                        inode.balance_child(start_idx);
+                    } else {
+                        inode.insert_at_depth(
+                            start_idx,
+                            Arc::new(Node::Internal(i)),
+                        );
+                    }
+                } else if inode.is_empty() {
+                    inode.insert(0, end);
+                } else {
+                    inode.insert_at_depth(start_idx, end);
+                }
+            },
+
+            _ => unreachable!(),
+        }
+    }
+
+    use segmenters::{DiocanSegmenter, DiocanSegmenterBack};
+
+    mod segmenters {
+        use super::*;
+
+        /// The minimum number of leaves required by [`Inode::from_nodes()`] to
+        /// produce an internal node of the target depth with at least
+        /// [`Inode::min_children()`] children.
+        const fn min_leaves_for_depth<const N: usize, L: Leaf>(
+            target_depth: usize,
+        ) -> usize {
+            let max_leaves_for_one_less =
+                Inode::<N, L>::max_children().pow((target_depth - 1) as u32);
+
+            ((Inode::<N, L>::min_children() - 1) * max_leaves_for_one_less) + 1
+        }
+
+        /// The maximum number of leaves that can be fed to
+        /// [`Inode::from_nodes()`] to produce an internal node of the target
+        /// depth with no more than [`Inode::max_children()`] children.
+        const fn max_leaves_for_depth<const N: usize, L: Leaf>(
+            target_depth: usize,
+        ) -> usize {
+            Inode::<N, L>::max_children().pow(target_depth as u32)
+        }
+
+        /// Takes an iterator over leaf nodes and gives back inodes
+        /// at the target depth that are all guaranteed to have between
+        /// `min_children` and `max_children` children. **except** for the last
+        /// inode which can be at a lower depth than the target and contain less
+        /// than `min_children` children.
+        pub(super) struct DiocanSegmenter<const N: usize, L, Leaves>
+        where
+            L: Leaf,
+            Leaves: ExactSizeIterator<Item = Arc<Node<N, L>>>,
+        {
+            leaves: Leaves,
+            target_depth: usize,
+            min_leaves_for_depth: usize,
+            max_leaves_for_depth: usize,
+        }
+
+        impl<const N: usize, L, Leaves> DiocanSegmenter<N, L, Leaves>
+        where
+            L: Leaf,
+            Leaves: ExactSizeIterator<Item = Arc<Node<N, L>>>,
+        {
+            /// # Panics
+            ///
+            /// Panics if `leaves` yields 0 leaves or if the target_depth is 0.
+            #[inline]
+            pub(in crate::tree) fn new(
+                leaves: Leaves,
+                target_depth: usize,
+            ) -> Self {
+                debug_assert!(leaves.len() > 0);
+                debug_assert!(target_depth > 0);
+
+                Self {
+                    leaves,
+                    target_depth,
+                    min_leaves_for_depth: min_leaves_for_depth::<N, L>(
+                        target_depth,
+                    ),
+                    max_leaves_for_depth: max_leaves_for_depth::<N, L>(
+                        target_depth,
+                    ),
+                }
+            }
+        }
+
+        impl<const N: usize, L, Leaves> Iterator for DiocanSegmenter<N, L, Leaves>
+        where
+            L: Leaf,
+            Leaves: ExactSizeIterator<Item = Arc<Node<N, L>>>,
+        {
+            type Item = Inode<N, L>;
+
+            #[inline]
+            fn next(&mut self) -> Option<Self::Item> {
+                let remaining = self.leaves.len();
+
+                if remaining == 0 {
+                    None
+                } else if remaining < self.min_leaves_for_depth {
+                    let last = Inode::from_nodes(self.leaves.by_ref());
+
+                    debug_assert!(
+                        last.depth() < self.target_depth
+                            || last.len() < Inode::<N, L>::min_children()
+                    );
+
+                    debug_assert!(last.len() <= Inode::<N, L>::max_children());
+
+                    Some(last)
+                } else {
+                    let inode = Inode::from_nodes(
+                        self.leaves.by_ref().take(self.max_leaves_for_depth),
+                    );
+
+                    debug_assert_eq!(inode.depth(), self.target_depth);
+
+                    debug_assert!(
+                        inode.len() >= Inode::<N, L>::min_children()
+                    );
+
+                    debug_assert!(
+                        inode.len() <= Inode::<N, L>::max_children()
+                    );
+
+                    Some(inode)
+                }
+            }
+        }
+
+        pub(super) struct DiocanSegmenterBack<'a, const N: usize, L>
+        where
+            L: Leaf,
+        {
+            leaves: &'a mut Vec<Arc<Node<N, L>>>,
+            target_depth: usize,
+            min_leaves_for_depth: usize,
+            max_leaves_for_depth: usize,
+        }
+
+        impl<'a, const N: usize, L> DiocanSegmenterBack<'a, N, L>
+        where
+            L: Leaf,
+        {
+            /// # Panics
+            ///
+            /// Panics if `leaves` is empty or if the target_depth is 0.
+            #[inline]
+            pub(in crate::tree) fn new(
+                leaves: &'a mut Vec<Arc<Node<N, L>>>,
+                target_depth: usize,
+            ) -> Self {
+                debug_assert!(!leaves.is_empty());
+                debug_assert!(target_depth > 0);
+
+                Self {
+                    leaves,
+                    target_depth,
+                    min_leaves_for_depth: min_leaves_for_depth::<N, L>(
+                        target_depth,
+                    ),
+                    max_leaves_for_depth: max_leaves_for_depth::<N, L>(
+                        target_depth,
+                    ),
+                }
+            }
+        }
+
+        impl<const N: usize, L> Iterator for DiocanSegmenterBack<'_, N, L>
+        where
+            L: Leaf,
+        {
+            type Item = Inode<N, L>;
+
+            #[inline]
+            fn next(&mut self) -> Option<Self::Item> {
+                let remaining = self.leaves.len();
+
+                if remaining == 0 {
+                    None
+                } else if remaining < self.min_leaves_for_depth {
+                    let last = Inode::from_nodes(self.leaves.drain(..));
+
+                    debug_assert!(
+                        last.depth() < self.target_depth
+                            || last.len() < Inode::<N, L>::min_children()
+                    );
+
+                    debug_assert!(last.len() <= Inode::<N, L>::max_children());
+
+                    Some(last)
+                } else {
+                    let inode = Inode::from_nodes(
+                        self.leaves.drain(
+                            self.leaves
+                                .len()
+                                .saturating_sub(self.max_leaves_for_depth)..,
+                        ),
+                    );
+
+                    debug_assert_eq!(inode.depth(), self.target_depth);
+                    debug_assert!(
+                        inode.len() >= Inode::<N, L>::min_children()
+                    );
+                    debug_assert!(
+                        inode.len() <= Inode::<N, L>::max_children()
+                    );
+
+                    Some(inode)
+                }
+            }
         }
     }
 }

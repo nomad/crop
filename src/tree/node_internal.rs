@@ -1,4 +1,4 @@
-use std::ops::{Range, RangeBounds};
+use std::ops::RangeBounds;
 use std::sync::Arc;
 
 use super::traits::*;
@@ -137,6 +137,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             for child in other.drain(..) {
                 self.push(child)
             }
+
+            return;
         } else if self.len() > other.len() {
             let move_right = Self::min_children() - other.len();
 
@@ -148,7 +150,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         } else {
             let move_left = other.len() - Self::min_children();
 
-            for child in other.drain(move_left..) {
+            for child in other.drain(..move_left) {
                 self.push(child)
             }
         }
@@ -582,7 +584,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 .collect();
         }
 
-        debug_assert!(nodes.len() >= Self::min_children());
+        debug_assert!(nodes.len() > 1);
 
         Self::from_children(nodes)
     }
@@ -761,12 +763,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &self.children[last_idx]
     }
 
-    // #[inline]
-    // pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
-    //     let last_idx = self.len() - 1;
-    //     &mut self.children[last_idx]
-    // }
-
     /// The number of children contained in this internal node.
     #[inline]
     pub(super) fn len(&self) -> usize {
@@ -783,14 +779,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         N
     }
 
-    /// The maximum number of leaves that can be fed to [`Self::from_nodes()`]
-    /// to get an internal node of the given depth.
-    #[inline]
-    pub(super) const fn max_leaves_for_depth(depth: usize) -> usize {
-        debug_assert!(depth <= u32::MAX as usize);
-        Self::max_children().pow(depth as _)
-    }
-
     #[inline]
     pub fn measure<M: Metric<L>>(&self) -> M {
         M::measure(self.summary())
@@ -801,14 +789,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         let min = N / 2;
         assert!(min >= 2);
         min
-    }
-
-    /// The minimum number of leaves required by [`Self::from_nodes()`] to get
-    /// an internal node of the given depth.
-    #[inline]
-    pub(super) const fn min_leaves_for_depth(depth: usize) -> usize {
-        debug_assert!(depth <= u32::MAX as usize);
-        Self::max_children().pow((depth as u32) - 1) + 1
     }
 
     #[inline]
@@ -889,182 +869,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         child
     }
 
-    /// TODO: this belong in the tree_replace module.
-    ///
-    /// TODO: document that ends after len are valid.
-    #[inline]
-    pub(super) fn replace_range_with_leaves<I>(
-        &mut self,
-        child_range: Range<usize>,
-        leaves: &mut I,
-    ) where
-        I: Iterator<Item = Arc<Node<N, L>>> + ExactSizeIterator,
-        L: BalancedLeaf + Clone,
-    {
-        debug_assert!(child_range.start <= child_range.end);
-        debug_assert!(child_range.end <= self.len());
-
-        // TODO: refactor to add nodes until max_children if we can.
-
-        let end = child_range.end;
-
-        if self.depth() == 1 {
-            for child_idx in child_range {
-                if let Some(leaf) = leaves.next() {
-                    debug_assert!(leaf.is_leaf());
-                    self.swap(child_idx, leaf);
-                } else {
-                    self.drain(child_idx..end);
-                    return;
-                }
-            }
-            return;
-        }
-
-        let target_depth = self.depth() - 1;
-
-        debug_assert!(target_depth > 0);
-
-        let max_leaves_for_depth = Self::max_leaves_for_depth(target_depth);
-
-        let min_leaves_for_depth = Self::min_leaves_for_depth(target_depth);
-
-        for child_idx in child_range {
-            if leaves.len() >= min_leaves_for_depth {
-                let inode =
-                    Self::from_nodes(leaves.take(max_leaves_for_depth));
-
-                debug_assert_eq!(inode.depth(), target_depth);
-
-                self.swap(child_idx, Arc::new(Node::Internal(inode)));
-            } else if leaves.len() > 0 {
-                let last = if leaves.len() == 1 {
-                    leaves.next().unwrap()
-                } else {
-                    Arc::new(Node::Internal(Self::from_nodes(leaves.by_ref())))
-                };
-
-                debug_assert!(last.depth() < target_depth);
-
-                if child_idx == 0 {
-                    panic!("TODO: explain why");
-                }
-
-                let last = self.with_child_mut(child_idx - 1, |previous| {
-                    let previous = {
-                        let n = Arc::make_mut(previous);
-                        unsafe { n.as_mut_internal_unchecked() }
-                    };
-
-                    previous.append_at_depth(last)
-                });
-
-                if let Some(last) = last {
-                    self.swap(child_idx, Arc::new(Node::Internal(last)));
-                    self.drain(child_idx + 1..end);
-                } else {
-                    self.drain(child_idx..end);
-                }
-
-                debug_assert_eq!(0, leaves.len());
-
-                return;
-            } else {
-                self.drain(child_idx..end);
-                return;
-            }
-        }
-    }
-
-    /// TODO: this should belong in the tree_replace module.
-    ///
-    /// TODO: docs
-    #[inline]
-    pub(super) fn replace_range_with_leaves_back(
-        &mut self,
-        child_range: Range<usize>,
-        leaves: &mut Vec<Arc<Node<N, L>>>,
-    ) where
-        L: BalancedLeaf + Clone,
-    {
-        debug_assert!(child_range.start <= child_range.end);
-        debug_assert!(child_range.end <= self.len());
-
-        // TODO: refactor to add nodes until max_children if we can.
-
-        let start = child_range.start;
-
-        if self.depth() == 1 {
-            for child_idx in child_range.rev() {
-                if let Some(leaf) = leaves.pop() {
-                    debug_assert!(leaf.is_leaf());
-                    self.swap(child_idx, leaf);
-                } else {
-                    self.drain(start..child_idx + 1);
-                    return;
-                }
-            }
-            return;
-        }
-
-        let target_depth = self.depth() - 1;
-
-        debug_assert!(target_depth > 0);
-
-        let max_leaves_for_depth = Self::max_leaves_for_depth(target_depth);
-
-        let min_leaves_for_depth = Self::min_leaves_for_depth(target_depth);
-
-        for child_idx in child_range.rev() {
-            if leaves.len() >= min_leaves_for_depth {
-                let inode = Self::from_nodes(leaves.drain(
-                    leaves.len().saturating_sub(max_leaves_for_depth)..,
-                ));
-
-                debug_assert_eq!(inode.depth(), target_depth);
-
-                self.swap(child_idx, Arc::new(Node::Internal(inode)));
-            } else if !leaves.is_empty() {
-                let last = if leaves.len() == 1 {
-                    leaves.pop().unwrap()
-                } else {
-                    Arc::new(Node::Internal(Self::from_nodes(
-                        leaves.drain(..),
-                    )))
-                };
-
-                debug_assert!(last.depth() < target_depth);
-
-                if child_idx == self.len() - 1 {
-                    panic!("TODO: explain why");
-                }
-
-                let last = self.with_child_mut(child_idx + 1, |next| {
-                    let next = {
-                        let n = Arc::make_mut(next);
-                        unsafe { n.as_mut_internal_unchecked() }
-                    };
-
-                    next.prepend_at_depth(last)
-                });
-
-                if let Some(last) = last {
-                    self.swap(child_idx, Arc::new(Node::Internal(last)));
-                    self.drain(start..child_idx);
-                } else {
-                    self.drain(start..child_idx + 1);
-                }
-
-                debug_assert_eq!(0, leaves.len());
-
-                return;
-            } else {
-                self.drain(start..child_idx + 1);
-                return;
-            }
-        }
-    }
-
     #[inline]
     pub(super) fn summary(&self) -> &L::Summary {
         &self.summary
@@ -1076,7 +880,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &mut self,
         child_idx: usize,
         new_child: Arc<Node<N, L>>,
-    ) -> Arc<Node<N, L>> {
+    ) {
         debug_assert!(child_idx < self.len());
         debug_assert_eq!(new_child.depth() + 1, self.depth());
 
@@ -1086,7 +890,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         self.summary += new_child.summary();
         self.leaf_count += new_child.leaf_count();
-        std::mem::replace(&mut self.children[child_idx], new_child)
+        self.children[child_idx] = new_child;
     }
 
     /// Returns mutable references to the child nodes at `first_idx` and
@@ -1134,7 +938,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 }
 
-/// TODO: docs
+/// Takes an iterator of `n` nodes (with `n >= min_children`) at depth `d`
+/// and gives back inodes of depth `d + 1` that are all guaranteed to have
+/// between `min_children` and `max_children` children.
 struct ChildSegmenter<const N: usize, L, Children>
 where
     L: Leaf,
@@ -1148,8 +954,11 @@ where
     L: Leaf,
     Children: ExactSizeIterator<Item = Arc<Node<N, L>>>,
 {
+    /// # Panics
+    ///
+    /// Panics if `children` yields less than `min_children` children.
     #[inline]
-    pub(super) fn new(children: Children) -> Self {
+    fn new(children: Children) -> Self {
         debug_assert!(children.len() >= Inode::<N, L>::min_children());
         Self { children }
     }
