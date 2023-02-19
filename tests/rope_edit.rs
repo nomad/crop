@@ -49,8 +49,8 @@ fn rope_insert_random() {
                 s[start..end].to_owned()
             };
 
-            s.insert_str(insert_at, &insert);
             r.insert(insert_at, &insert);
+            s.insert_str(insert_at, &insert);
 
             r.assert_invariants();
             assert_eq!(s, r);
@@ -66,15 +66,15 @@ fn rope_delete_random() {
         let mut r = Rope::from(s);
         let mut s = s.to_owned();
 
-        for _ in 0..5 {
+        for _ in 0..15 {
             let delete_range = {
                 let start = rng.gen_range(0..=r.byte_len());
                 let end = rng.gen_range(start..=r.byte_len());
                 start..end
             };
 
-            s.replace_range(delete_range.clone(), "");
-            r.delete(delete_range);
+            r.delete(delete_range.clone());
+            s.replace_range(delete_range, "");
 
             r.assert_invariants();
             assert_eq!(s, r);
@@ -90,7 +90,7 @@ fn rope_replace_random() {
         let mut r = Rope::from(s);
         let mut s = s.to_owned();
 
-        for _ in 0..5 {
+        for _ in 0..10 {
             let replace_range = {
                 let start = rng.gen_range(0..=r.byte_len());
                 let end = rng.gen_range(start..=r.byte_len());
@@ -103,8 +103,8 @@ fn rope_replace_random() {
                 s[start..end].to_owned()
             };
 
-            s.replace_range(replace_range.clone(), &replace_with);
-            r.replace(replace_range, &replace_with);
+            r.replace(replace_range.clone(), &replace_with);
+            s.replace_range(replace_range, &replace_with);
 
             r.assert_invariants();
             assert_eq!(s, r);

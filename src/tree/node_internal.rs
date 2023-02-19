@@ -82,14 +82,14 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     pub(super) fn assert_invariants(&self) {
-        // assert!(
-        //     self.len() >= Self::min_children(),
-        //     "An internal node of depth {} was supposed to contain at least \
-        //      {} children but actually contains {}",
-        //     self.depth(),
-        //     Self::min_children(),
-        //     self.len()
-        // );
+        assert!(
+            self.len() >= Self::min_children(),
+            "An internal node of depth {} was supposed to contain at least \
+             {} children but actually contains {}",
+            self.depth(),
+            Self::min_children(),
+            self.len()
+        );
 
         assert!(
             self.len() <= Self::max_children(),
@@ -128,16 +128,139 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn balance(&mut self, other: &mut Self) {
         debug_assert_eq!(self.depth(), other.depth());
+
+        if !self.is_underfilled() && !other.is_underfilled() {
+            return;
+        }
+
+        if self.len() + other.len() <= Self::max_children() {
+            for child in other.drain(..) {
+                self.push(child)
+            }
+        } else if self.len() > other.len() {
+            let move_right = Self::min_children() - other.len();
+
+            for (insert_idx, child) in
+                self.drain(self.len() - move_right..).enumerate()
+            {
+                other.insert(insert_idx, child);
+            }
+        } else {
+            let move_left = other.len() - Self::min_children();
+
+            for child in other.drain(move_left..) {
+                self.push(child)
+            }
+        }
+
+        debug_assert!(
+            self.len() >= Self::min_children()
+                && self.len() <= Self::max_children()
+        );
+
+        debug_assert!(
+            other.len() >= Self::min_children()
+                && other.len() <= Self::max_children()
+        );
     }
 
     /// TODO: docs
     #[inline]
-    pub(super) fn balance_two_children(
-        &mut self,
-        first_idx: usize,
-        second_idx: usize,
-    ) {
-        // todo!();
+    pub(super) fn balance_child(&mut self, child_idx: usize)
+    where
+        L: BalancedLeaf + Clone,
+    {
+        debug_assert!(self.len() > 1);
+
+        if !self.child(child_idx).is_underfilled() {
+            return;
+        }
+
+        let left_idx = child_idx.saturating_sub(1);
+        let right_idx = left_idx + 1;
+
+        let (left, right) = self.two_mut(left_idx, right_idx);
+
+        Arc::make_mut(left).balance(Arc::make_mut(right));
+
+        if right.is_empty() {
+            self.remove(right_idx);
+        }
+    }
+
+    // ```
+    // ChunkSummary { b
+    // ├── ChunkSummary
+    // │   └── ""
+    // ├── ChunkSummary
+    // │   ├── "s \nn"
+    // │   ├── "ec t"
+    // │   ├── "urpi"
+    // │   └── "s fe"
+    // ├── ChunkSummary
+    // │   ├── "ugia"
+    // │   ├── "t se"
+    // │   ├── "mper"
+    // │   └── ". Na"
+    // └── ChunkSummary
+    //     ├── "m at"
+    //     ├── " nu"
+    //     └── "t a"
+    // ```
+
+    /// Recursively balances the first child all the way down to the deepest
+    /// inode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the first child has a strong counter > 1.
+    #[inline]
+    pub(super) fn balance_left_side(&mut self)
+    where
+        L: BalancedLeaf,
+    {
+        self.balance_first_child_with_second();
+
+        let first_is_underfilled = self.with_child_mut(0, |first| {
+            if let Node::Internal(first) = Arc::get_mut(first).unwrap() {
+                first.balance_left_side();
+                first.is_underfilled()
+            } else {
+                false
+            }
+        });
+
+        if first_is_underfilled && self.len() > 1 {
+            self.balance_first_child_with_second();
+        }
+    }
+
+    /// Recursively balances the last child all the way down to the deepest
+    /// inode.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the last child has a strong counter > 1.
+    #[inline]
+    pub(super) fn balance_right_side(&mut self)
+    where
+        L: BalancedLeaf,
+    {
+        self.balance_last_child_with_penultimate();
+
+        let last_is_underfilled =
+            self.with_child_mut(self.len() - 1, |last| {
+                if let Node::Internal(last) = Arc::get_mut(last).unwrap() {
+                    last.balance_right_side();
+                    last.is_underfilled()
+                } else {
+                    false
+                }
+            });
+
+        if last_is_underfilled && self.len() > 1 {
+            self.balance_last_child_with_penultimate();
+        }
     }
 
     /// Balances the first child using the contents of the second child,
@@ -154,6 +277,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     ///
     /// - the `Arc` enclosing the first child has a strong counter > 1. This
     /// function assumes that there are zero `Arc::clone`s of the first child.
+    ///
+    /// TODO: this should belong in the `from_tree_slice` module.
     #[inline]
     pub(super) fn balance_first_child_with_second(&mut self)
     where
@@ -247,6 +372,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     ///
     /// - the `Arc` enclosing the last child has a strong counter > 1. This
     /// function assumes that there are zero `Arc::clone`s of the last child.
+    ///
+    /// TODO: this should belong in the `from_tree_slice` module.
     #[inline]
     pub(super) fn balance_last_child_with_penultimate(&mut self)
     where
@@ -396,11 +523,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &self.children[0]
     }
 
-    #[inline]
-    pub(super) fn first_mut(&mut self) -> &mut Arc<Node<N, L>> {
-        &mut self.children[0]
-    }
-
     /// Creates a new internal node from its children.
     ///
     /// NOTE: this function assumes that `children` yields less than
@@ -484,11 +606,62 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         child: Arc<Node<N, L>>,
     ) {
         debug_assert!(!self.is_full());
-        debug_assert_eq!(child.depth() + 1, self.depth());
+        debug_assert!(self.is_empty() || child.depth() + 1 == self.depth());
 
         self.leaf_count += child.leaf_count();
         self.summary += child.summary();
+
+        if self.is_empty() {
+            self.depth = child.depth() + 1;
+        }
+
         self.children.insert(child_offset, child);
+    }
+
+    /// TODO: docs
+    #[inline]
+    pub(super) fn insert_at_depth(
+        &mut self,
+        child_offset: usize,
+        node: Arc<Node<N, L>>,
+    ) where
+        L: BalancedLeaf + Clone,
+    {
+        debug_assert!(!self.is_empty());
+        debug_assert!(child_offset <= self.len());
+        debug_assert!(self.depth() >= 2);
+        debug_assert!(node.depth() < self.depth() - 1);
+
+        if child_offset > 0 {
+            let extra = self.with_child_mut(child_offset - 1, |previous| {
+                let previous = {
+                    let n = Arc::make_mut(previous);
+                    // SAFETY: this inode's depth is >= 2 so its children are
+                    // also inodes.
+                    unsafe { n.as_mut_internal_unchecked() }
+                };
+                previous.append_at_depth(node)
+            });
+
+            if let Some(extra) = extra {
+                self.insert(child_offset, Arc::new(Node::Internal(extra)));
+            }
+        } else {
+            let extra = self.with_child_mut(0, |first| {
+                let first = {
+                    let n = Arc::make_mut(first);
+                    // SAFETY: this inode's depth is >= 2 so its children are
+                    // also inodes.
+                    unsafe { n.as_mut_internal_unchecked() }
+                };
+
+                first.prepend_at_depth(node)
+            });
+
+            if let Some(extra) = extra {
+                self.insert(0, Arc::new(Node::Internal(extra)));
+            }
+        }
     }
 
     /// Inserts a sequence of child nodes at the given offset, so that the
@@ -588,11 +761,11 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &self.children[last_idx]
     }
 
-    #[inline]
-    pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
-        let last_idx = self.len() - 1;
-        &mut self.children[last_idx]
-    }
+    // #[inline]
+    // pub(super) fn last_mut(&mut self) -> &mut Arc<Node<N, L>> {
+    //     let last_idx = self.len() - 1;
+    //     &mut self.children[last_idx]
+    // }
 
     /// The number of children contained in this internal node.
     #[inline]
@@ -625,7 +798,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     #[inline]
     pub(super) const fn min_children() -> usize {
-        N / 2
+        let min = N / 2;
+        assert!(min >= 2);
+        min
     }
 
     /// The minimum number of leaves required by [`Self::from_nodes()`] to get
@@ -714,7 +889,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         child
     }
 
-    /// TODO: docs
+    /// TODO: this belong in the tree_replace module.
+    ///
     /// TODO: document that ends after len are valid.
     #[inline]
     pub(super) fn replace_range_with_leaves<I>(
@@ -800,6 +976,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
     }
 
+    /// TODO: this should belong in the tree_replace module.
+    ///
     /// TODO: docs
     #[inline]
     pub(super) fn replace_range_with_leaves_back(

@@ -38,14 +38,14 @@ impl Rope {
         }
 
         while let Some(chunk) = chunks.next() {
-            // assert!(chunk.len() >= RopeChunk::chunk_min());
+            assert!(chunk.len() >= RopeChunk::chunk_min());
             assert!(chunk.len() <= RopeChunk::chunk_max());
 
-            // if ends_in_cr(chunk) {
-            if let Some(_next) = chunks.peek().copied() {
-                // assert!(!starts_with_lf(next));
+            if ends_in_cr(chunk) {
+                if let Some(next) = chunks.peek().copied() {
+                    assert!(!starts_with_lf(next));
+                }
             }
-            // }
         }
     }
 

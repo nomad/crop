@@ -119,11 +119,6 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
-        self.measure::<L::BaseMetric>()
-    }
-
-    #[inline]
     pub(super) fn balance(&mut self, other: &mut Self)
     where
         L: BalancedLeaf,
@@ -139,6 +134,11 @@ impl<const N: usize, L: Leaf> Node<N, L> {
 
             _ => unreachable!(),
         }
+    }
+
+    #[inline]
+    pub fn base_measure(&self) -> L::BaseMetric {
+        self.measure::<L::BaseMetric>()
     }
 
     #[inline]

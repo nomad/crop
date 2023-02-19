@@ -162,21 +162,11 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
             // SAFETY: the only way the root can be a leaf node is if
             // the stack is empty and `self.leaves` contains a single leaf,
             // and that case has already been handled.
-            let mut inode = unsafe {
+            let inode = unsafe {
                 Arc::get_mut(&mut root).unwrap().as_mut_internal_unchecked()
             };
 
-            loop {
-                inode.balance_last_child_with_penultimate();
-
-                if let Node::Internal(last) =
-                    Arc::get_mut(inode.last_mut()).unwrap()
-                {
-                    inode = last;
-                } else {
-                    break;
-                }
-            }
+            inode.balance_right_side();
         }
 
         Node::replace_with_single_child(&mut root);
