@@ -4,7 +4,6 @@
 use std::fmt::Write;
 
 use super::iterators::Chunks;
-use super::rope_chunk::RopeChunk;
 
 /// TODO: document panics, behaviour if candidate is > s.len()
 #[inline]
@@ -218,36 +217,6 @@ pub(super) fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
 #[inline]
 pub(super) fn last_byte_is_newline(s: &str) -> bool {
     !s.is_empty() && s.as_bytes()[s.len() - 1] == b'\n'
-}
-
-/// Returns a tuple `(to_add, rest)`, where `to_add` is the largest left
-/// sub-slice of `text` that can be added to `current` that still keeps the
-/// latter under the byte limit of [`RopeChunk`]s. It follows that `rest` is
-/// the right sub-slice of `text` not included in `to_add`.
-#[inline]
-pub(super) fn rope_chunk_append<'a>(
-    current: &str,
-    text: &'a str,
-) -> (&'a str, &'a str) {
-    if current.len() >= RopeChunk::max_bytes() {
-        // If the current text is already longer than `RopeChunk::max_bytes()`
-        // the only edge case to consider is not splitting CRLF pairs.
-        if ends_in_cr(current) && starts_with_lf(text) {
-            return (&text[0..1], &text[1..]);
-        } else {
-            return ("", text);
-        }
-    }
-
-    let mut bytes_to_add = RopeChunk::max_bytes() - current.len();
-
-    if text.len() <= bytes_to_add {
-        return (text, "");
-    }
-
-    bytes_to_add = adjust_split_point::<true>(text, bytes_to_add);
-
-    (&text[..bytes_to_add], &text[bytes_to_add..])
 }
 
 /// Returns `true` if the first byte in the string slice is a line feed.

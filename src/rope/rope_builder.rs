@@ -23,12 +23,9 @@ impl RopeBuilder {
         let mut text = text.as_ref();
 
         loop {
-            let (to_add, rest) = rope_chunk_append(&self.buffer, text);
-            self.buffer.push_str(to_add);
+            let rest = self.buffer.push_with_remainder(text.into());
             if rest.is_empty() {
-                if !to_add.is_empty() {
-                    self.last_byte_is_newline = last_byte_is_newline(to_add);
-                }
+                self.last_byte_is_newline = last_byte_is_newline(&self.buffer);
                 break;
             } else {
                 self.tree_builder.append(std::mem::take(&mut self.buffer));

@@ -228,6 +228,7 @@ impl<'a> ChunkSlice {
             && self.len() <= RopeChunk::chunk_max()
     }
 
+    /// TODO: docs
     #[inline]
     pub(super) fn split_adjusted<const WITH_RIGHT_BIAS: bool>(
         &'a self,

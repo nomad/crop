@@ -34,6 +34,37 @@ impl Default for RopeChunk {
 }
 
 impl RopeChunk {
+    /// TODO: docs
+    #[inline]
+    pub(super) fn push_with_remainder<'a>(
+        &mut self,
+        slice: &'a ChunkSlice,
+    ) -> &'a ChunkSlice {
+        if self.len() >= Self::max_bytes() {
+            // If the current text is already longer than
+            // `RopeChunk::max_bytes()` the only edge case to consider is not
+            // splitting CRLF pairs.
+            if ends_in_cr(self) && starts_with_lf(slice) {
+                // SAFETY: the slice starts with a `\n` so 1 is a char
+                // boundary.
+                let (lf, rest) = unsafe { slice.split_unchecked(1) };
+                self.push_str(lf);
+                return rest;
+            } else {
+                return slice;
+            }
+        }
+
+        let (push, rest) =
+            slice.split_adjusted::<true>(Self::max_bytes() - self.len());
+
+        self.push_str(push);
+
+        debug_assert!(self.len() <= Self::chunk_max());
+
+        rest
+    }
+
     #[inline]
     fn as_slice(&self) -> &ChunkSlice {
         use std::borrow::Borrow;

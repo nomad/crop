@@ -1,6 +1,7 @@
 use std::ops::RangeBounds;
 
 use super::chunk_slice::ChunkSegmenter;
+use super::chunk_slice::ChunkSlice;
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
 use super::rope_chunk::RopeChunk;
@@ -405,11 +406,19 @@ impl From<&str> for Rope {
 
 impl From<String> for Rope {
     #[inline]
-    fn from(s: String) -> Self {
-        if s.is_empty() {
-            Rope::new()
-        } else if rope_chunk_append("", &s).1.is_empty() {
-            // If the string fits in one chunk we can avoid a new allocation.
+    fn from(mut s: String) -> Self {
+        // If the strings fits in a single chunk we can try to avoid a new
+        // allocation.
+        if s.len() <= RopeChunk::max_bytes()
+            || <&ChunkSlice>::from(&*s)
+                .split_adjusted::<true>(RopeChunk::max_bytes())
+                .1
+                .is_empty()
+        {
+            debug_assert!(s.len() <= RopeChunk::chunk_max());
+
+            s.reserve_exact(RopeChunk::chunk_max() - s.len());
+
             Rope {
                 last_byte_is_newline: last_byte_is_newline(&s),
                 tree: Tree::from_leaves([RopeChunk { text: s }]),
