@@ -450,7 +450,7 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
         }
 
         debug_assert!(
-            self.len() >= Self::min_bytes() && self.len() <= Self::max_bytes()
+            self.len() >= Self::chunk_min() && self.len() <= Self::chunk_max()
         );
 
         *summary = self.summarize();
