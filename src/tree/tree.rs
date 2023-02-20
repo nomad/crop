@@ -170,9 +170,11 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
-        if let Some(extras) =
-            tree_replace::some_name(&mut self.root, range, slice)
-        {
+        if let Some(extras) = tree_replace::replace_range_with_slice(
+            &mut self.root,
+            range,
+            slice,
+        ) {
             debug_assert!(extras
                 .iter()
                 .all(|n| n.depth() == self.root.depth()));
@@ -324,7 +326,7 @@ mod from_treeslice {
                 if start == L::BaseMetric::zero() {
                     root.push(Arc::clone(child));
                 } else {
-                    let first = cut_first_rec(
+                    let first = cut_start_rec(
                         child,
                         start - offset,
                         slice.first_slice,
@@ -351,7 +353,7 @@ mod from_treeslice {
                 if end == slice.root().base_measure() {
                     root.push(Arc::clone(child));
                 } else {
-                    let last = cut_last_rec(
+                    let last = cut_end_rec(
                         child,
                         end - offset,
                         slice.last_slice,
@@ -374,7 +376,7 @@ mod from_treeslice {
 
     /// TODO: docs
     #[inline]
-    fn cut_first_rec<const N: usize, L: BalancedLeaf>(
+    fn cut_start_rec<const N: usize, L: BalancedLeaf>(
         node: &Arc<Node<N, L>>,
         take_from: L::BaseMetric,
         start_slice: &L::Slice,
@@ -393,7 +395,7 @@ mod from_treeslice {
                     let this = child.base_measure();
 
                     if offset + this > take_from {
-                        let first = cut_first_rec(
+                        let first = cut_start_rec(
                             child,
                             take_from - offset,
                             start_slice,
@@ -441,7 +443,7 @@ mod from_treeslice {
 
     /// TODO: docs
     #[inline]
-    fn cut_last_rec<const N: usize, L: BalancedLeaf>(
+    fn cut_end_rec<const N: usize, L: BalancedLeaf>(
         node: &Arc<Node<N, L>>,
         take_up_to: L::BaseMetric,
         end_slice: &L::Slice,
@@ -458,7 +460,7 @@ mod from_treeslice {
                     let this = child.base_measure();
 
                     if offset + this >= take_up_to {
-                        let last = cut_last_rec(
+                        let last = cut_end_rec(
                             child,
                             take_up_to - offset,
                             end_slice,
@@ -503,15 +505,32 @@ mod from_treeslice {
 }
 
 mod tree_replace {
-    //! This module handles the logic used in [`Tree::replace()`].
+    //! This module contains the logic used to implement [`Tree::replace()`].
+    //!
+    //! TODO: explain how this works... to make a long story short we first
+    //! call [`replace_range_with_slice`] recursively until we get to the
+    //! deepest node that fully contains the replacement range.
+    //!
+    //! Once we get there we call [`replace_range_in_deepest`] which can either
+    //! return some extra nodes to be pushed after that node if the replace
+    //! operation was insertion-heavy, or handle the rebalancing of that node
+    //! (which could cause the node to be underfilled/be at a lower
+    //! depth/become a leaf) if the replace operation was removal-heavy.
+    //!
+    //! Once that's done we return to [`replace_range_with_slice`] which will
+    //! handle the insertion of those optional extra nodes or the rebalancing
+    //! of the tree.
 
     use super::*;
 
-    /// This is recursive.
+    /// Replaces the content within the specified range of `node` with the
+    /// given slice, optionally returning a vector of nodes at the same depth
+    /// as `node` to be insert by `node`'s parent after `node`.
     ///
-    /// TODO: docs
+    /// Note that when no extra nodes are returned, `node` could be underfilled
+    /// or even at a lower depth than it was before calling this function.
     #[inline]
-    pub(super) fn some_name<const N: usize, M, L>(
+    pub(super) fn replace_range_with_slice<const N: usize, M, L>(
         node: &mut Arc<Node<N, L>>,
         mut range: Range<M>,
         slice: &L::Slice,
@@ -521,7 +540,7 @@ mod tree_replace {
         L: ReplaceableLeaf<M> + Clone,
     {
         let Node::Internal(inode) = Arc::make_mut(node) else {
-            return do_stuff_with_deepest(node, range, slice)
+            return replace_range_in_deepest(node, range, slice)
         };
 
         // The index of the child containing the entire replacement range.
@@ -544,12 +563,12 @@ mod tree_replace {
                         offset -= child_measure;
                         range.start -= offset;
                         range.end -= offset;
-                        some_name(child, range, slice)
+                        replace_range_with_slice(child, range, slice)
                     });
 
                     break;
                 } else {
-                    return do_stuff_with_deepest(node, range, slice);
+                    return replace_range_in_deepest(node, range, slice);
                 };
             }
         }
@@ -593,15 +612,9 @@ mod tree_replace {
         }
     }
 
-    /// This is not recursive. The only the code that handles the first final
-    /// branches are.
-    ///
-    /// Returns a vector of nodes that should be pushed back onto the Tree
-    /// after this node.
-    ///
     /// TODO: docs
     #[inline]
-    fn do_stuff_with_deepest<const N: usize, M, L>(
+    fn replace_range_in_deepest<const N: usize, M, L>(
         node: &mut Arc<Node<N, L>>,
         range: Range<M>,
         slice: &L::Slice,
@@ -626,13 +639,13 @@ mod tree_replace {
             start_should_rebalance,
             end_should_rebalance,
             extra_leaves,
-        ) = inode_replace_range(inode, range, slice);
+        ) = inode_replace_nodes_in_start_and_end_subtrees(inode, range, slice);
 
         let Some(mut extra_leaves) = extra_leaves else {
             inode.drain(start_idx+1..end_idx);
 
             if start_should_rebalance || end_should_rebalance {
-                inode_fix_seam(
+                fix_seam_between_start_and_end_subtrees(
                     inode,
                     start_idx,
                     start_should_rebalance,
@@ -650,7 +663,7 @@ mod tree_replace {
         // balanced.
         debug_assert!(!(start_should_rebalance || end_should_rebalance));
 
-        inode_replace_range_with_leaves_back(
+        replace_child_range_with_leaves_from_back(
             inode,
             start_idx + 1..end_idx,
             &mut extra_leaves,
@@ -668,7 +681,7 @@ mod tree_replace {
             let target_depth = inode.depth() - 1;
 
             let mut extras =
-                DiocanSegmenter::new(extra_leaves.by_ref(), target_depth)
+                TargetDepth::new(extra_leaves.by_ref(), target_depth)
                     .map(Node::Internal)
                     .map(Arc::new)
                     .collect::<Vec<_>>();
@@ -732,7 +745,7 @@ mod tree_replace {
     /// TODO: docs
     #[allow(clippy::type_complexity)]
     #[inline]
-    fn inode_replace_range<const N: usize, M, L>(
+    fn inode_replace_nodes_in_start_and_end_subtrees<const N: usize, M, L>(
         inode: &mut Inode<N, L>,
         range: Range<M>,
         slice: &L::Slice,
@@ -760,7 +773,7 @@ mod tree_replace {
                 start_idx = idx;
 
                 extra_leaves = inode.with_child_mut(start_idx, |child| {
-                    replace_first_rec(
+                    replace_nodes_in_start_subtree(
                         Arc::make_mut(child),
                         range.start + child_measure - offset,
                         slice,
@@ -787,7 +800,7 @@ mod tree_replace {
                 end_idx = idx;
 
                 inode.with_child_mut(end_idx, |child| {
-                    replace_last_rec(
+                    replace_nodes_in_end_subtree(
                         Arc::make_mut(child),
                         range.end + child_measure - offset,
                         &mut extra_leaves,
@@ -810,7 +823,7 @@ mod tree_replace {
 
     /// TODO: docs
     #[inline]
-    fn replace_first_rec<const N: usize, M, L>(
+    fn replace_nodes_in_start_subtree<const N: usize, M, L>(
         node: &mut Node<N, L>,
         replace_from: M,
         slice: &L::Slice,
@@ -851,7 +864,7 @@ mod tree_replace {
                 start_idx = idx;
 
                 extra_leaves = inode.with_child_mut(start_idx, |child| {
-                    replace_first_rec(
+                    replace_nodes_in_start_subtree(
                         Arc::make_mut(child),
                         replace_from + child_measure - offset,
                         slice,
@@ -864,7 +877,7 @@ mod tree_replace {
         }
 
         let extra_leaves = if let Some(mut extra_leaves) = extra_leaves {
-            inode_replace_range_with_leaves(
+            replace_child_range_with_leaves(
                 inode,
                 start_idx + 1..inode.len(),
                 &mut extra_leaves,
@@ -883,7 +896,7 @@ mod tree_replace {
 
     /// TODO: docs
     #[inline]
-    fn replace_last_rec<const N: usize, M, L>(
+    fn replace_nodes_in_end_subtree<const N: usize, M, L>(
         node: &mut Node<N, L>,
         replace_up_to: M,
         extra_leaves: &mut Option<Vec<Arc<Node<N, L>>>>,
@@ -942,7 +955,7 @@ mod tree_replace {
                 end_idx = idx;
 
                 inode.with_child_mut(end_idx, |child| {
-                    replace_last_rec(
+                    replace_nodes_in_end_subtree(
                         Arc::make_mut(child),
                         replace_up_to - offset,
                         extra_leaves,
@@ -955,7 +968,11 @@ mod tree_replace {
         }
 
         if let Some(leaves) = extra_leaves {
-            inode_replace_range_with_leaves_back(inode, 0..end_idx, leaves);
+            replace_child_range_with_leaves_from_back(
+                inode,
+                0..end_idx,
+                leaves,
+            );
 
             if leaves.is_empty() {
                 *extra_leaves = None;
@@ -969,7 +986,7 @@ mod tree_replace {
 
     /// TODO: docs
     #[inline]
-    fn inode_replace_range_with_leaves<const N: usize, L, I>(
+    fn replace_child_range_with_leaves<const N: usize, L, I>(
         inode: &mut Inode<N, L>,
         child_range: Range<usize>,
         leaves: &mut I,
@@ -999,7 +1016,7 @@ mod tree_replace {
             let target_depth = inode.depth() - 1;
 
             let mut replacements =
-                DiocanSegmenter::new(leaves.by_ref(), target_depth);
+                TargetDepth::new(leaves.by_ref(), target_depth);
 
             for child_idx in child_range {
                 if let Some(replacement) = replacements.next() {
@@ -1055,7 +1072,7 @@ mod tree_replace {
 
     /// TODO: docs
     #[inline]
-    fn inode_replace_range_with_leaves_back<const N: usize, L>(
+    fn replace_child_range_with_leaves_from_back<const N: usize, L>(
         inode: &mut Inode<N, L>,
         child_range: Range<usize>,
         leaves: &mut Vec<Arc<Node<N, L>>>,
@@ -1083,7 +1100,7 @@ mod tree_replace {
             let target_depth = inode.depth() - 1;
 
             let mut replacements =
-                DiocanSegmenterBack::new(leaves, target_depth);
+                TargetDepthFromBack::new(leaves, target_depth);
 
             for child_idx in child_range.rev() {
                 if let Some(replacement) = replacements.next() {
@@ -1144,7 +1161,7 @@ mod tree_replace {
 
     /// TODO: docs
     #[inline]
-    fn inode_fix_seam<const N: usize, L>(
+    fn fix_seam_between_start_and_end_subtrees<const N: usize, L>(
         inode: &mut Inode<N, L>,
         start_idx: usize,
         start_should_rebalance: bool,
@@ -1341,9 +1358,9 @@ mod tree_replace {
         }
     }
 
-    use segmenters::{DiocanSegmenter, DiocanSegmenterBack};
+    use iter::{TargetDepth, TargetDepthFromBack};
 
-    mod segmenters {
+    mod iter {
         use super::*;
 
         /// The minimum number of leaves required by [`Inode::from_nodes()`] to
@@ -1367,12 +1384,12 @@ mod tree_replace {
             Inode::<N, L>::max_children().pow(target_depth as u32)
         }
 
-        /// Takes an iterator over leaf nodes and gives back inodes
-        /// at the target depth that are all guaranteed to have between
-        /// `min_children` and `max_children` children. **except** for the last
-        /// inode which can be at a lower depth than the target and contain less
-        /// than `min_children` children.
-        pub(super) struct DiocanSegmenter<const N: usize, L, Leaves>
+        /// Transforms an iterator over leaf nodes into internal nodes at a
+        /// given target depth that are all guaranteed to have between
+        /// `min_children` and `max_children` children, except for the last
+        /// inode which can be at a lower depth than the target and contain
+        /// less than `min_children` children.
+        pub(super) struct TargetDepth<const N: usize, L, Leaves>
         where
             L: Leaf,
             Leaves: ExactSizeIterator<Item = Arc<Node<N, L>>>,
@@ -1383,7 +1400,7 @@ mod tree_replace {
             max_leaves_for_depth: usize,
         }
 
-        impl<const N: usize, L, Leaves> DiocanSegmenter<N, L, Leaves>
+        impl<const N: usize, L, Leaves> TargetDepth<N, L, Leaves>
         where
             L: Leaf,
             Leaves: ExactSizeIterator<Item = Arc<Node<N, L>>>,
@@ -1412,7 +1429,7 @@ mod tree_replace {
             }
         }
 
-        impl<const N: usize, L, Leaves> Iterator for DiocanSegmenter<N, L, Leaves>
+        impl<const N: usize, L, Leaves> Iterator for TargetDepth<N, L, Leaves>
         where
             L: Leaf,
             Leaves: ExactSizeIterator<Item = Arc<Node<N, L>>>,
@@ -1457,7 +1474,10 @@ mod tree_replace {
             }
         }
 
-        pub(super) struct DiocanSegmenterBack<'a, const N: usize, L>
+        /// Same as `TargetDepth` except the inodes are constructed from back
+        /// to front instead of front to back by draining the nodes off of a
+        /// `Vec`.
+        pub(super) struct TargetDepthFromBack<'a, const N: usize, L>
         where
             L: Leaf,
         {
@@ -1467,7 +1487,7 @@ mod tree_replace {
             max_leaves_for_depth: usize,
         }
 
-        impl<'a, const N: usize, L> DiocanSegmenterBack<'a, N, L>
+        impl<'a, const N: usize, L> TargetDepthFromBack<'a, N, L>
         where
             L: Leaf,
         {
@@ -1495,7 +1515,7 @@ mod tree_replace {
             }
         }
 
-        impl<const N: usize, L> Iterator for DiocanSegmenterBack<'_, N, L>
+        impl<const N: usize, L> Iterator for TargetDepthFromBack<'_, N, L>
         where
             L: Leaf,
         {
@@ -1503,6 +1523,9 @@ mod tree_replace {
 
             #[inline]
             fn next(&mut self) -> Option<Self::Item> {
+                // TODO: this feels a bit repetitive with `TargetDepth`, can we
+                // DRY it up?
+
                 let remaining = self.leaves.len();
 
                 if remaining == 0 {
@@ -1528,9 +1551,11 @@ mod tree_replace {
                     );
 
                     debug_assert_eq!(inode.depth(), self.target_depth);
+
                     debug_assert!(
                         inode.len() >= Inode::<N, L>::min_children()
                     );
+
                     debug_assert!(
                         inode.len() <= Inode::<N, L>::max_children()
                     );
