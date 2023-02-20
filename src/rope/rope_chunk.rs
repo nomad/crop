@@ -356,6 +356,7 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
             let mut missing = Self::min_bytes() - self.len();
             let (left, right) = slice.split_adjusted::<true>(missing);
             self.push_str(left);
+            slice = right;
 
             // The slice alone wasn't enough, we need to also push some bytes
             // from `last`
@@ -365,8 +366,6 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
                 let (left, right) = last.split_adjusted::<false>(missing);
                 self.push_str(left);
                 last = right;
-            } else {
-                slice = right;
             }
         } else if slice.len() + last.len() < Self::min_bytes() {
             let split = Self::min_bytes() - slice.len() - last.len();

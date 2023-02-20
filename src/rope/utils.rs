@@ -13,7 +13,7 @@ pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
     mut candidate: usize,
 ) -> usize {
     if candidate >= s.len() {
-        return candidate;
+        return s.len();
     }
 
     if WITH_RIGHT_BIAS {
