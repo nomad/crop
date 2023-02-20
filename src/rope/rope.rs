@@ -14,8 +14,6 @@ const ROPE_FANOUT: usize = 8;
 const ROPE_FANOUT: usize = 4;
 
 /// A UTF-8 text rope.
-///
-/// TODO: docs
 #[derive(Clone, Default)]
 pub struct Rope {
     pub(super) tree: Tree<{ Self::fanout() }, RopeChunk>,
@@ -310,7 +308,23 @@ impl Rope {
         Self::default()
     }
 
-    /// TODO: docs
+    /// Replaces the content of the `Rope` within the specified byte range
+    /// with the given string, where the start and end of the range are
+    /// interpreted as byte offsets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the start or the end of the byte range don't lie on a code
+    /// point boundary, if the start is greater than the end or if the end is
+    /// out of bounds (i.e. greater than [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut r = crop::Rope::from("Hello Earth 🌎!");
+    /// r.replace(6..16, "Saturn 🪐");
+    /// assert_eq!(r, "Hello Saturn 🪐!");
+    /// ```
     #[inline]
     pub fn replace<R, T>(&mut self, byte_range: R, text: T)
     where
