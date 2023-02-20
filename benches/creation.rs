@@ -49,8 +49,9 @@ impl RopeBuilder for crop::RopeBuilder {
     }
 
     #[inline]
-    fn append(self, s: &str) -> Self {
-        crop::RopeBuilder::append(self, s)
+    fn append(mut self, s: &str) -> Self {
+        crop::RopeBuilder::append(&mut self, s);
+        self
     }
 
     #[inline]

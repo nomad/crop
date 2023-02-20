@@ -4,8 +4,6 @@ use super::Rope;
 use crate::tree::TreeBuilder;
 
 /// An incremental [`Rope`](crate::Rope) builder.
-///
-/// TODO: docs
 #[derive(Clone, Default)]
 pub struct RopeBuilder {
     tree_builder: TreeBuilder<{ Rope::fanout() }, RopeChunk>,
@@ -16,7 +14,7 @@ pub struct RopeBuilder {
 impl RopeBuilder {
     /// TODO: docs
     #[inline]
-    pub fn append<T>(mut self, text: T) -> Self
+    pub fn append<T>(&mut self, text: T) -> &mut Self
     where
         T: AsRef<str>,
     {
@@ -50,7 +48,7 @@ impl RopeBuilder {
         }
     }
 
-    /// TODO: docs
+    /// Creates a new `RopeBuilder`.
     #[inline]
     pub fn new() -> Self {
         Self::default()

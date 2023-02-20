@@ -5,7 +5,17 @@ use std::fmt::Write;
 
 use super::iterators::Chunks;
 
-/// TODO: document panics, behaviour if candidate is > s.len()
+/// Adjusts the candidate byte offset to make sure it's a valid split point for
+/// `s`, i.e. it makes sure that it lies on a char boundary and that it doesn't
+/// split a CRLF pair. Offsets past the end of the string will be clipped to
+/// the length of the string.
+///
+/// If the initial candidate is not a valid split position we can either go
+/// left or right until is it. The direction is chosen based on the value of
+/// `WITH_RIGHT_BIAS`: true -> go right, false -> go left.
+///
+/// In every case the adjusted split point will be within ± 3 bytes from the
+/// input candidate.
 #[inline]
 pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
     s: &str,
@@ -36,8 +46,8 @@ pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
 
 /// Returns the number of bytes that `s`'s trailing line break takes up.
 ///
-/// NOTE: this function assumes that `s` ends with a newline (`\n`), if `s`
-/// doesn't it can return a wrong result.
+/// NOTE: this function assumes that `s` ends with a newline, if it doesn't
+/// it will return a wrong result.
 #[inline]
 pub(super) fn bytes_line_break(s: &str) -> usize {
     debug_assert!(!s.is_empty() && *s.as_bytes().last().unwrap() == b'\n');
@@ -202,7 +212,7 @@ pub(super) fn is_grapheme_boundary(
     }
 }
 
-/// Returns whether `byte_offset` would be splitting a CRLF pair inside `s`.
+/// Returns whether `byte_offset` sits between a CRLF pair in `s`.
 #[inline]
 pub(super) fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
     byte_offset > 0
@@ -213,13 +223,13 @@ pub(super) fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
         })
 }
 
-/// Returns `true` if the last byte of the string slice is a line feed (0x0A).
+/// Returns whether the last byte of the string is a newline (0x0A).
 #[inline]
 pub(super) fn last_byte_is_newline(s: &str) -> bool {
     !s.is_empty() && s.as_bytes()[s.len() - 1] == b'\n'
 }
 
-/// Returns `true` if the first byte in the string slice is a line feed.
+/// Returns whether the first byte of the string is a newline (0x0A).
 pub(super) fn starts_with_lf(s: &str) -> bool {
     !s.is_empty() && s.as_bytes()[0] == b'\n'
 }

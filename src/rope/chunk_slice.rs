@@ -71,7 +71,8 @@ impl ToOwned for ChunkSlice {
 }
 
 impl<'a> ChunkSlice {
-    /// TODO: docs
+    /// Balances `left` and `right`. The second tuple is returned if the two
+    /// slices didn't fit in a single `RopeChunk`.
     #[inline]
     pub(super) fn balance(
         left: &Self,
@@ -220,7 +221,8 @@ impl<'a> ChunkSlice {
         ((left, left_summary), (right, right_summary))
     }
 
-    /// TODO: docs
+    /// Returns whether the length of this slice is within
+    /// [`RopeChunk::chunk_min()`] and [`RopeChunk::chunk_max()`].
     #[allow(dead_code)]
     #[inline]
     pub(super) fn is_within_chunk_bounds(&self) -> bool {
@@ -228,17 +230,31 @@ impl<'a> ChunkSlice {
             && self.len() <= RopeChunk::chunk_max()
     }
 
-    /// TODO: docs
+    /// Splits the slice at `byte_offset`, returning the left and right sides
+    /// of the split.
+    ///
+    /// Note that the split point will be adjusted to make sure it's within the
+    /// bounds of this slice, it lies on a char boundary and it doesn't split
+    /// CRLF pair. Offsets past the end of the slice are valid and will be
+    /// clipped to the length of the slice.
     #[inline]
     pub(super) fn split_adjusted<const WITH_RIGHT_BIAS: bool>(
         &'a self,
-        split_at: usize,
+        byte_offset: usize,
     ) -> (&'a ChunkSlice, &'a ChunkSlice) {
-        let split_at = adjust_split_point::<WITH_RIGHT_BIAS>(self, split_at);
+        let split_at =
+            adjust_split_point::<WITH_RIGHT_BIAS>(self, byte_offset);
         unsafe { self.split_unchecked(split_at) }
     }
 
-    /// TODO: docs
+    /// Splits the slice at `byte_offset`, returning the left and right sides
+    /// of the split.
+    ///
+    /// # Safety
+    ///
+    /// Unlike [`Self::split_adjusted()`] this function doesn't adjust the
+    /// split point to make sure it's within bounds and it lies on a char
+    /// boundary, leaving that up to the caller.
     #[inline]
     pub(super) unsafe fn split_unchecked(
         &'a self,
@@ -253,7 +269,14 @@ impl<'a> ChunkSlice {
     }
 }
 
-/// TODO: docs
+/// An iterator over the valid split points of a `ChunkSlice`.
+///
+/// All the `ChunkSlice`s yielded by this iterator are guaranteed to never
+/// split char boundaries and CRLF pairs and to be within the chunk bounds of
+/// [`RopeChunk`]s.
+///
+/// The only exception is if the slice fed to [`Self::new()`] is shorter than
+/// [`RopeChunk::chunk_min()`], in which case this will only yield that slice.
 pub(super) struct ChunkSegmenter<'a> {
     text: &'a ChunkSlice,
     yielded: usize,
@@ -312,6 +335,8 @@ impl<'a> Iterator for ChunkSegmenter<'a> {
         (lo, Some(lo + 1))
     }
 }
+
+impl std::iter::FusedIterator for ChunkSegmenter<'_> {}
 
 #[cfg(test)]
 mod tests {

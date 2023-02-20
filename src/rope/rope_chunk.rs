@@ -100,7 +100,8 @@ impl RopeChunk {
         ROPE_CHUNK_MIN_BYTES
     }
 
-    /// TODO: docs
+    /// Returns whether the length of this chunk is within
+    /// [`RopeChunk::chunk_min()`] and [`RopeChunk::chunk_max()`].
     pub(super) fn is_within_chunk_bounds(&self) -> bool {
         self.len() >= Self::chunk_min() && self.len() <= Self::chunk_max()
     }
@@ -430,183 +431,177 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
     }
 }
 
+/// An iterator very similar in spirit to
+/// [`ChunkSegmenter`](super::ChunkSegmenter), except there we have
+/// the luxury of having a contiguous slice to split, while here the input
+/// slice is broken up into 3 pieces.
+#[derive(Debug)]
+struct ExtraLeaves<'a> {
+    first: Option<RopeChunk>,
+    yielded_first: bool,
+    slice: &'a ChunkSlice,
+    last: &'a ChunkSlice,
+    yielded: usize,
+    total: usize,
+}
+
+impl<'a> ExtraLeaves<'a> {
+    /// # Panics
+    ///
+    /// Panics if the combined length of `first`, `slice` and `last` is
+    /// less than [`RopeChunk::chunk_min()`].
+    #[inline]
+    pub(super) fn new(
+        first: Option<RopeChunk>,
+        slice: &'a ChunkSlice,
+        last: &'a ChunkSlice,
+    ) -> Self {
+        debug_assert!(
+            first.as_ref().map(|f| f.len()).unwrap_or(0)
+                + slice.len()
+                + last.len()
+                >= RopeChunk::chunk_min()
+        );
+
+        Self {
+            total: slice.len() + last.len(),
+            yielded: 0,
+            yielded_first: false,
+            first,
+            slice,
+            last,
+        }
+    }
+
+    #[inline]
+    fn yield_first(&mut self) -> RopeChunk {
+        debug_assert!(!self.yielded_first);
+
+        self.yielded_first = true;
+
+        if let Some(mut first) = self.first.take() {
+            if first.len() + self.total <= RopeChunk::max_bytes() {
+                first.push_str(self.slice);
+                first.push_str(self.last);
+                self.yielded = self.total;
+                first
+            } else {
+                let mut add_to_first = RopeChunk::max_bytes() - first.len();
+
+                if self.total - add_to_first < RopeChunk::min_bytes() {
+                    add_to_first = self.total - RopeChunk::min_bytes();
+                }
+
+                let take_from_slice = if add_to_first > self.slice.len() {
+                    self.slice.len()
+                } else {
+                    adjust_split_point::<true>(self.slice, add_to_first)
+                };
+
+                first.push_str(&self.slice[..take_from_slice]);
+                self.slice = self.slice[take_from_slice..].into();
+                self.yielded += take_from_slice;
+
+                // If the slice alone wasn't enough we need to take from
+                // `last`.
+                if add_to_first > take_from_slice {
+                    add_to_first -= take_from_slice;
+
+                    let take_from_last =
+                        adjust_split_point::<true>(self.last, add_to_first);
+                    first.push_str(&self.last[..take_from_last]);
+                    self.last = self.last[take_from_last..].into();
+                    self.yielded += take_from_last;
+                }
+
+                first
+            }
+        } else {
+            self.yield_next().unwrap()
+        }
+    }
+
+    #[inline]
+    fn yield_next(&mut self) -> Option<RopeChunk> {
+        debug_assert!(self.yielded_first);
+        debug_assert!(self.first.is_none());
+
+        let remaining = self.total - self.yielded;
+
+        let chunk: RopeChunk = if remaining == 0 {
+            return None;
+        } else if remaining > RopeChunk::max_bytes() {
+            let mut chunk = RopeChunk::default();
+
+            let mut chunk_len = RopeChunk::max_bytes();
+
+            if remaining - chunk_len < RopeChunk::min_bytes() {
+                chunk_len = remaining - RopeChunk::min_bytes();
+            }
+
+            let take_from_slice = if chunk_len > self.slice.len() {
+                self.slice.len()
+            } else {
+                adjust_split_point::<true>(self.slice, chunk_len)
+            };
+
+            chunk.push_str(&self.slice[..take_from_slice]);
+            self.slice = self.slice[take_from_slice..].into();
+
+            // If the slice alone wasn't enough we need to take from
+            // `last`.
+            if chunk_len > take_from_slice {
+                chunk_len -= take_from_slice;
+
+                let take_from_last =
+                    adjust_split_point::<true>(self.last, chunk_len);
+                chunk.push_str(&self.last[..take_from_last]);
+                self.last = self.last[take_from_last..].into();
+            }
+
+            chunk
+        } else {
+            debug_assert!(remaining >= RopeChunk::chunk_min());
+            let mut last = self.slice.to_owned();
+            last.push_str(self.last);
+            last
+        };
+
+        self.yielded += chunk.len();
+
+        Some(chunk)
+    }
+}
+
+impl Iterator for ExtraLeaves<'_> {
+    type Item = RopeChunk;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if !self.yielded_first {
+            Some(self.yield_first())
+        } else {
+            self.yield_next()
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let lo = (self.total - self.yielded) / RopeChunk::max_bytes();
+        (lo, Some(lo + 1))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     #[test]
-    fn rope_chunk_split_off() {
+    fn split_off_0() {
         let mut r = RopeChunk::from("abcd");
         let rhs = unsafe { r.split_off_unchecked(3) };
         assert_eq!("abc", &*r);
         assert_eq!("d", &*rhs);
-    }
-}
-
-use extra_leaves::ExtraLeaves;
-
-mod extra_leaves {
-    use super::*;
-
-    /// TODO: docs
-    #[derive(Debug)]
-    pub(super) struct ExtraLeaves<'a> {
-        first: Option<RopeChunk>,
-        yielded_first: bool,
-        slice: &'a ChunkSlice,
-        last: &'a ChunkSlice,
-        yielded: usize,
-        total: usize,
-    }
-
-    impl<'a> ExtraLeaves<'a> {
-        /// # Panics
-        ///
-        /// Panics if `first`, `slice` and `last` combined are less than
-        /// [`RopeChunk::chunk_min()`].
-        #[inline]
-        pub(super) fn new(
-            first: Option<RopeChunk>,
-            slice: &'a ChunkSlice,
-            last: &'a ChunkSlice,
-        ) -> Self {
-            debug_assert!(
-                first.as_ref().map(|f| f.len()).unwrap_or(0)
-                    + slice.len()
-                    + last.len()
-                    >= RopeChunk::chunk_min()
-            );
-
-            Self {
-                total: slice.len() + last.len(),
-                yielded: 0,
-                yielded_first: false,
-                first,
-                slice,
-                last,
-            }
-        }
-
-        #[inline]
-        fn yield_first(&mut self) -> RopeChunk {
-            debug_assert!(!self.yielded_first);
-
-            self.yielded_first = true;
-
-            if let Some(mut first) = self.first.take() {
-                if first.len() + self.total <= RopeChunk::max_bytes() {
-                    first.push_str(self.slice);
-                    first.push_str(self.last);
-                    self.yielded = self.total;
-                    first
-                } else {
-                    let mut add_to_first =
-                        RopeChunk::max_bytes() - first.len();
-
-                    if self.total - add_to_first < RopeChunk::min_bytes() {
-                        add_to_first = self.total - RopeChunk::min_bytes();
-                    }
-
-                    let take_from_slice = if add_to_first > self.slice.len() {
-                        self.slice.len()
-                    } else {
-                        adjust_split_point::<true>(self.slice, add_to_first)
-                    };
-
-                    first.push_str(&self.slice[..take_from_slice]);
-                    self.slice = self.slice[take_from_slice..].into();
-                    self.yielded += take_from_slice;
-
-                    // If the slice alone wasn't enough we need to take from
-                    // `last`.
-                    if add_to_first > take_from_slice {
-                        add_to_first -= take_from_slice;
-
-                        let take_from_last = adjust_split_point::<true>(
-                            self.last,
-                            add_to_first,
-                        );
-                        first.push_str(&self.last[..take_from_last]);
-                        self.last = self.last[take_from_last..].into();
-                        self.yielded += take_from_last;
-                    }
-
-                    first
-                }
-            } else {
-                self.yield_next().unwrap()
-            }
-        }
-
-        #[inline]
-        fn yield_next(&mut self) -> Option<RopeChunk> {
-            debug_assert!(self.yielded_first);
-            debug_assert!(self.first.is_none());
-
-            let remaining = self.total - self.yielded;
-
-            let chunk: RopeChunk = if remaining == 0 {
-                return None;
-            } else if remaining > RopeChunk::max_bytes() {
-                let mut chunk = RopeChunk::default();
-
-                let mut chunk_len = RopeChunk::max_bytes();
-
-                if remaining - chunk_len < RopeChunk::min_bytes() {
-                    chunk_len = remaining - RopeChunk::min_bytes();
-                }
-
-                let take_from_slice = if chunk_len > self.slice.len() {
-                    self.slice.len()
-                } else {
-                    adjust_split_point::<true>(self.slice, chunk_len)
-                };
-
-                chunk.push_str(&self.slice[..take_from_slice]);
-                self.slice = self.slice[take_from_slice..].into();
-
-                // If the slice alone wasn't enough we need to take from
-                // `last`.
-                if chunk_len > take_from_slice {
-                    chunk_len -= take_from_slice;
-
-                    let take_from_last =
-                        adjust_split_point::<true>(self.last, chunk_len);
-                    chunk.push_str(&self.last[..take_from_last]);
-                    self.last = self.last[take_from_last..].into();
-                }
-
-                chunk
-            } else {
-                debug_assert!(remaining >= RopeChunk::chunk_min());
-                let mut last = self.slice.to_owned();
-                last.push_str(self.last);
-                last
-            };
-
-            self.yielded += chunk.len();
-
-            Some(chunk)
-        }
-    }
-
-    impl Iterator for ExtraLeaves<'_> {
-        type Item = RopeChunk;
-
-        #[inline]
-        fn next(&mut self) -> Option<Self::Item> {
-            if !self.yielded_first {
-                Some(self.yield_first())
-            } else {
-                self.yield_next()
-            }
-        }
-
-        #[inline]
-        fn size_hint(&self) -> (usize, Option<usize>) {
-            let lo = (self.total - self.yielded) / RopeChunk::max_bytes();
-            (lo, Some(lo + 1))
-        }
     }
 
     #[test]

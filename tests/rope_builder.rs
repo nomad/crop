@@ -10,13 +10,11 @@ fn empty() {
     assert!(r.is_empty());
     assert_eq!(Rope::new(), r);
 
-    let r = RopeBuilder::new()
-        .append("")
-        .append("")
-        .append("")
-        .append("")
-        .append("")
-        .build();
+    let mut b = RopeBuilder::new();
+
+    b.append("").append("").append("").append("").append("");
+
+    let r = b.build();
 
     assert!(r.is_empty());
     assert_eq!(Rope::new(), r);
@@ -28,7 +26,7 @@ fn large_lines() {
     let mut s = String::new();
 
     for line in LARGE.lines() {
-        b = b.append(line);
+        b.append(line);
         s.push_str(line);
     }
 
