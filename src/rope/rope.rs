@@ -1,11 +1,13 @@
 use std::ops::RangeBounds;
 
+use super::chunk_slice::ChunkSegmenter;
+use super::chunk_slice::ChunkSlice;
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
-use super::rope_chunk::{RopeChunk, RopeChunkIter};
+use super::rope_chunk::RopeChunk;
 use super::utils::*;
 use crate::tree::Tree;
-use crate::RopeSlice;
+use crate::{range_bounds_to_start_end, RopeSlice};
 
 #[cfg(all(any(test, feature = "fanout_4"), not(feature = "fanout_24")))]
 const ROPE_FANOUT: usize = 4;
@@ -17,8 +19,6 @@ const ROPE_FANOUT: usize = 8;
 const ROPE_FANOUT: usize = 24;
 
 /// A UTF-8 text rope.
-///
-/// TODO: docs
 #[derive(Clone, Default)]
 pub struct Rope {
     pub(super) tree: Tree<{ Self::fanout() }, RopeChunk>,
@@ -161,11 +161,11 @@ impl Rope {
 
     /// TODO: docs
     #[inline]
-    pub fn insert<T>(&mut self, byte_index: usize, text: T)
+    pub fn insert<T>(&mut self, byte_offset: usize, text: T)
     where
         T: AsRef<str>,
     {
-        self.replace(byte_index..byte_index, text)
+        self.replace(byte_offset..byte_offset, text)
     }
 
     /// TODO: docs
@@ -313,15 +313,35 @@ impl Rope {
         Self::default()
     }
 
-    /// TODO: docs
+    /// Replaces the content of the `Rope` within the specified byte range
+    /// with the given string, where the start and end of the range are
+    /// interpreted as byte offsets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the start or the end of the byte range don't lie on a code
+    /// point boundary, if the start is greater than the end or if the end is
+    /// out of bounds (i.e. greater than [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// let mut r = crop::Rope::from("Hello Earth 🌎!");
+    /// r.replace(6..16, "Saturn 🪐");
+    /// assert_eq!(r, "Hello Saturn 🪐!");
+    /// ```
     #[inline]
-    pub fn replace<R, T>(&mut self, byte_range: R, _text: T)
+    pub fn replace<R, T>(&mut self, byte_range: R, text: T)
     where
         R: RangeBounds<usize>,
         T: AsRef<str>,
     {
-        let (_start, end) =
+        let (start, end) =
             range_bounds_to_start_end(byte_range, 0, self.byte_len());
+
+        if start > end {
+            panic!("TODO");
+        }
 
         if end > self.byte_len() {
             panic!(
@@ -332,17 +352,26 @@ impl Rope {
             );
         }
 
-        todo!()
+        self.tree
+            .replace(ByteMetric(start)..ByteMetric(end), text.as_ref().into());
+
+        #[cfg(debug_assertions)]
+        self.assert_invariants();
     }
 }
 
 impl From<RopeSlice<'_>> for Rope {
     #[inline]
     fn from(rope_slice: RopeSlice<'_>) -> Rope {
-        Rope {
-            tree: Tree::from(rope_slice.tree_slice),
+        let rope = Self {
             last_byte_is_newline: rope_slice.last_byte_is_newline,
-        }
+            tree: Tree::from(rope_slice.tree_slice),
+        };
+
+        #[cfg(debug_assertions)]
+        rope.assert_invariants();
+
+        rope
     }
 }
 
@@ -369,22 +398,30 @@ impl From<&str> for Rope {
     #[inline]
     fn from(s: &str) -> Self {
         Rope {
-            tree: Tree::from_leaves(
-                RopeChunkIter::new(s)
-                    .map(|chunk| RopeChunk { text: chunk.to_owned() }),
-            ),
             last_byte_is_newline: last_byte_is_newline(s),
+
+            tree: Tree::from_leaves(
+                ChunkSegmenter::new(s).map(std::borrow::ToOwned::to_owned),
+            ),
         }
     }
 }
 
 impl From<String> for Rope {
     #[inline]
-    fn from(s: String) -> Self {
-        if s.is_empty() {
-            Rope::new()
-        } else if rope_chunk_append("", &s).1.is_empty() {
-            // If the string fits in one chunk we can avoid a new allocation.
+    fn from(mut s: String) -> Self {
+        // If the strings fits in a single chunk we can try to avoid a new
+        // allocation.
+        if s.len() <= RopeChunk::max_bytes()
+            || <&ChunkSlice>::from(&*s)
+                .split_adjusted::<true>(RopeChunk::max_bytes())
+                .1
+                .is_empty()
+        {
+            debug_assert!(s.len() <= RopeChunk::chunk_max());
+
+            s.reserve_exact(RopeChunk::chunk_max() - s.len());
+
             Rope {
                 last_byte_is_newline: last_byte_is_newline(&s),
                 tree: Tree::from_leaves([RopeChunk { text: s }]),

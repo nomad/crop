@@ -1,3 +1,4 @@
+mod chunk_slice;
 pub(crate) mod iterators;
 mod metrics;
 mod rope;

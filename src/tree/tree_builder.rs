@@ -2,7 +2,8 @@ use std::sync::Arc;
 
 use smallvec::SmallVec;
 
-use super::{Inode, Leaf, Lnode, Node, Tree};
+use super::traits::*;
+use super::{Inode, Lnode, Node, Tree};
 
 /// An incremental [`Tree`] builder.
 #[derive(Clone)]
@@ -23,7 +24,7 @@ pub struct TreeBuilder<const FANOUT: usize, L: Leaf> {
     /// level containing inodes of depth one less than the previous level;
     ///
     /// - every inode at every stack level is completely full, i.e. for every
-    /// inode it holds `inode.leaf_count() == FANOUT**(inode.depth())`;
+    /// inode it holds `inode.leaf_count() == max_children ^ inode.depth()`;
     ///
     /// - all the inodes in the last stack level (assuming there are any) have
     /// a depth of 1.
@@ -106,7 +107,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
     #[inline]
     pub fn build(mut self) -> Tree<FANOUT, L>
     where
-        L: Default,
+        L: BalancedLeaf + Default,
     {
         if self.stack.is_empty() {
             if self.leaves.is_empty() {
@@ -160,7 +161,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
         {
             // SAFETY: the only way the root can be a leaf node is if
             // the stack is empty and `self.leaves` contains a single leaf,
-            // and that case has already been handled.
+            // and that case was handled at the start of this function.
             let root = unsafe {
                 Arc::get_mut(&mut root).unwrap().as_mut_internal_unchecked()
             };
@@ -168,11 +169,9 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
             root.balance_right_side();
         }
 
-        let mut tree = Tree { root };
+        Node::replace_with_single_child(&mut root);
 
-        tree.pull_up_root();
-
-        tree
+        Tree { root }
     }
 
     #[allow(dead_code)]

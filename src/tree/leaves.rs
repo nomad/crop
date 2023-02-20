@@ -5,8 +5,8 @@ use crate::tree::{Inode, Leaf, Metric, Node, Tree, TreeSlice};
 /// An iterator over the leaves of `Tree`s and `TreeSlice`s.
 pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
     /*
-      Just like the `Units` iterator, this iterator is also implemented using
-      two independent iterators advancing in opposite directions.
+      This iterator is implemented using two independent iterators advancing in
+      opposite directions.
     */
     #[rustfmt::skip]
 
@@ -43,7 +43,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
             forward: LeavesForward::from(tree),
             backward: LeavesBackward::from(tree),
             leaves_yielded: 0,
-            leaves_total: tree.root.leaf_count(),
+            leaves_total: tree.leaf_count(),
         }
     }
 }
@@ -110,6 +110,7 @@ impl<const FANOUT: usize, L: Leaf> std::iter::FusedIterator
 {
 }
 
+#[derive(Debug)]
 struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](Self::initialize()).
@@ -123,7 +124,7 @@ struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// there is one) is 2.
     path: Vec<(&'a Inode<N, L>, usize)>,
 
-    /// The current leaf bunch.
+    /// The current leaves.
     leaves: &'a [Arc<Node<N, L>>],
 
     /// The index of the next leaf in [`leaves`](Self::leaves) that'll be
@@ -138,16 +139,16 @@ struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// we're iterating over a `TreeSlice`.
     last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
 
-    /// The base measure between the start of the tree under `root` and the
-    /// first leaf in the iterating range.
+    /// The base offset of [`first_slice`](Self::first_slice), or zero if we're
+    /// iterating over a `Tree`.
     base_offset: L::BaseMetric,
 
-    /// The number of **whole** leaves yielded so far.
-    whole_yielded: usize,
-
-    /// The number of **whole** leaves this iterator will yield. All leaves are
+    /// The number of whole leaf slices yielded so far. All leaf slices are
     /// considered whole except for the first and last leaf slices of
     /// `TreeSlice`s.
+    whole_yielded: usize,
+
+    /// The number of whole leaf slices this iterator will yield.
     whole_total: usize,
 }
 
@@ -274,7 +275,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                                 .unwrap_or((leaf.as_slice(), leaf.summary()));
 
                             let n = std::cmp::min(
-                                inode.children().len() - idx - 1,
+                                inode.len() - idx - 1,
                                 self.whole_total - self.whole_yielded,
                             );
 
@@ -298,10 +299,10 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 
             *visited += 1;
 
-            if *visited == inode.children().len() {
+            if *visited == inode.len() {
                 self.path.pop();
             } else {
-                let inode = &inode.children()[*visited];
+                let inode = inode.child(*visited);
 
                 // SAFETY: the last internal node in `path` is always *2*
                 // levels above a leaf, so all its children are internal
@@ -319,7 +320,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 
                 Node::Leaf(_) => {
                     let n = std::cmp::min(
-                        inode.children().len(),
+                        inode.len(),
                         self.whole_total - self.whole_yielded,
                     );
 
@@ -358,6 +359,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
     }
 }
 
+#[derive(Debug)]
 struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](Self::initialize()).
@@ -371,7 +373,7 @@ struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// there is one) is 2.
     path: Vec<(&'a Inode<N, L>, usize)>,
 
-    /// The current leaf bunch.
+    /// The current leaves.
     leaves: &'a [Arc<Node<N, L>>],
 
     /// The index of the last leaf in [`leaves`](Self::leaves) that was yielded
@@ -386,16 +388,17 @@ struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// we're iterating over a `TreeSlice`.
     last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
 
-    /// The base measure between the last leaf in the iterating range and the
-    /// end of the tree under `root`.
+    /// The base measure between the end of [`last_slice`](Self::last_slice)
+    /// and the end of the subtree under [`root`](Self::root), or zero if we're
+    /// iterating over a `Tree`.
     base_offset: L::BaseMetric,
 
-    /// The number of **whole** leaves yielded so far.
-    whole_yielded: usize,
-
-    /// The number of **whole** leaves this iterator will yield. All leaves are
+    /// The number of whole leaf slices yielded so far. All leaf slices are
     /// considered whole except for the first and last leaf slices of
     /// `TreeSlice`s.
+    whole_yielded: usize,
+
+    /// The number of whole leaf slices this iterator will yield.
     whole_total: usize,
 }
 
@@ -552,7 +555,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
             } else {
                 *visited -= 1;
 
-                let inode = &inode.children()[*visited];
+                let inode = inode.child(*visited);
 
                 // SAFETY: the last internal node in `path` is always *2*
                 // levels above a leaf, so all its children are internal
@@ -564,17 +567,17 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
         loop {
             match &**inode.last() {
                 Node::Internal(i) => {
-                    self.path.push((inode, inode.children().len() - 1));
+                    self.path.push((inode, inode.len() - 1));
                     inode = i;
                 },
 
                 Node::Leaf(_) => {
                     let n = std::cmp::min(
-                        inode.children().len(),
+                        inode.len(),
                         self.whole_total - self.whole_yielded,
                     );
 
-                    return &inode.children()[(inode.children().len() - n)..];
+                    return &inode.children()[(inode.len() - n)..];
                 },
             }
         }

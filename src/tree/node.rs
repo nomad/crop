@@ -1,4 +1,7 @@
-use super::{Inode, Leaf, Lnode, Metric, SlicingMetric};
+use std::sync::Arc;
+
+use super::traits::*;
+use super::{Inode, Lnode};
 
 #[derive(Clone)]
 pub(super) enum Node<const N: usize, L: Leaf> {
@@ -35,8 +38,8 @@ impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
 }
 
 impl<const N: usize, L: Leaf> Node<N, L> {
-    /// Checks the invariants of the node, and if it's internal it calls itself
-    /// recursively on all of its children.
+    /// Asserts the invariants of this node, then if it's an inode it calls
+    /// itself recursively on all of its children.
     pub(super) fn assert_invariants(&self) {
         match self {
             Node::Internal(inode) => {
@@ -101,12 +104,48 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
+    pub(super) unsafe fn as_mut_leaf_unchecked(&mut self) -> &mut Lnode<L> {
+        debug_assert!(
+            self.is_leaf(),
+            "A node was expected to be a leaf but it's an internal node. This \
+            is a logic bug in crop. Please file an issue at \
+            https://github.com/noib3/crop."
+        );
+
+        match self {
+            Node::Internal(_) => std::hint::unreachable_unchecked(),
+            Node::Leaf(leaf) => leaf,
+        }
+    }
+
+    /// # Panics
+    ///
+    /// Panics if `other` is at a different depth.
+    #[inline]
+    pub(super) fn balance(&mut self, other: &mut Self)
+    where
+        L: BalancedLeaf,
+    {
+        debug_assert_eq!(self.depth(), other.depth());
+
+        match (self, other) {
+            (Node::Internal(left), Node::Internal(right)) => {
+                left.balance(right)
+            },
+
+            (Node::Leaf(left), Node::Leaf(right)) => left.balance(right),
+
+            _ => unreachable!(),
+        }
+    }
+
+    #[inline]
+    pub(super) fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
     #[inline]
-    pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
+    pub(super) fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: SlicingMetric<L>,
         M2: Metric<L>,
@@ -155,6 +194,14 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
+    pub(super) fn is_empty(&self) -> bool {
+        match self {
+            Node::Internal(inode) => inode.is_empty(),
+            Node::Leaf(leaf) => leaf.is_empty(),
+        }
+    }
+
+    #[inline]
     pub(super) fn is_internal(&self) -> bool {
         matches!(self, Node::Internal(_))
     }
@@ -165,15 +212,18 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn is_valid(&self) -> bool {
+    pub(super) fn is_underfilled(&self) -> bool
+    where
+        L: BalancedLeaf,
+    {
         match self {
-            Node::Internal(inode) => inode.has_enough_children(),
-            Node::Leaf(leaf) => leaf.is_big_enough(),
+            Node::Internal(inode) => inode.is_underfilled(),
+            Node::Leaf(leaf) => leaf.is_underfilled(),
         }
     }
 
     #[inline]
-    pub fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
+    pub(super) fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
     where
         M: Metric<L>,
     {
@@ -216,10 +266,28 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub fn measure<M: Metric<L>>(&self) -> M {
+    pub(super) fn measure<M: Metric<L>>(&self) -> M {
         match self {
             Node::Internal(inode) => inode.measure(),
             Node::Leaf(leaf) => leaf.measure(),
+        }
+    }
+
+    /// Continuously replaces the node its child qs long as it's an internal
+    /// node with a single child. Note that an inode might become a leaf node
+    /// after calling this.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `Arc` enclosing the root has a strong counter > 1.
+    #[inline]
+    pub(super) fn replace_with_single_child(node: &mut Arc<Self>) {
+        while let Self::Internal(inode) = Arc::get_mut(node).unwrap() {
+            if inode.len() == 1 {
+                *node = Arc::clone(inode.first());
+            } else {
+                break;
+            }
         }
     }
 

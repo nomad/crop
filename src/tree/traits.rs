@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::fmt::Debug;
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, RangeBounds, Sub, SubAssign};
 
 pub trait Summarize: Debug {
     type Summary: Debug
@@ -21,30 +21,53 @@ pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized {
     type Slice: ?Sized
         + Summarize<Summary = <Self as Summarize>::Summary>
         + ToOwned<Owned = Self>;
+}
 
-    /// Returns `true` if the leaf is big enough on its own, `false` if it
-    /// should be balanced with another leaf slice to become valid.
-    #[allow(unused_variables)]
-    fn is_big_enough(&self, summary: &Self::Summary) -> bool {
-        true
-    }
+pub trait BalancedLeaf: Leaf {
+    /// Returns whether the leaf node is too small to be on its own and should
+    /// be rebalanced with another leaf.
+    fn is_underfilled(slice: &Self::Slice, summary: &Self::Summary) -> bool;
 
-    /// Balances two leaves.
+    /// Balance two leaves.
     ///
-    /// There are no guarantees on whether both `first` and `second` are big
-    /// enough, all combinations should be checked.
+    /// The `right` leaf can be left empty if the two leaves can be combined
+    /// into a single one.
+    fn balance_leaves(
+        left: (&mut Self, &mut Self::Summary),
+        right: (&mut Self, &mut Self::Summary),
+    );
+
+    /// Balances two leaf slices.
     ///
-    /// The first `(leaf, summary)` in the returned tuple is the left leaf
-    /// together with its summary, the second tuple is optional and is only
-    /// returned if the two leaves didn't get combined in a single leaf.
-    #[allow(unused_variables)]
+    /// The second element of the tuple can be omitted if the two slices can be
+    /// combined into a single leaf.
     #[allow(clippy::type_complexity)]
     fn balance_slices<'a>(
-        first: (&'a Self::Slice, &'a Self::Summary),
-        second: (&'a Self::Slice, &'a Self::Summary),
-    ) -> ((Self, Self::Summary), Option<(Self, Self::Summary)>) {
-        unimplemented!();
-    }
+        left: (&'a Self::Slice, &'a Self::Summary),
+        right: (&'a Self::Slice, &'a Self::Summary),
+    ) -> ((Self, Self::Summary), Option<(Self, Self::Summary)>);
+}
+
+pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
+    type ExtraLeaves: ExactSizeIterator<Item = Self>;
+
+    /// Replace the contents of the leaf in the given range with `slice`. If
+    /// that would cause the leaf to be too big the function can return an
+    /// iterator over the leaves to insert right after this leaf. Note that in
+    /// this case both this leaf and all the leaves yielded by the iterator are
+    /// assumed to not be underfilled.
+    fn replace<R>(
+        &mut self,
+        summary: &mut Self::Summary,
+        range: R,
+        slice: &Self::Slice,
+    ) -> Option<Self::ExtraLeaves>
+    where
+        R: RangeBounds<M>;
+
+    /// Remove the contents of the leaf up to `up_to`. The leaf is allowed to
+    /// be underfilled after calling this function.
+    fn remove(&mut self, summary: &mut Self::Summary, up_to: M);
 }
 
 pub trait Metric<L: Leaf>:
@@ -63,7 +86,7 @@ pub trait Metric<L: Leaf>:
     fn zero() -> Self;
 
     /// The smallest value larger than [`zero`](Self::zero()) this metric can
-    /// produce.
+    /// measure.
     fn one() -> Self;
 
     /// Returns the measure of the summary according to this metric.
@@ -75,9 +98,9 @@ pub trait SlicingMetric<L: Leaf>: Metric<L> {
     /// Splits the given slice at `at`, returning a
     /// `(left_slice, left_summary, right_slice, right_summary)` tuple.
     ///
-    /// NOTE: the original slice must always be split without omitting any
-    /// contents. In other words, it should always hold
-    /// `summary == left_summary + right_summary`.
+    /// The original slice must always be split without omitting any contents.
+    /// In other words, it should always hold
+    /// `left_summary + right_summary = summary`.
     #[allow(clippy::type_complexity)]
     fn split<'a>(
         slice: &'a L::Slice,

@@ -7,24 +7,24 @@ use super::{Leaf, Leaves, Metric, Node, SlicingMetric, Summarize, Units};
 #[derive(Debug)]
 pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     /// The deepest node that contains all the leaves between (and including)
-    /// the ones containing [`first_slice`](Self::first_slice) and
-    /// [`last_slice`](Self::last_slice).
+    /// the one containing [`first_slice`](Self::first_slice) and the one
+    /// containing [`last_slice`](Self::last_slice).
     pub(super) root: &'a Arc<Node<FANOUT, L>>,
 
-    /// The summary between the left-most leaf of the root and the start of the
-    /// slice.
+    /// The summary of the subtree under [`root`](Self::root) up to the start
+    /// of the [`first_slice`](Self::first_slice).
     pub(super) offset: L::Summary,
 
     /// The total summary of this slice.
     pub(super) summary: L::Summary,
 
-    /// A right sub-slice of the leaf containing the start of the sliced range.
+    /// The right sub-slice of the leaf containing the start of the sliced range.
     pub(super) first_slice: &'a L::Slice,
 
     /// [`first_slice`](Self::first_slice)'s summary.
     pub(super) first_summary: L::Summary,
 
-    /// A left sub-slice of the leaf containing the end of the sliced range.
+    /// The left sub-slice of the leaf containing the end of the sliced range.
     pub(super) last_slice: &'a L::Slice,
 
     /// [`last_slice`](Self::last_slice)'s summary.
@@ -98,8 +98,9 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
                     )
                 };
 
-                // All these asserts should be equivalent, we use them all for
+                // These asserts should be equivalent but we use them all for
                 // redundancy.
+
                 assert!(Arc::ptr_eq(self.root, root));
                 assert_eq!(self.root.depth(), root.depth());
                 assert_eq!(
@@ -117,7 +118,6 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         }
     }
 
-    /// Returns the base measure of this slice's summary.
     #[inline]
     pub fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
@@ -125,15 +125,13 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
     /// Returns the `M2`-measure of all the leaves before `up_to` plus the
     /// `M2`-measure of the left sub-slice of the leaf at `up_to`.
-    ///
-    /// NOTE: this function doesn't do any bounds checks.
     #[inline]
     pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: SlicingMetric<L>,
         M2: Metric<L>,
     {
-        debug_assert!(up_to <= self.measure::<M1>() + M1::one(),);
+        debug_assert!(up_to <= self.measure::<M1>() + M1::one());
 
         if up_to == M1::zero() {
             M2::zero()
@@ -156,8 +154,6 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
     /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
     /// plus the `M`-measure of all the leaves before it.
-    ///
-    /// NOTE: this function doesn't do any bounds checks.
     #[inline]
     pub fn leaf_at_measure<M>(&'a self, measure: M) -> (&'a L::Slice, M)
     where
@@ -183,21 +179,19 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         }
     }
 
-    /// Returns an iterator over the leaves of this `TreeSlice`.
+    #[inline]
+    pub fn leaf_count(&self) -> usize {
+        self.leaf_count
+    }
+
     #[inline]
     pub fn leaves(&'a self) -> Leaves<'a, FANOUT, L> {
         Leaves::from(self)
     }
 
-    /// Returns the `M`-measure of this slice's summary.
     #[inline]
     pub fn measure<M: Metric<L>>(&self) -> M {
         M::measure(self.summary())
-    }
-
-    #[inline]
-    pub fn leaf_count(&self) -> usize {
-        self.leaf_count
     }
 
     #[inline]
@@ -225,7 +219,6 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L>
 where
     for<'d> &'d L::Slice: Default,
 {
-    /// NOTE: doesn't do any bounds checks on `range`.
     #[inline]
     pub(super) fn from_range_in_root<M>(
         root: &'a Arc<Node<FANOUT, L>>,
@@ -248,7 +241,6 @@ where
         }
     }
 
-    /// NOTE: doesn't do any bounds checks on `range`.
     #[inline]
     pub fn slice<M>(self, mut range: Range<M>) -> Self
     where
@@ -279,12 +271,13 @@ where
     /// Returns the `TreeSlice` obtained by slicing `root` between `start` and
     /// `end`.
     ///
-    /// NOTE: `start` and `end` are specified using different metrics so
+    /// Note that `start` and `end` are specified using different metrics so
     /// there's no way to tell if `start` actually precedes `end` without
-    /// going through the nodes (which this function doesn't do).
+    /// traversing the nodes (which this function doesn't do).
     ///
-    /// It's the caller's responsibility to guarantee this, this function
-    /// may panic or return an incorrect or invalid `TreeSlice` otherwise.
+    /// It's the caller's responsibility to guarantee this, and this function
+    /// can panic or return an incorrect or invalid `TreeSlice` if this
+    /// condition is not met.
     #[inline]
     fn slice_impl<S, E>(
         root: &'a Arc<Node<FANOUT, L>>,
@@ -319,8 +312,8 @@ where
             root,
             start,
             end,
-            &mut false,
             &mut recompute_root,
+            &mut false,
             &mut false,
         );
 
@@ -343,7 +336,6 @@ where
         slice
     }
 
-    /// Returns an iterator over the `M`-units of this `TreeSlice`.
     #[inline]
     pub fn units<M>(&'a self) -> Units<'a, FANOUT, L, M>
     where
@@ -353,7 +345,9 @@ where
     }
 }
 
-/// TODO: docs
+/// Returns the deepest node under `nodes`'s subtree that fully contains the
+/// range between `start` and `end`, together with the `S` and `E` offsets with
+/// respect to that node.
 #[inline]
 fn deepest_node_containing_range<const N: usize, L, S, E>(
     mut node: &Arc<Node<N, L>>,
@@ -450,15 +444,36 @@ where
     }
 }
 
-/// TODO: docs
+/// Gradually builds the `TreeSlice` by recursively traversing all the nodes
+/// between `start` and `end`.
+///
+/// The `found_first_slice` and `done` bits are used to track state while
+/// traversing and should always start off as `false`.
+///
+/// # On `recompute_root`
+///
+/// The leaf node containing the start of the range could return an
+/// empty right sub-slice when calling `S::split`. Since `TreeSlice`s are not
+/// allowed to have an empty [`first_slice`](TreeSlice::first_slice) this
+/// function will move to the following leaf to set that field. This
+/// however means that the current root of the `slice` might not actually be
+/// the deepest node containing the entire range.
+///
+/// When this happens the `recompute_root` bit will be set to `true` to
+/// indicate that the slice's root (and its offset) needs to be recomputed. All
+/// the other fields of the slice are valid.
+//
+// TODO: what if there's no following leaf node? E.g. "aaaa" -> slice (4..4). I
+// think that's a bug. Test what happens when taking empty slices at the
+// beginning, end and between chunks.
 #[inline]
 fn build_slice<'a, const N: usize, L, S, E>(
     slice: &mut TreeSlice<'a, N, L>,
     node: &'a Arc<Node<N, L>>,
     start: S,
     end: E,
-    found_first_slice: &mut bool,
     recompute_root: &mut bool,
+    found_first_slice: &mut bool,
     done: &mut bool,
 ) where
     L: Leaf,
@@ -488,8 +503,8 @@ fn build_slice<'a, const N: usize, L, S, E>(
                             child,
                             start,
                             end,
-                            found_first_slice,
                             recompute_root,
+                            found_first_slice,
                             done,
                         );
                     } else {
@@ -509,8 +524,8 @@ fn build_slice<'a, const N: usize, L, S, E>(
                         child,
                         start,
                         end,
-                        found_first_slice,
                         recompute_root,
+                        found_first_slice,
                         done,
                     );
                 } else {

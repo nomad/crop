@@ -6,18 +6,19 @@ use super::*;
 #[derive(Clone)]
 pub struct Units<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
     /*
-    `Units` is implemented using two separate iterators, one for iterating
-    forward (used in the `Iterator` impl), and the other for iterating backward
-    (used in the `DoubleEndedIterator` impl).
+      Just like the `Leaves` iterator, this iterator is also implemented using
+      two separate iterators, one for iterating forward (used in the `Iterator`
+      impl), and the other for iterating backward (used in the
+      `DoubleEndedIterator` impl).
 
-    These two iterators are completely independent and don't know about each
-    other, which could cause them to overlap if alternating between calling
-    `Units::next()` and `Units::next_back()`.
+      These two iterators are completely independent and don't know about each
+      other, which could cause them to overlap if alternating between calling
+      `Units::next()` and `Units::next_back()`.
 
-    To prevent this we also store the base measure of the unyielded iterating
-    range, which is decreased as new `TreeSliece`s are yielded (both forward
-    and backward). Once that reaches zero this iterator will stop yielding any
-    more items.
+      To prevent this we also store the base measure of the unyielded iterating
+      range, which is decreased as new `TreeSliece`s are yielded (both forward
+      and backward). Once that reaches zero this iterator will stop yielding
+      any more items.
     */
     #[rustfmt::skip]
 
@@ -305,8 +306,8 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
             *child_idx += 1;
 
-            if *child_idx < inode.children().len() {
-                break &inode.children()[*child_idx];
+            if *child_idx < inode.len() {
+                break inode.child(*child_idx);
             } else {
                 self.path.pop();
             }
@@ -375,30 +376,30 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     /// Traverses the path to reach the next leaf node with a non-zero
     /// `M`-measure.
     ///
-    /// Returns a `(Leaf, Root, Before, Summary, Count)` tuple where:
+    /// Returns a `(leaf, root, before, summary, count)` tuple where:
     ///
-    /// - `Leaf` is that leaf node;
+    /// - `leaf` is that leaf node;
     ///
-    /// - `Root` is the deepest internal node containing both the current
-    /// `self.leaf_node` and `Leaf` in its subtree;
+    /// - `root` is the deepest internal node containing both the current
+    /// `self.leaf_node` and `leaf` in its subtree;
     ///
-    /// - `Before` is the total base measure of all the nodes from the first
-    /// leaf in `Root`'s subtree to the leaf preceding the current
-    /// `self.leaf_node`. If `self.leaf_node` is the first leaf in `Root`'s
+    /// - `before` is the total base measure of all the nodes from the first
+    /// leaf in `root`'s subtree to the leaf preceding the current
+    /// `self.leaf_node`. If `self.leaf_node` is the first leaf in `root`'s
     /// subtree this measure will be zero;
     ///
-    /// - `Summary` and `Count` are the total summary and leaf count of all the
-    /// nodes between (but not including) `self.leaf_node` and `Leaf`. If
-    /// `Leaf` is the leaf node immediately after `self.leaf` then `Summary`
-    /// will be empty and `Count` will be zero.
+    /// - `summary` and `count` are the total summary and leaf count of all the
+    /// nodes between (but not including) `self.leaf_node` and `leaf`. If
+    /// `leaf` is the leaf node immediately after `self.leaf` then `summary`
+    /// will be empty and `count` will be zero.
     ///
     /// NOTE: it assumes that such a leaf node exists. If that's not the case
     /// this function may panic or return a leaf node outside of the valid
     /// range for this iterator.
     ///
     /// NOTE: after calling this function the path will contain the path from
-    /// the root down to the internal node containing `Leaf`, and
-    /// `self.leaf_node` will be set to `Leaf`.
+    /// the root down to the internal node containing `leaf`, and
+    /// `self.leaf_node` will be set to `leaf`.
     #[allow(clippy::type_complexity)]
     #[inline]
     fn next_leaf_with_measure(
@@ -444,7 +445,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
         // SAFETY: every node in the path is an internal node.
         let mut node =
-            unsafe { &inode.as_internal_unchecked().children()[child_idx] };
+            unsafe { inode.as_internal_unchecked().child(child_idx) };
 
         'outer: loop {
             match &**node {
@@ -488,7 +489,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             let inode = unsafe { node.as_internal_unchecked() };
 
             if child_idx > 0 {
-                break &inode.children()[child_idx - 1];
+                break inode.child(child_idx - 1);
             } else {
                 path_idx -= 1;
             }
@@ -717,7 +718,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             before += child_summary;
         }
 
-        offset += inode.children()[child_idx].base_measure();
+        offset += inode.child(child_idx).base_measure();
 
         // This will be the child of the root node that contains the last
         // slice.
@@ -1092,7 +1093,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
             if *child_idx > 0 {
                 *child_idx -= 1;
-                break &inode.children()[*child_idx];
+                break inode.child(*child_idx);
             } else {
                 self.path.pop();
             }
@@ -1101,7 +1102,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         loop {
             match &**node {
                 Node::Internal(inode) => {
-                    self.path.push((node, inode.children().len() - 1));
+                    self.path.push((node, inode.len() - 1));
                     node = inode.last();
                     continue;
                 },
@@ -1397,30 +1398,30 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     /// Traverses the path to reach the previous leaf node with a non-zero
     /// `M`-measure.
     ///
-    /// Returns a `(Leaf, Root, After, Summary, Count)` tuple where:
+    /// Returns a `(leaf, root, after, summary, count)` tuple where:
     ///
-    /// - `Leaf` is that leaf node;
+    /// - `leaf` is that leaf node;
     ///
-    /// - `Root` is the deepest internal node containing both `Leaf` and the
+    /// - `root` is the deepest internal node containing both `leaf` and the
     /// current `self.leaf_node` in its subtree;
     ///
-    /// - `After` is the total base measure of all the nodes from the last leaf
-    /// in `Root`'s subtree to the leaf after the current `self.leaf_node`. If
-    /// `self.leaf_node` if the last leaf in `Root`'s subtree this measure will
+    /// - `after` is the total base measure of all the nodes from the last leaf
+    /// in `root`'s subtree to the leaf after the current `self.leaf_node`. If
+    /// `self.leaf_node` if the last leaf in `root`'s subtree this measure will
     /// be zero;
     ///
-    /// - `Summary` and `Count` are the total summary and leaf count of all the
-    /// nodes between (but not including) `Leaf` and `self.leaf_node`. If
-    /// `Leaf` is the leaf node immediately before `self.leaf` then `Summary`
-    /// will be empty and `Count` will be zero.
+    /// - `summary` and `count` are the total summary and leaf count of all the
+    /// nodes between (but not including) `leaf` and `self.leaf_node`. If
+    /// `leaf` is the leaf node immediately before `self.leaf` then `summary`
+    /// will be empty and `count` will be zero.
     ///
     /// NOTE: it assumes that such a leaf node exists. If that's not the case
     /// this function may panic or return a leaf node outside of the valid
     /// range for this iterator.
     ///
     /// NOTE: after calling this function the path will contain the path from
-    /// the root down to the internal node containing `Leaf`, and
-    /// `self.leaf_node` will be set to `Leaf`.
+    /// the root down to the internal node containing `leaf`, and
+    /// `self.leaf_node` will be set to `leaf`.
     #[allow(clippy::type_complexity)]
     #[inline]
     fn previous_leaf_with_measure(
@@ -1513,8 +1514,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
             child_idx += 1;
 
-            if child_idx < inode.children().len() {
-                break &inode.children()[child_idx];
+            if child_idx < inode.len() {
+                break inode.child(child_idx);
             } else {
                 path_idx -= 1;
             }

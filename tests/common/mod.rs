@@ -13,3 +13,20 @@ pub const CURSED_LIPSUM: &str = "Ḽơᶉëᶆ ȋṕšᶙṁ\nḍỡḽǭᵳ ʂ�
                                  ĉṓɲṩḙċťᶒțûɾ \nấɖḯƥĭ\r\nṩčįɳġ ḝłįʈ, șế\r\nᶑ \
                                  ᶁⱺ ẽḭŭŝḿꝋď\n ṫĕᶆᶈṓɍ ỉñḉīḑȋᵭṵńť \nṷŧ ḹẩḇőꝛế \
                                  éȶ đꝍꞎ\r\nôꝛȇ ᵯáꞡ\r\nᶇā ąⱡ\nîɋṹẵ.";
+
+// The following test vectors were taken from Ropey.
+
+/// 127 bytes, 103 chars, 1 line
+pub const TEXT: &str = "Hello there!  How're you doing?  It's a fine day, \
+                        isn't it?  Aren't you glad we're alive?  \
+                        こんにちは、みんなさん！";
+
+/// 124 bytes, 100 chars, 4 lines
+pub const TEXT_LINES: &str = "Hello there!  How're you doing?\nIt's a fine \
+                              day, isn't it?\nAren't you glad we're \
+                              alive?\nこんにちは、みんなさん！";
+
+/// 127 bytes, 107 chars, 111 utf16 code units, 1 line
+pub const TEXT_EMOJI: &str = "Hello there!🐸  How're you doing?🐸  It's a \
+                              fine day, isn't it?🐸  Aren't you glad we're \
+                              alive?🐸  こんにちは、みんなさん！";
