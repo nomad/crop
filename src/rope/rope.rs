@@ -1,8 +1,9 @@
 use std::ops::RangeBounds;
 
+use super::chunk_slice::ChunkSegmenter;
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
-use super::rope_chunk::{RopeChunk, RopeChunkIter};
+use super::rope_chunk::RopeChunk;
 use super::utils::*;
 use crate::tree::Tree;
 use crate::{range_bounds_to_start_end, RopeSlice};
@@ -393,11 +394,11 @@ impl From<&str> for Rope {
     #[inline]
     fn from(s: &str) -> Self {
         Rope {
-            tree: Tree::from_leaves(
-                RopeChunkIter::new(s)
-                    .map(|chunk| RopeChunk { text: chunk.to_owned() }),
-            ),
             last_byte_is_newline: last_byte_is_newline(s),
+
+            tree: Tree::from_leaves(
+                ChunkSegmenter::new(s).map(std::borrow::ToOwned::to_owned),
+            ),
         }
     }
 }

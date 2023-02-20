@@ -1,3 +1,5 @@
+use std::ops::RangeBounds;
+
 use super::traits::*;
 use super::{Leaf, Metric};
 
@@ -94,13 +96,14 @@ impl<L: Leaf> Lnode<L> {
     }
 
     #[inline]
-    pub(super) fn replace<M>(
+    pub(super) fn replace<M, R>(
         &mut self,
-        range: std::ops::Range<M>,
+        range: R,
         slice: &L::Slice,
     ) -> Option<impl ExactSizeIterator<Item = Self>>
     where
         M: Metric<L>,
+        R: RangeBounds<M>,
         L: ReplaceableLeaf<M>,
     {
         self.value

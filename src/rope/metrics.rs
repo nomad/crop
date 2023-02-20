@@ -1,13 +1,14 @@
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
-use super::rope_chunk::{ChunkSlice, ChunkSummary, RopeChunk};
+use super::chunk_slice::ChunkSlice;
+use super::rope_chunk::{ChunkSummary, RopeChunk};
 use super::utils::*;
 use crate::tree::*;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct ByteMetric(pub(super) usize);
 
-impl Add for ByteMetric {
+impl Add<Self> for ByteMetric {
     type Output = Self;
 
     #[inline]
@@ -36,6 +37,22 @@ impl SubAssign for ByteMetric {
     #[inline]
     fn sub_assign(&mut self, other: Self) {
         self.0 -= other.0
+    }
+}
+
+impl Add<usize> for ByteMetric {
+    type Output = usize;
+
+    #[inline]
+    fn add(self, other: usize) -> usize {
+        self.0 + other
+    }
+}
+
+impl From<ByteMetric> for usize {
+    #[inline]
+    fn from(ByteMetric(value): ByteMetric) -> usize {
+        value
     }
 }
 

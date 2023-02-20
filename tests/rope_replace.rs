@@ -186,7 +186,7 @@ mod delete {
     use super::*;
 
     #[test]
-    fn remove_01() {
+    fn delete_1() {
         let mut r = Rope::from(TEXT);
 
         r.delete(5..11);
@@ -207,7 +207,7 @@ mod delete {
     // `Rope::replace()`.
     #[ignore]
     #[test]
-    fn remove_02() {
+    fn delete_2() {
         let mut r =
             Rope::from("\r\n\r\n\r\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n\r\n");
 
@@ -219,7 +219,7 @@ mod delete {
     }
 
     #[test]
-    fn remove_03() {
+    fn delete_3() {
         let mut r = Rope::from(TEXT);
 
         // Make sure removing nothing actually does nothing.
@@ -230,7 +230,7 @@ mod delete {
     }
 
     #[test]
-    fn remove_04() {
+    fn delete_4() {
         let mut r = Rope::from(TEXT);
 
         // Make sure removing everything works.
@@ -241,11 +241,11 @@ mod delete {
     }
 
     #[test]
-    fn remove_05() {
+    fn delete_5() {
         let mut r = Rope::from(TEXT);
 
         // Make sure removing a large range works.
-        r.delete(3..100);
+        r.delete(3..118);
 
         r.assert_invariants();
         assert_eq!(r, "Helさん！");
@@ -253,7 +253,7 @@ mod delete {
 
     #[test]
     #[should_panic]
-    fn remove_06() {
+    fn delete_6() {
         let mut r = Rope::from(TEXT);
         #[allow(clippy::reversed_empty_ranges)]
         r.delete(56..55); // Wrong ordering of start/end on purpose.
@@ -261,28 +261,28 @@ mod delete {
 
     #[test]
     #[should_panic]
-    fn remove_07() {
+    fn delete_7() {
         let mut r = Rope::from(TEXT);
         r.delete(126..128); // Removing past the end
     }
 
     #[test]
     #[should_panic]
-    fn remove_08() {
+    fn delete_8() {
         let mut r = Rope::from(TEXT);
         r.delete(127..128); // Removing past the end
     }
 
     #[test]
     #[should_panic]
-    fn remove_09() {
+    fn delete_9() {
         let mut r = Rope::from(TEXT);
         r.delete(128..128); // Removing past the end
     }
 
     #[test]
     #[should_panic]
-    fn remove_10() {
+    fn delete_10() {
         let mut r = Rope::from(TEXT);
         r.delete(128..129); // Removing past the end
     }

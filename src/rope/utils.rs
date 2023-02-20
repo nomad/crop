@@ -1,8 +1,10 @@
+//! This module contains utility functions on strings and code to be shared
+//! between `Rope`s and `RopeSlice`s, `RopeChunk`s and `ChunkSlice`s.
+
 use std::fmt::Write;
 
 use super::iterators::Chunks;
-use super::rope_chunk::{ChunkSlice, ChunkSummary, RopeChunk};
-use crate::tree::Summarize;
+use super::rope_chunk::RopeChunk;
 
 /// TODO: document panics, behaviour if candidate is > s.len()
 #[inline]
@@ -10,6 +12,10 @@ pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
     s: &str,
     mut candidate: usize,
 ) -> usize {
+    if candidate >= s.len() {
+        return candidate;
+    }
+
     if WITH_RIGHT_BIAS {
         while !s.is_char_boundary(candidate) {
             candidate += 1;
@@ -25,89 +31,8 @@ pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
             candidate -= 1;
         }
     }
+
     candidate
-}
-
-/// Balances `left` with the contents of `right`, assuming that:
-///
-/// - `left` has less than `RopeChunk::min_bytes()` bytes;
-/// - `right` has more than `RopeChunk::min_bytes()` bytes;
-/// - `left` and `right` can't be combined in a single `RopeChunk`, i.e. `left`
-/// and `right` combined have more than `RopeChunk::max_bytes()` bytes.
-#[inline]
-pub(super) fn balance_left_with_right(
-    left: &ChunkSlice,
-    left_summary: &ChunkSummary,
-    right: &ChunkSlice,
-    right_summary: &ChunkSummary,
-) -> ((RopeChunk, ChunkSummary), (RopeChunk, ChunkSummary)) {
-    debug_assert!(left.len() < RopeChunk::min_bytes());
-    debug_assert!(right.len() > RopeChunk::min_bytes());
-    debug_assert!(left.len() + right.len() > RopeChunk::max_bytes());
-
-    let bytes_to_left = adjust_split_point::<false>(
-        right,
-        RopeChunk::min_bytes() - left.len(),
-    );
-
-    let add_to_left: &ChunkSlice = (&right[..bytes_to_left]).into();
-
-    let add_to_left_summary = add_to_left.summarize();
-
-    let mut left = left.to_owned();
-    left.push_str(add_to_left);
-
-    let mut left_summary = *left_summary;
-    left_summary += &add_to_left_summary;
-
-    let right: &ChunkSlice = (&right[bytes_to_left..]).into();
-
-    let mut right_summary = *right_summary;
-    right_summary -= &add_to_left_summary;
-
-    ((left, left_summary), (right.to_owned(), right_summary))
-}
-
-/// Balances `right` with the contents of `left`, assuming that:
-///
-/// - `left` has more than `RopeChunk::min_bytes()` bytes;
-/// - `right` has less than `RopeChunk::min_bytes()` bytes;
-/// - `left` and `right` can't be combined in a single `RopeChunk`, i.e. `left`
-/// and `right` combined have more than `RopeChunk::max_bytes()` bytes.
-#[inline]
-pub(super) fn balance_right_with_left(
-    left: &ChunkSlice,
-    left_summary: &ChunkSummary,
-    right: &ChunkSlice,
-    right_summary: &ChunkSummary,
-) -> ((RopeChunk, ChunkSummary), (RopeChunk, ChunkSummary)) {
-    debug_assert!(left.len() > RopeChunk::min_bytes());
-    debug_assert!(right.len() < RopeChunk::min_bytes());
-    debug_assert!(left.len() + right.len() > RopeChunk::max_bytes());
-
-    let bytes_keep_left = adjust_split_point::<true>(
-        left,
-        left.len() - (RopeChunk::min_bytes() - right.len()),
-    );
-
-    let add_to_right: &ChunkSlice = (&left[bytes_keep_left..]).into();
-
-    let add_to_right_summary = add_to_right.summarize();
-
-    let left: &ChunkSlice = (&left[..bytes_keep_left]).into();
-
-    let mut left_summary = *left_summary;
-    left_summary -= &add_to_right_summary;
-
-    let old_right = right;
-
-    let mut right = add_to_right.to_owned();
-    right.push_str(old_right);
-
-    let mut right_summary = *right_summary;
-    right_summary += &add_to_right_summary;
-
-    ((left.to_owned(), left_summary), (right, right_summary))
 }
 
 /// Returns the number of bytes that `s`'s trailing line break takes up.

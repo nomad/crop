@@ -824,21 +824,13 @@ mod tree_replace {
             Node::Internal(inode) => inode,
 
             Node::Leaf(leaf) => {
-                // NOTE: the end of the range is wrong for metrics other than
-                // the BaseMetric because there might be some `M`-remainder
-                // that is not part of the range. This is not a problem for now
-                // because `Rope::replace()` uses the ByteMetric.
-                //
-                // TODO: make `Leaf::replace()` generic over a `RangeBounds<M>`
-                // instead of `Range<M>`?
-                let range = replace_from..leaf.measure::<M>();
-
-                return if let Some(extra_leaves) = leaf.replace(range, slice) {
-                    Some(extra_leaves.map(Node::Leaf).map(Arc::new))
+                if let Some(extra_leaves) = leaf.replace(replace_from.., slice)
+                {
+                    return Some(extra_leaves.map(Node::Leaf).map(Arc::new));
                 } else {
-                    *should_rebalance |= leaf.is_underfilled();
-                    None
-                };
+                    *should_rebalance = leaf.is_underfilled();
+                    return None;
+                }
             },
         };
 

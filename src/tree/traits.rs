@@ -1,6 +1,6 @@
 use std::borrow::Borrow;
 use std::fmt::Debug;
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use std::ops::{Add, AddAssign, RangeBounds, Sub, SubAssign};
 
 pub trait Summarize: Debug {
     type Summary: Debug
@@ -56,12 +56,14 @@ pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
     /// iterator over the leaves to insert right after this leaf. Note that in
     /// this case both this leaf and all the leaves yielded by the iterator are
     /// assumed to not be underfilled.
-    fn replace(
+    fn replace<R>(
         &mut self,
         summary: &mut Self::Summary,
-        range: std::ops::Range<M>,
+        range: R,
         slice: &Self::Slice,
-    ) -> Option<Self::ExtraLeaves>;
+    ) -> Option<Self::ExtraLeaves>
+    where
+        R: RangeBounds<M>;
 
     /// Remove the contents of the leaf up to `up_to`. The leaf is allowed to
     /// be underfilled after calling this function.
