@@ -6,15 +6,11 @@ use crop::Rope;
 
 // TODO: remove the `#[ignore]`s once
 // https://github.com/unicode-rs/unicode-segmentation/issues/115 gets
-// addressed.
+// resolved.
 
-/// ```
-/// Root
-/// └── "abcd"
-/// ```
 #[cfg(feature = "graphemes")]
 #[test]
-fn graphemes_iter_ascii() {
+fn iter_graphemes_ascii() {
     let r = Rope::from("abcd");
 
     let mut graphemes = r.graphemes();
@@ -35,7 +31,7 @@ fn graphemes_iter_ascii() {
 #[ignore]
 #[cfg(all(feature = "graphemes", feature = "small_chunks"))]
 #[test]
-fn graphemes_iter_two_flags() {
+fn iter_graphemes_two_flags() {
     let r = Rope::from("🇷🇸🇮🇴");
 
     let mut graphemes = r.graphemes();
@@ -121,21 +117,17 @@ fn graphemes_iter_flags() {
 fn graphemes_is_boundary_two_flags() {
     let r = Rope::from("🇷🇸🇮🇴");
     assert!(r.is_grapheme_boundary(0));
-    assert!(!r.is_grapheme_boundary(1));
-    assert!(!r.is_grapheme_boundary(2));
-    assert!(!r.is_grapheme_boundary(3));
-    assert!(!r.is_grapheme_boundary(4));
-    assert!(!r.is_grapheme_boundary(5));
-    assert!(!r.is_grapheme_boundary(6));
-    assert!(!r.is_grapheme_boundary(7));
+
+    for i in 1..8 {
+        assert!(!r.is_grapheme_boundary(i));
+    }
+
     assert!(r.is_grapheme_boundary(8));
-    assert!(!r.is_grapheme_boundary(9));
-    assert!(!r.is_grapheme_boundary(10));
-    assert!(!r.is_grapheme_boundary(11));
-    assert!(!r.is_grapheme_boundary(12));
-    assert!(!r.is_grapheme_boundary(13));
-    assert!(!r.is_grapheme_boundary(14));
-    assert!(!r.is_grapheme_boundary(15));
+
+    for i in 9..16 {
+        assert!(!r.is_grapheme_boundary(i));
+    }
+
     assert!(r.is_grapheme_boundary(16));
 }
 

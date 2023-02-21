@@ -5,37 +5,6 @@ mod common;
 
 use common::{CURSED_LIPSUM, LARGE, MEDIUM, SMALL, TINY};
 
-/// Tests that repeatedly byte-slicing a RopeSlice always matches the
-/// equivalent str slice.
-#[test]
-fn byte_slice_random() {
-    let mut rng = rand::thread_rng();
-
-    for s in [TINY, SMALL, MEDIUM, LARGE] {
-        let r = Rope::from(s);
-
-        let mut start = 0;
-        let mut end = r.byte_len();
-
-        let mut str_slice = &s[start..end];
-        let mut rope_slice = r.byte_slice(start..end);
-
-        let mut ranges = Vec::new();
-
-        while start != end {
-            ranges.push(start..end);
-            if str_slice != rope_slice {
-                println!("byte ranges: {ranges:?}");
-                assert_eq!(str_slice, rope_slice);
-            }
-            start = rng.gen_range(0..=rope_slice.byte_len());
-            end = rng.gen_range(start..=rope_slice.byte_len());
-            str_slice = &str_slice[start..end];
-            rope_slice = rope_slice.byte_slice(start..end);
-        }
-    }
-}
-
 /// Tests `RopeSlice::byte()` on a bunch of random RopeSlices over different
 /// texts.
 #[test]

@@ -4,7 +4,7 @@ use common::LARGE;
 use crop::{Rope, RopeBuilder};
 
 #[test]
-fn empty() {
+fn builder_empty() {
     let r = RopeBuilder::new().build();
 
     assert!(r.is_empty());
@@ -21,7 +21,7 @@ fn empty() {
 }
 
 #[test]
-fn large_lines() {
+fn builder_0() {
     let mut b = RopeBuilder::new();
     let mut s = String::new();
 
@@ -31,4 +31,22 @@ fn large_lines() {
     }
 
     assert_eq!(s, b.build());
+}
+
+#[test]
+fn builder_crlf_0() {
+    let mut b = RopeBuilder::new();
+    b.append("aaa\r").append("\nbbb");
+    let r = b.build();
+    r.assert_invariants();
+    assert_eq!(r, "aaa\r\nbbb");
+}
+
+#[test]
+fn builder_crlf_1() {
+    let mut b = RopeBuilder::new();
+    b.append("aaa\r\nbbb");
+    let r = b.build();
+    r.assert_invariants();
+    assert_eq!(r, "aaa\r\nbbb");
 }
