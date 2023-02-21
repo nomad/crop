@@ -191,12 +191,12 @@ impl Rope {
     /// # Examples
     ///
     /// ```
-    /// use crop::Rope;
-    ///
-    /// let r = Rope::from("");
+    /// # use crop::Rope;
+    /// #
+    /// let mut r = Rope::new();
     /// assert!(r.is_empty());
     ///
-    /// let r = Rope::from("foo");
+    /// r.insert(0, "hey");
     /// assert!(!r.is_empty());
     /// ```
     #[inline]
@@ -326,7 +326,9 @@ impl Rope {
     /// # Examples
     ///
     /// ```
-    /// let mut r = crop::Rope::from("Hello Earth 🌎!");
+    /// # use crop::Rope;
+    /// #
+    /// let mut r = Rope::from("Hello Earth 🌎!");
     /// r.replace(6..16, "Saturn 🪐");
     /// assert_eq!(r, "Hello Saturn 🪐!");
     /// ```

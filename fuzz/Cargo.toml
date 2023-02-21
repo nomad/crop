@@ -8,18 +8,19 @@ edition = "2018"
 [package.metadata]
 cargo-fuzz = true
 
-[dependencies]
-libfuzzer-sys = "0.4"
+[features]
+small_chunks = ["crop/small_chunks"]
 
-[dependencies.crop]
-path = ".."
+[dependencies]
+crop = { path = ".." }
+libfuzzer-sys = { version = "0.4", features = ["arbitrary-derive"] }
 
 # Prevent this from interfering with workspaces
 [workspace]
 members = ["."]
 
 [[bin]]
-name = "slicing"
-path = "fuzz_targets/slicing.rs"
+name = "editing"
+path = "fuzz_targets/editing.rs"
 test = false
 doc = false
