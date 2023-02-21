@@ -1,8 +1,8 @@
 use criterion::{criterion_group, criterion_main, Criterion};
 use crop::Rope;
 
-const TINY: &str = include_str!("tiny.txt");
-const LARGE: &str = include_str!("large.txt");
+const TINY: &str = include_str!("../tests/common/tiny.txt");
+const LARGE: &str = include_str!("../tests/common/large.txt");
 
 fn iter_create(c: &mut Criterion) {
     let mut group = c.benchmark_group("iter_create");

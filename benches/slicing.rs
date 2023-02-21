@@ -2,10 +2,10 @@ use std::ops::Range;
 
 use criterion::{criterion_group, criterion_main, Criterion};
 
-const TINY: &str = include_str!("tiny.txt");
-const SMALL: &str = include_str!("small.txt");
-const MEDIUM: &str = include_str!("medium.txt");
-const LARGE: &str = include_str!("large.txt");
+const TINY: &str = include_str!("../tests/common/tiny.txt");
+const SMALL: &str = include_str!("../tests/common/small.txt");
+const MEDIUM: &str = include_str!("../tests/common/medium.txt");
+const LARGE: &str = include_str!("../tests/common/large.txt");
 
 trait Rope {
     type RopeSlice<'a>: Copy

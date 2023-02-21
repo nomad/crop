@@ -1,169 +1,38 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::measurement::WallTime;
+use criterion::{criterion_group, criterion_main, BenchmarkGroup, Criterion};
+use crop::{Rope, RopeBuilder};
 
-const TINY: &str = include_str!("tiny.txt");
-const SMALL: &str = include_str!("small.txt");
-const MEDIUM: &str = include_str!("medium.txt");
-const LARGE: &str = include_str!("large.txt");
+const TINY: &str = include_str!("../tests/common/tiny.txt");
+const SMALL: &str = include_str!("../tests/common/small.txt");
+const MEDIUM: &str = include_str!("../tests/common/medium.txt");
+const LARGE: &str = include_str!("../tests/common/large.txt");
 
-trait Rope {
-    fn from_str(s: &str) -> Self;
+fn bench<F: Fn(&str)>(group: &mut BenchmarkGroup<WallTime>, to_bench: F) {
+    group.bench_function("tiny", |bench| bench.iter(|| to_bench(&TINY)));
+    group.bench_function("small", |bench| bench.iter(|| to_bench(&SMALL)));
+    group.bench_function("medium", |bench| bench.iter(|| to_bench(&MEDIUM)));
+    group.bench_function("large", |bench| bench.iter(|| to_bench(&LARGE)));
 }
 
-trait RopeBuilder {
-    type Rope: Rope;
+fn from_str(c: &mut Criterion) {
+    let mut group = c.benchmark_group("from_str");
 
-    fn new() -> Self;
-
-    fn append(self, s: &str) -> Self;
-
-    fn build(self) -> Self::Rope;
+    bench(&mut group, |s| {
+        let _ = Rope::from(s);
+    });
 }
 
-impl Rope for crop::Rope {
-    #[inline]
-    fn from_str(s: &str) -> Self {
-        Self::from(s)
-    }
+fn rope_builder(c: &mut Criterion) {
+    let mut group = c.benchmark_group("rope_builder");
+
+    bench(&mut group, |s| {
+        let mut builder = RopeBuilder::new();
+        for line in s.lines() {
+            builder.append(line);
+        }
+        let _ = builder.build();
+    });
 }
 
-impl Rope for ropey::Rope {
-    #[inline]
-    fn from_str(s: &str) -> Self {
-        Self::from_str(s)
-    }
-}
-
-impl Rope for xi_rope::Rope {
-    #[inline]
-    fn from_str(s: &str) -> Self {
-        Self::from(s)
-    }
-}
-
-impl RopeBuilder for crop::RopeBuilder {
-    type Rope = crop::Rope;
-
-    #[inline]
-    fn new() -> Self {
-        crop::RopeBuilder::new()
-    }
-
-    #[inline]
-    fn append(mut self, s: &str) -> Self {
-        crop::RopeBuilder::append(&mut self, s);
-        self
-    }
-
-    #[inline]
-    fn build(self) -> Self::Rope {
-        self.build()
-    }
-}
-
-impl RopeBuilder for ropey::RopeBuilder {
-    type Rope = ropey::Rope;
-
-    #[inline]
-    fn new() -> Self {
-        ropey::RopeBuilder::new()
-    }
-
-    #[inline]
-    fn append(mut self, s: &str) -> Self {
-        ropey::RopeBuilder::append(&mut self, s);
-        self
-    }
-
-    #[inline]
-    fn build(self) -> Self::Rope {
-        self.finish()
-    }
-}
-
-type XiRopeBuilder = xi_rope::tree::TreeBuilder<xi_rope::RopeInfo>;
-
-impl RopeBuilder for XiRopeBuilder {
-    type Rope = xi_rope::Rope;
-
-    #[inline]
-    fn new() -> Self {
-        XiRopeBuilder::new()
-    }
-
-    #[inline]
-    fn append(mut self, s: &str) -> Self {
-        self.push_str(s);
-        self
-    }
-
-    #[inline]
-    fn build(self) -> Self::Rope {
-        self.build()
-    }
-}
-
-#[inline]
-fn bench(c: &mut Criterion, fun: fn(&str), group_name: &str) {
-    let mut group = c.benchmark_group(group_name);
-
-    group.bench_function("tiny", |b| b.iter(|| fun(TINY)));
-    group.bench_function("small", |b| b.iter(|| fun(SMALL)));
-    group.bench_function("medium", |b| b.iter(|| fun(MEDIUM)));
-    group.bench_function("large", |b| b.iter(|| fun(LARGE)));
-}
-
-#[inline]
-fn from_str<R: Rope>(s: &str) {
-    let _ = R::from_str(black_box(s));
-}
-
-#[inline]
-fn rope_builder<B: RopeBuilder>(s: &str) {
-    let mut b = B::new();
-    for line in s.lines() {
-        b = b.append(line);
-    }
-    let _ = b.build();
-}
-
-#[inline]
-fn crop_from_str(c: &mut Criterion) {
-    bench(c, from_str::<crop::Rope>, "crop_from_str");
-}
-
-#[inline]
-fn ropey_from_str(c: &mut Criterion) {
-    bench(c, from_str::<ropey::Rope>, "ropey_from_str");
-}
-
-#[inline]
-fn xi_rope_from_str(c: &mut Criterion) {
-    bench(c, from_str::<xi_rope::Rope>, "xi_rope_from_str");
-}
-
-#[inline]
-fn crop_builder(c: &mut Criterion) {
-    bench(c, rope_builder::<crop::RopeBuilder>, "crop_builder");
-}
-
-#[inline]
-fn ropey_builder(c: &mut Criterion) {
-    bench(c, rope_builder::<ropey::RopeBuilder>, "ropey_builder");
-}
-
-#[inline]
-fn xi_rope_builder(c: &mut Criterion) {
-    bench(c, rope_builder::<XiRopeBuilder>, "xi_rope_builder");
-}
-
-criterion_group!(
-    benches,
-    crop_from_str,
-    ropey_from_str,
-    xi_rope_from_str,
-    crop_builder,
-    ropey_builder,
-    xi_rope_builder,
-);
-
+criterion_group!(benches, from_str, rope_builder);
 criterion_main!(benches);

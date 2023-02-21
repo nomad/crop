@@ -1,9 +1,9 @@
 #![allow(dead_code)]
 
-pub const TINY: &str = include_str!("../../benches/tiny.txt");
-pub const SMALL: &str = include_str!("../../benches/small.txt");
-pub const MEDIUM: &str = include_str!("../../benches/medium.txt");
-pub const LARGE: &str = include_str!("../../benches/large.txt");
+pub const TINY: &str = include_str!("tiny.txt");
+pub const SMALL: &str = include_str!("small.txt");
+pub const MEDIUM: &str = include_str!("medium.txt");
+pub const LARGE: &str = include_str!("large.txt");
 
 /// A cursed version of a lorem ipsum paragraph taken from [this online
 /// tool][1] with mixed line breaks (LF and CRLF).
