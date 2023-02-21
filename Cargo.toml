@@ -36,6 +36,11 @@ name = "creation"
 harness = false
 
 [[bench]]
+name = "graphemes"
+harness = false
+required-features = ["graphemes"]
+
+[[bench]]
 name = "insertion"
 harness = false
 
