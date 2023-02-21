@@ -1,13 +1,13 @@
 use std::ops::RangeBounds;
 
-use super::chunk_slice::ChunkSegmenter;
-use super::chunk_slice::ChunkSlice;
+use super::chunk_slice::{ChunkSegmenter, ChunkSlice};
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
 use super::rope_chunk::RopeChunk;
 use super::utils::*;
+use super::RopeSlice;
+use crate::range_bounds_to_start_end;
 use crate::tree::Tree;
-use crate::{range_bounds_to_start_end, RopeSlice};
 
 #[cfg(all(any(test, feature = "fanout_4"), not(feature = "fanout_24")))]
 const ROPE_FANOUT: usize = 4;

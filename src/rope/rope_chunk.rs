@@ -22,7 +22,7 @@ pub(super) struct RopeChunk {
 impl std::fmt::Debug for RopeChunk {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{:?}", self.text)
+        std::fmt::Debug::fmt(&self.text, f)
     }
 }
 
