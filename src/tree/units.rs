@@ -586,7 +586,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                 let start = L::BaseMetric::measure(&offset);
 
                 let (new_root, remove_offset) =
-                    tree_slice::deepest_node_containing_base_range_greedy(
+                    tree_slice::deepest_node_containing_base_range(
                         root,
                         start,
                         start + L::BaseMetric::measure(&summary),
@@ -1667,7 +1667,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                 let start = L::BaseMetric::measure(&offset);
 
                 let (new_root, remove_offset) =
-                    tree_slice::deepest_node_containing_base_range_greedy(
+                    tree_slice::deepest_node_containing_base_range(
                         root,
                         start,
                         start + L::BaseMetric::measure(&summary),

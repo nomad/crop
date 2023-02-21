@@ -18,6 +18,11 @@ pub struct RopeSlice<'a> {
 }
 
 impl<'a> RopeSlice<'a> {
+    #[doc(hidden)]
+    pub fn assert_invariants(&self) {
+        self.tree_slice.assert_invariants();
+    }
+
     /// TODO: docs
     #[inline]
     pub fn byte(&self, byte_index: usize) -> u8 {

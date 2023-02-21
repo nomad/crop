@@ -91,7 +91,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
                 let (root, remove_offset) = {
                     let start = L::BaseMetric::measure(&self.offset);
-                    deepest_node_containing_base_range_greedy(
+                    deepest_node_containing_base_range(
                         self.root,
                         start,
                         start + L::BaseMetric::measure(&self.summary),
@@ -320,7 +320,7 @@ where
         if recompute_root {
             let start = L::BaseMetric::measure(&slice.offset);
 
-            let (root, offset) = deepest_node_containing_base_range_greedy(
+            let (root, offset) = deepest_node_containing_base_range(
                 slice.root,
                 start,
                 start + L::BaseMetric::measure(&slice.summary),
@@ -397,9 +397,15 @@ where
     }
 }
 
-/// TODO: docs
+/// Same as [`deepest_node_containing_range`] except it only accepts base
+/// measures and thus can check whether a node contains `start` using `>`
+/// instead of `>=` (because the remainder of a slice divided by the BaseMetric
+/// should always be zero), resulting in a potentially deeper node than the one
+/// returned by [`deepest_node_containing_range`].
+///
+/// Also returns the summary between the input `node` and the returned node.
 #[inline]
-pub(super) fn deepest_node_containing_base_range_greedy<const N: usize, L>(
+pub(super) fn deepest_node_containing_base_range<const N: usize, L>(
     mut node: &Arc<Node<N, L>>,
     mut start: L::BaseMetric,
     mut end: L::BaseMetric,
@@ -418,25 +424,31 @@ where
                     let child_summary = child.summary();
 
                     let contains_first_slice =
-                        L::BaseMetric::measure(&measured) <= start;
-
-                    let contains_last_slice =
                         L::BaseMetric::measure(&measured)
                             + L::BaseMetric::measure(child_summary)
-                            >= end;
+                            > start;
 
-                    if contains_first_slice && contains_last_slice {
-                        node = child;
-                        start -= L::BaseMetric::measure(&measured);
-                        end -= L::BaseMetric::measure(&measured);
-                        offset += &measured;
-                        continue 'outer;
+                    if contains_first_slice {
+                        let contains_last_slice =
+                            L::BaseMetric::measure(&measured)
+                                + L::BaseMetric::measure(child_summary)
+                                >= end;
+
+                        if contains_last_slice {
+                            node = child;
+                            start -= L::BaseMetric::measure(&measured);
+                            end -= L::BaseMetric::measure(&measured);
+                            offset += &measured;
+                            continue 'outer;
+                        } else {
+                            return (node, offset);
+                        }
                     } else {
                         measured += child_summary;
                     }
                 }
 
-                return (node, offset);
+                unreachable!();
             },
 
             Node::Leaf(_) => return (node, offset),
@@ -462,10 +474,6 @@ where
 /// When this happens the `recompute_root` bit will be set to `true` to
 /// indicate that the slice's root (and its offset) needs to be recomputed. All
 /// the other fields of the slice are valid.
-//
-// TODO: what if there's no following leaf node? E.g. "aaaa" -> slice (4..4). I
-// think that's a bug. Test what happens when taking empty slices at the
-// beginning, end and between chunks.
 #[inline]
 fn build_slice<'a, const N: usize, L, S, E>(
     slice: &mut TreeSlice<'a, N, L>,

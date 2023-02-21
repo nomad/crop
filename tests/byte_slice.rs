@@ -2,59 +2,51 @@ use std::ops::Range;
 
 mod common;
 
-use common::LARGE;
-use common::MEDIUM;
-use common::SMALL;
-use common::TINY;
+use common::{LARGE, MEDIUM, SMALL, TINY};
 use crop::Rope;
-
-struct SliceRanges {
-    step: usize,
-    start: usize,
-    end: usize,
-    done: bool,
-}
-
-impl SliceRanges {
-    #[inline]
-    fn new(max: usize) -> Self {
-        let mut step = max / 200;
-        if step == 0 {
-            step = 1;
-        }
-
-        Self { step, start: 0, end: max, done: false }
-    }
-}
-
-impl Iterator for SliceRanges {
-    type Item = Range<usize>;
-
-    #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.start > self.end {
-            return None;
-        }
-
-        let range = self.start..self.end;
-
-        self.start += self.step;
-        self.end -= self.step;
-
-        if self.start > self.end && !self.done {
-            self.start = self.end;
-            self.done = true;
-        }
-
-        Some(range)
-    }
-}
 
 #[test]
 fn empty_slice() {
     let r = Rope::from("");
     let s = r.byte_slice(..);
     assert!(s.is_empty());
+}
+
+/// Tests that slicing at the start, at a node boundary and at end of a Rope
+/// works correctly.
+/// ```
+/// Root
+/// ├───┐
+/// │   ├── "aaaa"
+/// │   ├── "bbbb"
+/// │   ├── "cccc"
+/// │   └── "dddd"
+/// └───┐
+///     ├── "eeee"
+///     ├── "ffff"
+///     ├── "gggg"
+///     └── "hhhh"
+/// ```
+#[cfg(all(feature = "small_chunks", feature = "fanout_4"))]
+#[test]
+fn byte_slice_0() {
+    let r = Rope::from("aaaabbbbccccddddeeeeffffgggghhhh");
+
+    let s = r.byte_slice(..0);
+    s.assert_invariants();
+    assert_eq!(s, "");
+
+    let s = r.byte_slice(16..16);
+    s.assert_invariants();
+    assert_eq!(s, "");
+
+    let s = r.byte_slice(16..20);
+    s.assert_invariants();
+    assert_eq!(s, "eeee");
+
+    let s = r.byte_slice(r.byte_len()..);
+    s.assert_invariants();
+    assert_eq!(s, "");
 }
 
 #[test]
@@ -108,6 +100,48 @@ fn slice_slice() {
     let rope_slice = rope_slice.byte_slice(37..319);
     let str_slice = &str_slice[37..319];
     assert_eq!(str_slice, rope_slice);
+}
+
+struct SliceRanges {
+    step: usize,
+    start: usize,
+    end: usize,
+    done: bool,
+}
+
+impl SliceRanges {
+    #[inline]
+    fn new(max: usize) -> Self {
+        let mut step = max / 200;
+        if step == 0 {
+            step = 1;
+        }
+
+        Self { step, start: 0, end: max, done: false }
+    }
+}
+
+impl Iterator for SliceRanges {
+    type Item = Range<usize>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.start > self.end {
+            return None;
+        }
+
+        let range = self.start..self.end;
+
+        self.start += self.step;
+        self.end -= self.step;
+
+        if self.start > self.end && !self.done {
+            self.start = self.end;
+            self.done = true;
+        }
+
+        Some(range)
+    }
 }
 
 #[test]
