@@ -64,7 +64,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         if node.is_underfilled() {
             self.with_child_mut(self.len() - 1, |last| {
                 Arc::make_mut(last).balance(Arc::make_mut(&mut node));
-                debug_assert!(!last.is_underfilled());
             });
 
             if node.is_empty() {
@@ -348,8 +347,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
                     self.children[1] = second;
 
-                    debug_assert!(!self.children[0].is_underfilled());
-                    debug_assert!(!self.children[1].is_underfilled());
+                    debug_assert!(!self.first().is_underfilled());
+                    debug_assert!(!self.child(1).is_underfilled());
                 }
             },
 
@@ -445,10 +444,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
                     self.children[last_idx - 1] = penultimate;
 
-                    debug_assert!(
-                        !self.children[last_idx - 1].is_underfilled()
-                    );
-                    debug_assert!(!self.children[last_idx].is_underfilled());
+                    debug_assert!(!self.child(last_idx - 1).is_underfilled());
+                    debug_assert!(!self.last().is_underfilled());
                 }
             },
 
@@ -848,7 +845,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         if node.is_underfilled() {
             self.with_child_mut(0, |first| {
                 Arc::make_mut(&mut node).balance(Arc::make_mut(first));
-                debug_assert!(!node.is_underfilled());
             });
 
             if self.first().is_empty() {
