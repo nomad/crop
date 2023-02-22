@@ -41,7 +41,7 @@ let mut rope = builder.build();
 
 // `Rope`s can be sliced to obtain `RopeSlice`s.
 //
-// `RopeSlice` is to a `Rope` as a `&str` is to a `String`: the former in
+// A `RopeSlice` is to a `Rope` as a `&str` is to a `String`: the former in
 // each pair are borrowed references of the latter.
 
 // A `Rope` can be sliced using either byte offsets:
@@ -67,7 +67,7 @@ let start: usize = rope.byte_of_line(5);
 
 let end: usize = rope.byte_of_line(6);
 
-// and replacing it with some other text:
+// and replacing that byte range with some other text:
 
 rope.replace(start..end, "I'd rock some 👠\n");
 
@@ -85,8 +85,8 @@ thread::spawn(move || {
     let mut file =
         BufWriter::new(File::create("my_little_poem.txt").unwrap());
 
-    // The text content is stored in the leaves of the B-tree, with each
-    // leaf being able to store up to a 1KB chunk of data.
+    // The text content is stored in the leaves of the B-tree, where each
+    // chunk can store up to a 1KB of data.
     //
     // We can iterate over the leaves using the `Chunks` iterator which
     // yields the chunks of the `Rope` as string slices.
