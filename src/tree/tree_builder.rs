@@ -1,7 +1,5 @@
 use std::sync::Arc;
 
-use smallvec::SmallVec;
-
 use super::traits::*;
 use super::{Inode, Lnode, Node, Tree};
 
@@ -28,16 +26,16 @@ pub struct TreeBuilder<const FANOUT: usize, L: Leaf> {
     ///
     /// - all the inodes in the last stack level (assuming there are any) have
     /// a depth of 1.
-    stack: Vec<SmallVec<[Arc<Node<FANOUT, L>>; FANOUT]>>,
+    stack: Vec<Vec<Arc<Node<FANOUT, L>>>>,
 
     /// A bunch of leaves waiting to be grouped into an internal node.
-    leaves: SmallVec<[Arc<Node<FANOUT, L>>; FANOUT]>,
+    leaves: Vec<Arc<Node<FANOUT, L>>>,
 }
 
 impl<const FANOUT: usize, L: Leaf> Default for TreeBuilder<FANOUT, L> {
     #[inline]
     fn default() -> Self {
-        Self { stack: Vec::new(), leaves: SmallVec::with_capacity(FANOUT) }
+        Self { stack: Vec::new(), leaves: Vec::with_capacity(FANOUT) }
     }
 }
 
@@ -58,7 +56,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
 
         let mut stack_idx = match self.stack.len() {
             0 => {
-                let mut first_level = SmallVec::with_capacity(FANOUT);
+                let mut first_level = Vec::with_capacity(FANOUT);
                 first_level.push(inode);
                 self.stack.push(first_level);
                 return;
@@ -89,7 +87,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
 
             if stack_idx == 0 {
                 stack_level.push(inode);
-                self.stack.push(SmallVec::with_capacity(FANOUT));
+                self.stack.push(Vec::with_capacity(FANOUT));
 
                 #[cfg(debug_assertions)]
                 for level in &self.stack[1..] {
