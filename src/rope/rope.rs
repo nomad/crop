@@ -103,7 +103,25 @@ impl Rope {
         self.tree.summary().bytes
     }
 
-    /// TODO: docs
+    /// Returns the byte offset of the start of the given line from the start
+    /// of the `Rope`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the line index is out of bounds (i.e. greater than or equal
+    /// to [`line_len()`](Self::line_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("ƒoo\nbär\r\nbaz");
+    ///
+    /// assert_eq!(r.byte_of_line(0), 0);
+    /// assert_eq!(r.byte_of_line(1), "ƒoo\n".len());
+    /// assert_eq!(r.byte_of_line(2), "ƒoo\nbär\r\n".len());
+    /// ```
     #[inline]
     pub fn byte_of_line(&self, line_index: usize) -> usize {
         if line_index >= self.line_len() {
