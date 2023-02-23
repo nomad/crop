@@ -12,7 +12,7 @@ pub struct RopeBuilder {
 }
 
 impl RopeBuilder {
-    /// TODO: docs
+    /// Appends `text` to the end of the `Rope` being built.
     #[inline]
     pub fn append<T>(&mut self, text: T) -> &mut Self
     where
@@ -34,7 +34,22 @@ impl RopeBuilder {
         self
     }
 
-    /// TODO: docs
+    /// Completes the build, consuming the `RopeBuilder` and returning the
+    /// `Rope`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::{Rope, RopeBuilder};
+    /// #
+    /// let mut builder = RopeBuilder::new();
+    ///
+    /// builder.append("ƒoo\n").append("bär\r\n").append("baz");
+    ///
+    /// let rope: Rope = builder.build();
+    ///
+    /// assert_eq!(rope, "ƒoo\nbär\r\nbaz");
+    /// ```
     #[inline]
     pub fn build(mut self) -> Rope {
         if !self.buffer.is_empty() {

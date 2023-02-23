@@ -1,6 +1,18 @@
+//! TODO
+//!
+//! # On offsets and indexes
+//!
+//! todo.
+//!
+//! # Feature flags
+//!
+//! todo.
+
 #![allow(clippy::explicit_auto_deref)]
 #![allow(clippy::module_inception)]
+#![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
+#![deny(rustdoc::private_intra_doc_links)]
 
 mod rope;
 mod tree;
