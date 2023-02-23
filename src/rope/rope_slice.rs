@@ -23,7 +23,25 @@ impl<'a> RopeSlice<'a> {
         self.tree_slice.assert_invariants();
     }
 
-    /// TODO: docs
+    /// Returns the byte at `byte_index`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the byte index is out of bounds (i.e. greater than or equal
+    /// to [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("bar");
+    /// let s = r.byte_slice(..);
+    ///
+    /// assert_eq!(s.byte(0), b'b');
+    /// assert_eq!(s.byte(1), b'a');
+    /// assert_eq!(s.byte(2), b'r');
+    /// ```
     #[inline]
     pub fn byte(&self, byte_index: usize) -> u8 {
         if byte_index >= self.byte_len() {
