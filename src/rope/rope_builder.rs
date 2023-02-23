@@ -44,7 +44,7 @@ impl RopeBuilder {
 
         Rope {
             tree: self.tree_builder.build(),
-            last_byte_is_newline: self.last_byte_is_newline,
+            has_trailing_newline: self.last_byte_is_newline,
         }
     }
 

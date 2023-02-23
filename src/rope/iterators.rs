@@ -425,7 +425,7 @@ impl<'a> Iterator for Lines<'a> {
     fn next(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next()?;
         self.lines_yielded += 1;
-        Some(RopeSlice { tree_slice, last_byte_is_newline: false })
+        Some(RopeSlice { tree_slice, has_trailing_newline: false })
     }
 
     #[inline]
@@ -440,7 +440,7 @@ impl DoubleEndedIterator for Lines<'_> {
     fn next_back(&mut self) -> Option<Self::Item> {
         let tree_slice = self.units.next_back()?;
         self.lines_yielded += 1;
-        Some(RopeSlice { tree_slice, last_byte_is_newline: false })
+        Some(RopeSlice { tree_slice, has_trailing_newline: false })
     }
 }
 

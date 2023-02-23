@@ -14,7 +14,7 @@ use crate::tree::TreeSlice;
 #[derive(Copy, Clone)]
 pub struct RopeSlice<'a> {
     pub(super) tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>,
-    pub(super) last_byte_is_newline: bool,
+    pub(super) has_trailing_newline: bool,
 }
 
 impl<'a> RopeSlice<'a> {
@@ -221,14 +221,14 @@ impl<'a> RopeSlice<'a> {
 
         debug_assert_eq!(0, tree_slice.summary().line_breaks);
 
-        Self { tree_slice, last_byte_is_newline: false }
+        Self { tree_slice, has_trailing_newline: false }
     }
 
     /// TODO: docs
     #[inline]
     pub fn line_len(&self) -> usize {
         self.tree_slice.summary().line_breaks + 1
-            - (self.last_byte_is_newline as usize)
+            - (self.has_trailing_newline as usize)
             - (self.is_empty() as usize)
     }
 
@@ -288,7 +288,7 @@ impl<'a> From<TreeSlice<'a, { Rope::fanout() }, RopeChunk>> for RopeSlice<'a> {
     #[inline]
     fn from(tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>) -> Self {
         Self {
-            last_byte_is_newline: last_byte_is_newline(tree_slice.end_slice()),
+            has_trailing_newline: last_byte_is_newline(tree_slice.end_slice()),
             tree_slice,
         }
     }

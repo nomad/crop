@@ -22,7 +22,7 @@ const ROPE_FANOUT: usize = 24;
 #[derive(Clone, Default)]
 pub struct Rope {
     pub(super) tree: Tree<{ Self::fanout() }, RopeChunk>,
-    pub(super) last_byte_is_newline: bool,
+    pub(super) has_trailing_newline: bool,
 }
 
 impl Rope {
@@ -267,14 +267,14 @@ impl Rope {
 
         debug_assert_eq!(0, tree_slice.summary().line_breaks);
 
-        RopeSlice { tree_slice, last_byte_is_newline: false }
+        RopeSlice { tree_slice, has_trailing_newline: false }
     }
 
     /// TODO: docs
     #[inline]
     pub fn line_len(&self) -> usize {
         self.tree.summary().line_breaks + 1
-            - (self.last_byte_is_newline as usize)
+            - (self.has_trailing_newline as usize)
             - (self.is_empty() as usize)
     }
 
@@ -388,7 +388,7 @@ impl From<RopeSlice<'_>> for Rope {
     #[inline]
     fn from(rope_slice: RopeSlice<'_>) -> Rope {
         let rope = Self {
-            last_byte_is_newline: rope_slice.last_byte_is_newline,
+            has_trailing_newline: rope_slice.has_trailing_newline,
             tree: Tree::from(rope_slice.tree_slice),
         };
 
@@ -422,7 +422,7 @@ impl From<&str> for Rope {
     #[inline]
     fn from(s: &str) -> Self {
         Rope {
-            last_byte_is_newline: last_byte_is_newline(s),
+            has_trailing_newline: last_byte_is_newline(s),
 
             tree: Tree::from_leaves(
                 ChunkSegmenter::new(s).map(std::borrow::ToOwned::to_owned),
@@ -447,7 +447,7 @@ impl From<String> for Rope {
             s.reserve_exact(RopeChunk::chunk_max() - s.len());
 
             Rope {
-                last_byte_is_newline: last_byte_is_newline(&s),
+                has_trailing_newline: last_byte_is_newline(&s),
                 tree: Tree::from_leaves([RopeChunk { text: s }]),
             }
         } else {
