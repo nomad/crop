@@ -682,8 +682,6 @@ mod tree_replace {
 
             let mut extras =
                 TargetDepth::new(extra_leaves.by_ref(), target_depth)
-                    .map(Node::Internal)
-                    .map(Arc::new)
                     .collect::<Vec<_>>();
 
             debug_assert!(extra_leaves.len() == 0);
@@ -998,8 +996,6 @@ mod tree_replace {
         debug_assert!(child_range.start <= child_range.end);
         debug_assert!(child_range.end <= inode.len());
 
-        // TODO: refactor to add nodes until max_children if we can.
-
         let end = child_range.end;
 
         if inode.depth() == 1 {
@@ -1023,10 +1019,7 @@ mod tree_replace {
                     if replacement.depth() == target_depth
                         && !replacement.is_underfilled()
                     {
-                        inode.swap(
-                            child_idx,
-                            Arc::new(Node::Internal(replacement)),
-                        );
+                        inode.swap(child_idx, replacement);
                     } else {
                         let mut last = replacement;
 
@@ -1040,18 +1033,25 @@ mod tree_replace {
                                 if last.depth() == previous_child.depth() {
                                     debug_assert!(last.is_underfilled());
 
-                                    previous_child.balance(&mut last);
+                                    let l = {
+                                        let n = Arc::make_mut(&mut last);
+                                        unsafe {
+                                            n.as_mut_internal_unchecked()
+                                        }
+                                    };
 
-                                    (!last.is_empty()).then_some(last)
+                                    previous_child.balance(l);
+
+                                    (!l.is_empty()).then_some(last)
                                 } else {
-                                    previous_child.append_at_depth(Arc::new(
-                                        Node::Internal(last),
-                                    ))
+                                    previous_child
+                                        .append_at_depth(last)
+                                        .map(Node::Internal)
+                                        .map(Arc::new)
                                 }
                             });
 
                         if let Some(last) = last {
-                            let last = Arc::new(Node::Internal(last));
                             inode.swap(child_idx, last);
                             inode.drain(child_idx + 1..end);
                         } else {
@@ -1082,8 +1082,6 @@ mod tree_replace {
         debug_assert!(child_range.start <= child_range.end);
         debug_assert!(child_range.end < inode.len());
 
-        // TODO: refactor to add nodes until max_children if we can.
-
         let start = child_range.start;
 
         if inode.depth() == 1 {
@@ -1107,10 +1105,7 @@ mod tree_replace {
                     if replacement.depth() == target_depth
                         && !replacement.is_underfilled()
                     {
-                        inode.swap(
-                            child_idx,
-                            Arc::new(Node::Internal(replacement)),
-                        );
+                        inode.swap(child_idx, replacement);
                     } else {
                         let mut last = replacement;
 
@@ -1124,23 +1119,30 @@ mod tree_replace {
                                 if last.depth() == next_child.depth() {
                                     debug_assert!(last.is_underfilled());
 
-                                    last.balance(next_child);
+                                    let l = {
+                                        let n = Arc::make_mut(&mut last);
+                                        unsafe {
+                                            n.as_mut_internal_unchecked()
+                                        }
+                                    };
+
+                                    l.balance(next_child);
 
                                     if next_child.is_empty() {
-                                        *next = Arc::new(Node::Internal(last));
+                                        *next = last;
                                         None
                                     } else {
                                         Some(last)
                                     }
                                 } else {
-                                    next_child.prepend_at_depth(Arc::new(
-                                        Node::Internal(last),
-                                    ))
+                                    next_child
+                                        .prepend_at_depth(last)
+                                        .map(Node::Internal)
+                                        .map(Arc::new)
                                 }
                             });
 
                         if let Some(last) = last {
-                            let last = Arc::new(Node::Internal(last));
                             inode.swap(child_idx, last);
                             inode.drain(start..child_idx);
                         } else {
@@ -1387,8 +1389,8 @@ mod tree_replace {
         /// Transforms an iterator over leaf nodes into internal nodes at a
         /// given target depth that are all guaranteed to have between
         /// `min_children` and `max_children` children, except for the last
-        /// inode which can be at a lower depth than the target and contain
-        /// less than `min_children` children.
+        /// inode which can be at a lower depth than the target (can even be a
+        /// leaf node) and contain less than `min_children` children.
         pub(super) struct TargetDepth<const N: usize, L, Leaves>
         where
             L: Leaf,
@@ -1434,7 +1436,7 @@ mod tree_replace {
             L: Leaf,
             Leaves: ExactSizeIterator<Item = Arc<Node<N, L>>>,
         {
-            type Item = Inode<N, L>;
+            type Item = Arc<Node<N, L>>;
 
             #[inline]
             fn next(&mut self) -> Option<Self::Item> {
@@ -1443,15 +1445,22 @@ mod tree_replace {
                 if remaining == 0 {
                     None
                 } else if remaining < self.min_leaves_for_depth {
-                    // TODO: return the leaf if remaining is 1.
-                    let last = Inode::from_nodes(self.leaves.by_ref());
+                    let last = if self.leaves.len() == 1 {
+                        self.leaves.next().unwrap()
+                    } else {
+                        let last = Inode::from_nodes(self.leaves.by_ref());
 
-                    debug_assert!(
-                        last.depth() < self.target_depth
-                            || last.len() < Inode::<N, L>::min_children()
-                    );
+                        debug_assert!(
+                            last.depth() < self.target_depth
+                                || last.len() < Inode::<N, L>::min_children()
+                        );
 
-                    debug_assert!(last.len() <= Inode::<N, L>::max_children());
+                        debug_assert!(
+                            last.len() <= Inode::<N, L>::max_children()
+                        );
+
+                        Arc::new(Node::Internal(last))
+                    };
 
                     Some(last)
                 } else {
@@ -1469,7 +1478,7 @@ mod tree_replace {
                         inode.len() <= Inode::<N, L>::max_children()
                     );
 
-                    Some(inode)
+                    Some(Arc::new(Node::Internal(inode)))
                 }
             }
         }
@@ -1519,7 +1528,7 @@ mod tree_replace {
         where
             L: Leaf,
         {
-            type Item = Inode<N, L>;
+            type Item = Arc<Node<N, L>>;
 
             #[inline]
             fn next(&mut self) -> Option<Self::Item> {
@@ -1531,14 +1540,22 @@ mod tree_replace {
                 if remaining == 0 {
                     None
                 } else if remaining < self.min_leaves_for_depth {
-                    let last = Inode::from_nodes(self.leaves.drain(..));
+                    let last = if self.leaves.len() == 1 {
+                        self.leaves.pop().unwrap()
+                    } else {
+                        let last = Inode::from_nodes(self.leaves.drain(..));
 
-                    debug_assert!(
-                        last.depth() < self.target_depth
-                            || last.len() < Inode::<N, L>::min_children()
-                    );
+                        debug_assert!(
+                            last.depth() < self.target_depth
+                                || last.len() < Inode::<N, L>::min_children()
+                        );
 
-                    debug_assert!(last.len() <= Inode::<N, L>::max_children());
+                        debug_assert!(
+                            last.len() <= Inode::<N, L>::max_children()
+                        );
+
+                        Arc::new(Node::Internal(last))
+                    };
 
                     Some(last)
                 } else {
@@ -1560,7 +1577,7 @@ mod tree_replace {
                         inode.len() <= Inode::<N, L>::max_children()
                     );
 
-                    Some(inode)
+                    Some(Arc::new(Node::Internal(inode)))
                 }
             }
         }

@@ -584,8 +584,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     {
         let nodes = nodes.into_iter();
 
-        // TODO: uncomment once `DiocanSegmenter` yields Arc<Nodes>.
-        // debug_assert!(nodes.len() > 1);
+        debug_assert!(nodes.len() > 1);
 
         if nodes.len() <= Self::max_children() {
             return Self::from_children(nodes);
