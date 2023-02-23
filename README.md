@@ -86,7 +86,7 @@ thread::spawn(move || {
         BufWriter::new(File::create("my_little_poem.txt").unwrap());
 
     // The text content is stored in the leaves of the B-tree, where each
-    // chunk can store up to a 1KB of data.
+    // chunk can store up to 1KB of data.
     //
     // We can iterate over the leaves using the `Chunks` iterator which
     // yields the chunks of the `Rope` as string slices.
