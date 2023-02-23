@@ -129,8 +129,8 @@ impl Rope {
         byte_index
     }
 
-    /// Returns an immutable slice of the `Rope` between the specified byte
-    /// range, where the start and end of the range are interpreted as offsets.
+    /// Returns an immutable slice of the `Rope` in the specified byte range,
+    /// where the start and end of the range are interpreted as offsets.
     ///
     /// # Panics
     ///
@@ -143,9 +143,11 @@ impl Rope {
     /// ```
     /// # use crop::Rope;
     /// #
-    /// let mut r = Rope::from("Hello Earth 🌎!");
-    /// r.replace(6..16, "Saturn 🪐");
-    /// assert_eq!(r, "Hello Saturn 🪐!");
+    /// let r = Rope::from("🗻∈🌏");
+    ///
+    /// assert_eq!(r.byte_slice(..4), "🗻");
+    /// assert_eq!(r.byte_slice(4..7), "∈");
+    /// assert_eq!(r.byte_slice(7..), "🌏");
     /// ```
     #[inline]
     pub fn byte_slice<R>(&self, byte_range: R) -> RopeSlice<'_>

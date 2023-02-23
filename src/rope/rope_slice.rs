@@ -108,7 +108,26 @@ impl<'a> RopeSlice<'a> {
         byte_index
     }
 
-    /// TODO: docs
+    /// Returns a sub-slice of this `RopeSlice` in the specified byte range,
+    /// where the start and end of the range are interpreted as offsets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the start or the end of the byte range don't lie on a code
+    /// point boundary, if the start is greater than the end or if the end is
+    /// out of bounds (i.e. greater than [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("🗻∈🌏");
+    /// let s = r.byte_slice(4..);
+    ///
+    /// assert_eq!(s.byte_slice(..3), "∈");
+    /// assert_eq!(s.byte_slice(3..), "🌏");
+    /// ```
     #[inline]
     pub fn byte_slice<R>(self, byte_range: R) -> RopeSlice<'a>
     where
