@@ -75,11 +75,11 @@ impl RopeChunk {
 
         let to_left_summary = to_left.summarize();
 
-        *left_summary = *left_summary + to_left_summary;
+        *left_summary += to_left_summary;
 
         *right = new_right.to_owned();
 
-        *right_summary = *right_summary - to_left_summary;
+        *right_summary -= to_left_summary;
 
         debug_assert!(left.is_within_chunk_bounds());
         debug_assert!(right.is_within_chunk_bounds());
@@ -368,15 +368,13 @@ impl BalancedLeaf for RopeChunk {
         if left.len() >= RopeChunk::min_bytes()
             && right.len() >= RopeChunk::min_bytes()
         {
-            return;
         }
         // If both slices can fit in a single chunk we join them.
         else if left.len() + right.len() <= RopeChunk::max_bytes() {
             left.push_str(right);
             right.clear();
-            *left_summary = *left_summary + *right_summary;
+            *left_summary += *right_summary;
             *right_summary = ChunkSummary::default();
-            return;
         }
         // If the left side is lacking we take text from the right side.
         else if left.len() < RopeChunk::min_bytes() {

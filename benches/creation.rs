@@ -8,10 +8,10 @@ const MEDIUM: &str = include_str!("../tests/common/medium.txt");
 const LARGE: &str = include_str!("../tests/common/large.txt");
 
 fn bench<F: Fn(&str)>(group: &mut BenchmarkGroup<WallTime>, to_bench: F) {
-    group.bench_function("tiny", |bench| bench.iter(|| to_bench(&TINY)));
-    group.bench_function("small", |bench| bench.iter(|| to_bench(&SMALL)));
-    group.bench_function("medium", |bench| bench.iter(|| to_bench(&MEDIUM)));
-    group.bench_function("large", |bench| bench.iter(|| to_bench(&LARGE)));
+    group.bench_function("tiny", |bench| bench.iter(|| to_bench(TINY)));
+    group.bench_function("small", |bench| bench.iter(|| to_bench(SMALL)));
+    group.bench_function("medium", |bench| bench.iter(|| to_bench(MEDIUM)));
+    group.bench_function("large", |bench| bench.iter(|| to_bench(LARGE)));
 }
 
 fn from_str(c: &mut Criterion) {
