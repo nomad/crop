@@ -45,12 +45,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn byte(&self, byte_index: usize) -> u8 {
         if byte_index >= self.byte_len() {
-            panic!(
-                "Trying to index past the end of the RopeSlice: the byte \
-                 length is {} but the byte index is {}",
-                self.byte_len(),
-                byte_index
-            );
+            byte_index_out_of_bounds(byte_index, self.byte_len());
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
@@ -104,12 +99,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn byte_of_line(&self, line_index: usize) -> usize {
         if line_index >= self.line_len() {
-            panic!(
-                "Trying to index past the end of the RopeSlice: the line \
-                 length is {} but the line index is {}",
-                self.line_len(),
-                line_index
-            );
+            line_index_out_of_bounds(line_index, self.line_len());
         }
 
         let ByteMetric(byte_index) =
@@ -127,13 +117,12 @@ impl<'a> RopeSlice<'a> {
         let (start, end) =
             range_bounds_to_start_end(byte_range, 0, self.byte_len());
 
+        if start > end {
+            byte_start_after_end(start, end);
+        }
+
         if end > self.byte_len() {
-            panic!(
-                "Trying to slice past the end of the RopeSlice: the byte \
-                 length is {} but the end of the byte range is {}",
-                self.byte_len(),
-                end
-            );
+            byte_offset_out_of_bounds(end, self.byte_len());
         }
 
         self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)).into()
@@ -169,12 +158,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn is_char_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
-            panic!(
-                "The given offset is past the end of the Rope: the byte \
-                 length is {} but the byte offset is {}",
-                self.byte_len(),
-                byte_offset
-            );
+            byte_offset_out_of_bounds(byte_offset, self.byte_len());
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
@@ -206,12 +190,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn is_grapheme_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
-            panic!(
-                "The given offset is past the end of the Rope: the byte \
-                 length is {} but the byte offset is {}",
-                self.byte_len(),
-                byte_offset
-            );
+            byte_offset_out_of_bounds(byte_offset, self.byte_len());
         }
 
         is_grapheme_boundary(self.chunks(), self.byte_len(), byte_offset)
@@ -221,12 +200,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn line(self, line_index: usize) -> RopeSlice<'a> {
         if line_index >= self.line_len() {
-            panic!(
-                "Trying to index past the end of the RopeSlice: the line \
-                 length is {} but the line index is {}",
-                self.line_len(),
-                line_index
-            );
+            line_index_out_of_bounds(line_index, self.line_len());
         }
 
         let mut tree_slice = self
@@ -257,12 +231,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn line_of_byte(&self, byte_index: usize) -> usize {
         if byte_index >= self.byte_len() {
-            panic!(
-                "Trying to index past the end of the RopeSlice: the byte \
-                 length is {} but the byte index is {}",
-                self.byte_len(),
-                byte_index
-            );
+            byte_index_out_of_bounds(byte_index, self.byte_len());
         }
 
         let RawLineMetric(line_index) =
@@ -280,13 +249,12 @@ impl<'a> RopeSlice<'a> {
         let (start, end) =
             range_bounds_to_start_end(line_range, 0, self.line_len());
 
+        if start > end {
+            line_start_after_end(start, end);
+        }
+
         if end > self.line_len() {
-            panic!(
-                "Trying to slice past the end of the RopeSlice: the line \
-                 length is {} but the end of the line range is {}",
-                self.line_len(),
-                end
-            );
+            line_offset_out_of_bounds(end, self.line_len());
         }
 
         self.tree_slice.slice(RawLineMetric(start)..RawLineMetric(end)).into()

@@ -233,3 +233,79 @@ pub(super) fn last_byte_is_newline(s: &str) -> bool {
 pub(super) fn starts_with_lf(s: &str) -> bool {
     !s.is_empty() && s.as_bytes()[0] == b'\n'
 }
+
+pub(super) use panic_messages::*;
+
+mod panic_messages {
+    #[inline]
+    pub(crate) fn byte_index_out_of_bounds(
+        byte_index: usize,
+        byte_len: usize,
+    ) -> ! {
+        debug_assert!(byte_index >= byte_len);
+
+        panic!(
+            "Byte index out of bounds: the index is {byte_index} but the \
+             length is {byte_len}"
+        );
+    }
+
+    #[inline]
+    pub(crate) fn byte_offset_out_of_bounds(
+        byte_offset: usize,
+        byte_len: usize,
+    ) -> ! {
+        debug_assert!(byte_offset > byte_len);
+
+        panic!(
+            "Byte offset out of bounds: the offset is {byte_offset} but the \
+             length is {byte_len}"
+        );
+    }
+
+    #[inline]
+    pub(crate) fn byte_start_after_end(
+        byte_start: usize,
+        byte_end: usize,
+    ) -> ! {
+        debug_assert!(byte_start > byte_end);
+
+        panic!();
+    }
+
+    #[inline]
+    pub(crate) fn line_index_out_of_bounds(
+        line_index: usize,
+        line_len: usize,
+    ) -> ! {
+        debug_assert!(line_index >= line_len);
+
+        panic!(
+            "Line index out of bounds: the index is {line_index} but the \
+             length is {line_len}"
+        );
+    }
+
+    #[inline]
+    pub(crate) fn line_offset_out_of_bounds(
+        line_offset: usize,
+        line_len: usize,
+    ) -> ! {
+        debug_assert!(line_offset > line_len);
+
+        panic!(
+            "Line offset out of bounds: the offset is {line_offset} but the \
+             length is {line_len}"
+        );
+    }
+
+    #[inline]
+    pub(crate) fn line_start_after_end(
+        line_start: usize,
+        line_end: usize,
+    ) -> ! {
+        debug_assert!(line_start > line_end);
+
+        panic!();
+    }
+}
