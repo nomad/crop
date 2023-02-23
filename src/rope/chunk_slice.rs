@@ -71,63 +71,6 @@ impl ToOwned for ChunkSlice {
 }
 
 impl<'a> ChunkSlice {
-    /// Balances `left` and `right`. The second tuple is returned if the two
-    /// slices didn't fit in a single `RopeChunk`.
-    #[inline]
-    pub(super) fn balance(
-        left: &Self,
-        left_summary: ChunkSummary,
-        right: &Self,
-        right_summary: ChunkSummary,
-    ) -> ((RopeChunk, ChunkSummary), Option<(RopeChunk, ChunkSummary)>) {
-        if left.len() >= RopeChunk::min_bytes()
-            && right.len() >= RopeChunk::min_bytes()
-        {
-            (
-                (left.to_owned(), left_summary),
-                Some((right.to_owned(), right_summary)),
-            )
-        }
-        // If both slices can fit in a single chunk we join them.
-        else if left.len() + right.len() <= RopeChunk::max_bytes() {
-            let left = {
-                let mut l = left.to_owned();
-                l.push_str(right);
-                l
-            };
-
-            ((left, left_summary + right_summary), None)
-        }
-        // If the left side is lacking we take text from the right side.
-        else if left.len() < RopeChunk::min_bytes() {
-            debug_assert!(right.len() > RopeChunk::min_bytes());
-
-            let (left, right) = ChunkSlice::balance_left_with_right(
-                left,
-                left_summary,
-                right,
-                right_summary,
-            );
-
-            (left, Some(right))
-        }
-        // Viceversa, if the right side is lacking we take text from the left
-        // side.
-        else {
-            debug_assert!(right.len() < RopeChunk::min_bytes());
-            debug_assert!(left.len() > RopeChunk::min_bytes());
-
-            let (left, right) = ChunkSlice::balance_right_with_left(
-                left,
-                left_summary,
-                right,
-                right_summary,
-            );
-
-            (left, Some(right))
-        }
-    }
-
     /// Balances `left` using `right`.
     ///
     /// # Panics
@@ -135,7 +78,7 @@ impl<'a> ChunkSlice {
     /// Panics if `left` is not underfilled, in `right` is underfilled and if
     /// `left` and `right` can be combined in a single chunk.
     #[inline]
-    fn balance_left_with_right(
+    pub(super) fn balance_left_with_right(
         left: &Self,
         left_summary: ChunkSummary,
         right: &Self,
@@ -181,7 +124,7 @@ impl<'a> ChunkSlice {
     /// Panics if `right` is not underfilled, in `left` is underfilled and if
     /// `left` and `right` can be combined in a single chunk.
     #[inline]
-    fn balance_right_with_left(
+    pub(super) fn balance_right_with_left(
         left: &Self,
         left_summary: ChunkSummary,
         right: &Self,

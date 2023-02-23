@@ -34,41 +34,77 @@ impl Default for RopeChunk {
 }
 
 impl RopeChunk {
-    /// TODO: docs
-    #[inline]
-    pub(super) fn push_with_remainder<'a>(
-        &mut self,
-        slice: &'a ChunkSlice,
-    ) -> &'a ChunkSlice {
-        if self.len() >= Self::max_bytes() {
-            // If the current text is already longer than
-            // `RopeChunk::max_bytes()` the only edge case to consider is not
-            // splitting CRLF pairs.
-            if ends_in_cr(self) && starts_with_lf(slice) {
-                // SAFETY: the slice starts with a `\n` so 1 is a char
-                // boundary.
-                let (lf, rest) = unsafe { slice.split_unchecked(1) };
-                self.push_str(lf);
-                return rest;
-            } else {
-                return slice;
-            }
-        }
-
-        let (push, rest) =
-            slice.split_adjusted::<true>(Self::max_bytes() - self.len());
-
-        self.push_str(push);
-
-        debug_assert!(self.len() <= Self::chunk_max());
-
-        rest
-    }
-
     #[inline]
     fn as_slice(&self) -> &ChunkSlice {
         use std::borrow::Borrow;
         self.borrow()
+    }
+
+    /// Balances `left` using `right`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `left` is not underfilled, in `right` is underfilled and if
+    /// `left` and `right` can be combined in a single chunk.
+    #[inline]
+    fn balance_left_with_right(
+        left: &mut Self,
+        left_summary: &mut ChunkSummary,
+        right: &mut Self,
+        right_summary: &mut ChunkSummary,
+    ) {
+        // TODO: this is basically the same as
+        // `ChunkSlice::balance_left_with_right()` excess it doesn't allocate a
+        // new left chunk. Can we DRY this up?
+
+        debug_assert!(left.len() < RopeChunk::min_bytes());
+        debug_assert!(right.len() > RopeChunk::min_bytes());
+        debug_assert!(left.len() + right.len() > RopeChunk::max_bytes());
+
+        let missing = RopeChunk::min_bytes() - left.len();
+
+        let (mut to_left, mut new_right) =
+            right.as_slice().split_adjusted::<false>(missing);
+
+        if left.len() + to_left.len() < RopeChunk::chunk_min() {
+            (to_left, new_right) =
+                right.as_slice().split_adjusted::<true>(missing);
+        }
+
+        left.push_str(to_left);
+
+        let to_left_summary = to_left.summarize();
+
+        *left_summary = *left_summary + to_left_summary;
+
+        *right = new_right.to_owned();
+
+        *right_summary = *right_summary - to_left_summary;
+
+        debug_assert!(left.is_within_chunk_bounds());
+        debug_assert!(right.is_within_chunk_bounds());
+    }
+
+    /// Balances `right` using `left`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `right` is not underfilled, in `left` is underfilled and if
+    /// `left` and `right` can be combined in a single chunk.
+    #[inline]
+    fn balance_right_with_left(
+        left: &mut Self,
+        left_summary: &mut ChunkSummary,
+        right: &mut Self,
+        right_summary: &mut ChunkSummary,
+    ) {
+        ((*left, *left_summary), (*right, *right_summary)) =
+            ChunkSlice::balance_right_with_left(
+                left.as_slice(),
+                *left_summary,
+                right.as_slice(),
+                *right_summary,
+            );
     }
 
     /// The number of bytes `RopeChunk`s must always stay under.
@@ -106,9 +142,45 @@ impl RopeChunk {
         self.len() >= Self::chunk_min() && self.len() <= Self::chunk_max()
     }
 
+    /// Pushes as mush of `slice` as possible into this chunk, returning the
+    /// rest.
+    #[inline]
+    pub(super) fn push_with_remainder<'a>(
+        &mut self,
+        slice: &'a ChunkSlice,
+    ) -> &'a ChunkSlice {
+        if self.len() >= Self::max_bytes() {
+            // If the current text is already longer than
+            // `RopeChunk::max_bytes()` the only edge case to consider is not
+            // splitting CRLF pairs.
+            if ends_in_cr(self) && starts_with_lf(slice) {
+                // SAFETY: the slice starts with a `\n` so 1 is a char
+                // boundary.
+                let (lf, rest) = unsafe { slice.split_unchecked(1) };
+                self.push_str(lf);
+                return rest;
+            } else {
+                return slice;
+            }
+        }
+
+        let (push, rest) =
+            slice.split_adjusted::<true>(Self::max_bytes() - self.len());
+
+        self.push_str(push);
+
+        debug_assert!(self.len() <= Self::chunk_max());
+
+        rest
+    }
+
+    /// Slices the chunk in the given range.
+    ///
     /// # Safety
     ///
-    /// TODO:
+    /// This functions is unsafe because it doesn't do any bound/char boundary
+    /// checks on neither the start nor the end of the byte range, leaving that
+    /// up to the caller.
     #[inline]
     unsafe fn slice_unchecked(&self, byte_range: Range<usize>) -> &ChunkSlice {
         debug_assert!(byte_range.start <= byte_range.end);
@@ -137,7 +209,7 @@ impl RopeChunk {
     /// # Safety
     ///
     /// The function is unsafe because it does not check that `byte_offset` is
-    /// a valid char boundary, leaving that up to the caller.
+    /// within bounds and a valid char boundary, leaving that up to the caller.
     #[inline]
     unsafe fn split_off_unchecked(&mut self, byte_offset: usize) -> Self {
         debug_assert!(byte_offset <= self.len());
@@ -293,18 +365,43 @@ impl BalancedLeaf for RopeChunk {
         (left, left_summary): (&mut Self, &mut ChunkSummary),
         (right, right_summary): (&mut Self, &mut ChunkSummary),
     ) {
-        let (a, b) = Self::balance_slices(
-            (left.as_slice(), left_summary),
-            (right.as_slice(), right_summary),
-        );
+        if left.len() >= RopeChunk::min_bytes()
+            && right.len() >= RopeChunk::min_bytes()
+        {
+            return;
+        }
+        // If both slices can fit in a single chunk we join them.
+        else if left.len() + right.len() <= RopeChunk::max_bytes() {
+            left.push_str(right);
+            right.clear();
+            *left_summary = *left_summary + *right_summary;
+            *right_summary = ChunkSummary::default();
+            return;
+        }
+        // If the left side is lacking we take text from the right side.
+        else if left.len() < RopeChunk::min_bytes() {
+            debug_assert!(right.len() > RopeChunk::min_bytes());
 
-        *left = a.0;
-        *left_summary = a.1;
+            Self::balance_left_with_right(
+                left,
+                left_summary,
+                right,
+                right_summary,
+            );
+        }
+        // Viceversa, if the right side is lacking we take text from the left
+        // side.
+        else {
+            debug_assert!(right.len() < RopeChunk::min_bytes());
+            debug_assert!(left.len() > RopeChunk::min_bytes());
 
-        let b = b.unwrap_or_default();
-
-        *right = b.0;
-        *right_summary = b.1;
+            Self::balance_right_with_left(
+                left,
+                left_summary,
+                right,
+                right_summary,
+            );
+        }
     }
 
     #[inline]
@@ -312,7 +409,52 @@ impl BalancedLeaf for RopeChunk {
         (left, &left_summary): (&'a ChunkSlice, &'a ChunkSummary),
         (right, &right_summary): (&'a ChunkSlice, &'a ChunkSummary),
     ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
-        ChunkSlice::balance(left, left_summary, right, right_summary)
+        if left.len() >= RopeChunk::min_bytes()
+            && right.len() >= RopeChunk::min_bytes()
+        {
+            (
+                (left.to_owned(), left_summary),
+                Some((right.to_owned(), right_summary)),
+            )
+        }
+        // If both slices can fit in a single chunk we join them.
+        else if left.len() + right.len() <= RopeChunk::max_bytes() {
+            let left = {
+                let mut l = left.to_owned();
+                l.push_str(right);
+                l
+            };
+
+            ((left, left_summary + right_summary), None)
+        }
+        // If the left side is lacking we take text from the right side.
+        else if left.len() < RopeChunk::min_bytes() {
+            debug_assert!(right.len() > RopeChunk::min_bytes());
+
+            let (left, right) = ChunkSlice::balance_left_with_right(
+                left,
+                left_summary,
+                right,
+                right_summary,
+            );
+
+            (left, Some(right))
+        }
+        // Viceversa, if the right side is lacking we take text from the left
+        // side.
+        else {
+            debug_assert!(right.len() < RopeChunk::min_bytes());
+            debug_assert!(left.len() > RopeChunk::min_bytes());
+
+            let (left, right) = ChunkSlice::balance_right_with_left(
+                left,
+                left_summary,
+                right,
+                right_summary,
+            );
+
+            (left, Some(right))
+        }
     }
 }
 
