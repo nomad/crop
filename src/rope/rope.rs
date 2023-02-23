@@ -81,13 +81,8 @@ impl Rope {
             );
         }
 
-        let (mut chunk, ByteMetric(mut chunk_byte_offset)) =
-            self.tree.leaf_at_measure(ByteMetric(byte_index));
-
-        if chunk.len() == byte_index - chunk_byte_offset {
-            (chunk, ByteMetric(chunk_byte_offset)) =
-                self.tree.leaf_at_measure(ByteMetric(byte_index + 1));
-        }
+        let (chunk, ByteMetric(chunk_byte_offset)) =
+            self.tree.leaf_at_measure(ByteMetric(byte_index + 1));
 
         chunk.as_bytes()[byte_index - chunk_byte_offset]
     }

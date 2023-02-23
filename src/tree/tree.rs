@@ -642,7 +642,7 @@ mod tree_replace {
         ) = inode_replace_nodes_in_start_and_end_subtrees(inode, range, slice);
 
         let Some(mut extra_leaves) = extra_leaves else {
-            inode.drain(start_idx+1..end_idx);
+            inode.drain(start_idx + 1..end_idx);
 
             if start_should_rebalance || end_should_rebalance {
                 fix_seam_between_start_and_end_subtrees(
