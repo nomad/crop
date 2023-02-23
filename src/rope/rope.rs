@@ -92,7 +92,17 @@ impl Rope {
         chunk.as_bytes()[byte_index - chunk_byte_offset]
     }
 
-    /// TODO: docs
+    /// Returns the length of the `Rope` in bytes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("ƒoo");
+    ///
+    /// assert_eq!(r.byte_len(), 4);
+    /// ```
     #[inline]
     pub fn byte_len(&self) -> usize {
         self.tree.summary().bytes

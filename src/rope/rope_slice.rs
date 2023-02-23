@@ -64,7 +64,21 @@ impl<'a> RopeSlice<'a> {
         chunk.as_bytes()[byte_index - chunk_byte_offset]
     }
 
-    /// TODO: docs
+    /// Returns the length of the `RopeSlice` in bytes.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("ƒoo");
+    ///
+    /// let s = r.byte_slice(2..2);
+    /// assert_eq!(s.byte_len(), 0);
+    ///
+    /// let s = r.byte_slice(..);
+    /// assert_eq!(s.byte_len(), 4);
+    /// ```
     #[inline]
     pub fn byte_len(&self) -> usize {
         self.tree_slice.summary().bytes
