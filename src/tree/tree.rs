@@ -559,10 +559,11 @@ mod tree_replace {
                 if offset >= range.end {
                     child_idx = idx;
 
+                    offset -= child_measure;
+                    range.start -= offset;
+                    range.end -= offset;
+
                     extras = inode.with_child_mut(idx, |child| {
-                        offset -= child_measure;
-                        range.start -= offset;
-                        range.end -= offset;
                         replace_range_with_slice(child, range, slice)
                     });
 
@@ -1371,10 +1372,9 @@ mod tree_replace {
         const fn min_leaves_for_depth<const N: usize, L: Leaf>(
             target_depth: usize,
         ) -> usize {
-            let max_leaves_for_one_less =
-                Inode::<N, L>::max_children().pow((target_depth - 1) as u32);
-
-            ((Inode::<N, L>::min_children() - 1) * max_leaves_for_one_less) + 1
+            (Inode::<N, L>::min_children() - 1)
+                * max_leaves_for_depth::<N, L>(target_depth - 1)
+                + 1
         }
 
         /// The maximum number of leaves that can be fed to

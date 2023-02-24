@@ -22,6 +22,7 @@ impl RopeBuilder {
 
         loop {
             let rest = self.buffer.push_with_remainder(text.into());
+
             if rest.is_empty() {
                 self.last_byte_is_newline = last_byte_is_newline(&self.buffer);
                 break;

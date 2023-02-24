@@ -186,7 +186,25 @@ impl Rope {
         Chunks::from(self)
     }
 
-    /// TODO: docs
+    /// Deletes the contents of the `Rope` within the specified byte range,
+    /// where the start and end of the range are interpreted as offsets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the start or the end of the byte range don't lie on a code
+    /// point boundary, if the start is greater than the end or if the end is
+    /// out of bounds (i.e. greater than [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let mut r = Rope::from("Hello Earth 🌎!");
+    ///
+    /// r.delete(5..16);
+    /// assert_eq!(r, "Hello!");
+    /// ```
     #[inline]
     pub fn delete<R>(&mut self, byte_range: R)
     where
@@ -207,7 +225,24 @@ impl Rope {
         crate::iter::Graphemes::from(self)
     }
 
-    /// TODO: docs
+    /// Inserts `text` in the `Rope` at the given byte offset.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the byte offset doesn't lie on a code point boundary or if
+    /// it's out of bounds (i.e. greater than
+    /// [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let mut r = Rope::from("Hello Earth!");
+    ///
+    /// r.insert(11, " 🌎");
+    /// assert_eq!(r, "Hello Earth 🌎!");
+    /// ```
     #[inline]
     pub fn insert<T>(&mut self, byte_offset: usize, text: T)
     where
@@ -340,7 +375,7 @@ impl Rope {
         Self::default()
     }
 
-    /// Replaces the content of the `Rope` within the specified byte range
+    /// Replaces the contents of the `Rope` within the specified byte range
     /// with the given string, where the start and end of the range are
     /// interpreted as byte offsets.
     ///
@@ -356,6 +391,7 @@ impl Rope {
     /// # use crop::Rope;
     /// #
     /// let mut r = Rope::from("Hello Earth 🌎!");
+    ///
     /// r.replace(6..16, "Saturn 🪐");
     /// assert_eq!(r, "Hello Saturn 🪐!");
     /// ```
