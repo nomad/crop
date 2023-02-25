@@ -58,7 +58,7 @@ fn main() {
     // `Rope`s use `Arc`s to share data between threads, so cloning them is
     // extremely cheap.
 
-    let cloned = rope.clone();
+    let snapshot = rope.clone();
 
     // This allows to save a `Rope` to disk in a background thread while
     // keeping the main thread responsive.
@@ -73,7 +73,7 @@ fn main() {
         // We can iterate over those leaves via the `Chunks` iterator which
         // yields the chunks of the `Rope` as string slices.
 
-        for chunk in cloned.chunks() {
+        for chunk in snapshot.chunks() {
             file.write_all(chunk.as_bytes()).unwrap();
         }
     })

@@ -17,8 +17,19 @@ ensuring that the time complexity of inserting, deleting or replacing a piece
 of text is always logarithmic in the size of the `Rope`.
 
 crop places an extreme focus on performance: check out [the
-benchmarks](https://github.com/noib3/crop/blob/master/benches/README.md) to see
+benchmarks](https://github.com/noib3/crop/blob/master/BENCHMARKS.md) to see
 how it stacks up against similar projects.
+
+## Built with parallelism in mind
+
+`Rope`s use thread-safe reference counting to share data between threads.
+Cloning a `Rope` takes up only 16 extra bytes of memory, and its copy-on-write
+semantics make sure that the actual text contents are duplicated incrementally
+as different clones diverge due to user edits.
+
+This allows to send a snapshot of a `Rope` to a background thread to perform
+any IO or CPU-intensive computations, while the main thread is kept responsive
+and always ready for the next batch of edits.
 
 ## Example usage
 
@@ -76,7 +87,7 @@ assert_eq!(rope.line(5), "I'd rock some 👠");
 // `Rope`s use `Arc`s to share data between threads, so cloning them is
 // extremely cheap.
 
-let cloned = rope.clone();
+let snapshot = rope.clone();
 
 // This allows to save a `Rope` to disk in a background thread while
 // keeping the main thread responsive.
@@ -91,7 +102,7 @@ thread::spawn(move || {
     // We can iterate over the leaves using the `Chunks` iterator which
     // yields the chunks of the `Rope` as string slices.
 
-    for chunk in cloned.chunks() {
+    for chunk in snapshot.chunks() {
         file.write_all(chunk.as_bytes()).unwrap();
     }
 })
@@ -109,5 +120,5 @@ A significant portion of crop's public API was inspired by the excellent
 test vectors).
 
 Unlike crop, Ropey uses code points (`char`s in Rust-speak) as its primary
-indexing metric. If you'd prefer to work with `char`-offsets rather than
-byte-offsets Ropey might be a great alternative.
+indexing metric. If you'd prefer to work with `char` offsets rather than
+byte offsets Ropey might be a great alternative.
