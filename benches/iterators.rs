@@ -1,10 +1,8 @@
+mod common;
+
+use common::{LARGE, MEDIUM, SMALL, TINY};
 use criterion::{criterion_group, criterion_main, Criterion};
 use crop::{iter::*, Rope};
-
-const TINY: &str = include_str!("../tests/common/tiny.txt");
-const SMALL: &str = include_str!("../tests/common/small.txt");
-const MEDIUM: &str = include_str!("../tests/common/medium.txt");
-const LARGE: &str = include_str!("../tests/common/large.txt");
 
 #[macro_export]
 macro_rules! iter_bench {

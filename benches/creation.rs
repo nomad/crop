@@ -1,11 +1,9 @@
+mod common;
+
+use common::{LARGE, MEDIUM, SMALL, TINY};
 use criterion::measurement::WallTime;
 use criterion::{criterion_group, criterion_main, BenchmarkGroup, Criterion};
 use crop::{Rope, RopeBuilder};
-
-const TINY: &str = include_str!("../tests/common/tiny.txt");
-const SMALL: &str = include_str!("../tests/common/small.txt");
-const MEDIUM: &str = include_str!("../tests/common/medium.txt");
-const LARGE: &str = include_str!("../tests/common/large.txt");
 
 fn bench<F: Fn(&str)>(group: &mut BenchmarkGroup<WallTime>, to_bench: F) {
     group.bench_function("tiny", |bench| bench.iter(|| to_bench(TINY)));
