@@ -3,7 +3,10 @@ use super::rope_chunk::RopeChunk;
 use super::{Rope, RopeSlice};
 use crate::tree::{Leaves, Units};
 
-/// An iterator over the chunks of `Rope`s and `RopeSlice`s.
+/// An iterator over the `&str` chunks of `Rope`s and `RopeSlice`s.
+///
+/// This struct is created by the `chunks` method on [`Rope`](Rope::chunks())
+/// and [`RopeSlice`](RopeSlice::chunks()). See their documentation for more.
 #[derive(Clone)]
 pub struct Chunks<'a> {
     leaves: Leaves<'a, { Rope::fanout() }, RopeChunk>,
@@ -65,6 +68,9 @@ impl ExactSizeIterator for Chunks<'_> {
 impl std::iter::FusedIterator for Chunks<'_> {}
 
 /// An iterator over the bytes of `Rope`s and `RopeSlice`s.
+///
+/// This struct is created by the `bytes` method on [`Rope`](Rope::bytes())
+/// and [`RopeSlice`](RopeSlice::bytes()). See their documentation for more.
 #[derive(Clone)]
 pub struct Bytes<'a> {
     chunks: Chunks<'a>,
@@ -186,7 +192,11 @@ impl ExactSizeIterator for Bytes<'_> {
 
 impl std::iter::FusedIterator for Bytes<'_> {}
 
-/// An iterator over the [`char`]s of `Rope`s and `RopeSlice`s.
+/// An iterator over the code points (i.e. [`char`]s) of `Rope`s and
+/// `RopeSlice`s.
+///
+/// This struct is created by the `chars` method on [`Rope`](Rope::chars())
+/// and [`RopeSlice`](RopeSlice::chars()). See their documentation for more.
 #[derive(Clone)]
 pub struct Chars<'a> {
     chunks: Chunks<'a>,
@@ -315,7 +325,12 @@ impl DoubleEndedIterator for Chars<'_> {
 
 impl std::iter::FusedIterator for Chars<'_> {}
 
-/// An iterator over the raw lines of `Rope`s and `RopeSlice`s.
+/// An iterator over the lines of `Rope`s and `RopeSlice`s, including the line
+/// terminators (`\n` or `\r\n`).
+///
+/// This struct is created by the `raw_lines` method on
+/// [`Rope`](Rope::raw_lines()) and [`RopeSlice`](RopeSlice::raw_lines()). See
+/// their documentation for more.
 #[derive(Clone)]
 pub struct RawLines<'a> {
     units: Units<'a, { Rope::fanout() }, RopeChunk, RawLineMetric>,
@@ -384,7 +399,11 @@ impl ExactSizeIterator for RawLines<'_> {
 
 impl std::iter::FusedIterator for RawLines<'_> {}
 
-/// An iterator over the lines of `Rope`s and `RopeSlice`s.
+/// An iterator over the lines of `Rope`s and `RopeSlice`s, not including the
+/// line terminators (`\n` or `\r\n`).
+///
+/// This struct is created by the `lines` method on [`Rope`](Rope::lines()) and
+/// [`RopeSlice`](RopeSlice::lines()). See their documentation for more.
 #[derive(Clone)]
 pub struct Lines<'a> {
     units: Units<'a, { Rope::fanout() }, RopeChunk, LineMetric>,
@@ -466,6 +485,10 @@ mod graphemes {
 
     /// An iterator over the extended grapheme clusters of `Rope`s and
     /// `RopeSlice`s.
+    ///
+    /// This struct is created by the `graphemes` method on
+    /// [`Rope`](Rope::graphemes()) and [`RopeSlice`](RopeSlice::graphemes()).
+    /// See their documentation for more.
     #[derive(Clone)]
     pub struct Graphemes<'a> {
         chunks: Chunks<'a>,
