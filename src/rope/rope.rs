@@ -30,6 +30,10 @@ impl Rope {
     pub fn assert_invariants(&self) {
         self.tree.assert_invariants();
 
+        if let Some(last) = self.chunks().next_back() {
+            assert_eq!(self.has_trailing_newline, last_byte_is_newline(last));
+        }
+
         let mut chunks = self.chunks().peekable();
 
         if chunks.len() == 0 {
@@ -412,8 +416,26 @@ impl Rope {
             byte_offset_out_of_bounds(end, self.line_len());
         }
 
-        self.tree
-            .replace(ByteMetric(start)..ByteMetric(end), text.as_ref().into());
+        let text = text.as_ref();
+
+        let mut update_trailing = false;
+
+        if end == self.byte_len() {
+            if !text.is_empty() {
+                self.has_trailing_newline = last_byte_is_newline(text);
+            } else if start == 0 {
+                self.has_trailing_newline = false;
+            } else {
+                update_trailing = true;
+            }
+        }
+
+        self.tree.replace(ByteMetric(start)..ByteMetric(end), text.into());
+
+        if update_trailing {
+            self.has_trailing_newline =
+                last_byte_is_newline(self.chunks().next_back().unwrap());
+        }
 
         #[cfg(debug_assertions)]
         self.assert_invariants();

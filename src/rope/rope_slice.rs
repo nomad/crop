@@ -9,8 +9,6 @@ use crate::range_bounds_to_start_end;
 use crate::tree::TreeSlice;
 
 /// An immutable slice of a [`Rope`](crate::Rope).
-///
-/// TODO: docs
 #[derive(Copy, Clone)]
 pub struct RopeSlice<'a> {
     pub(super) tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>,
@@ -21,6 +19,10 @@ impl<'a> RopeSlice<'a> {
     #[doc(hidden)]
     pub fn assert_invariants(&self) {
         self.tree_slice.assert_invariants();
+
+        let last = self.tree_slice.end_slice();
+
+        assert_eq!(self.has_trailing_newline, last_byte_is_newline(last))
     }
 
     /// Returns the byte at `byte_index`.
