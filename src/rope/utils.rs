@@ -270,7 +270,10 @@ mod panic_messages {
     ) -> ! {
         debug_assert!(byte_start > byte_end);
 
-        panic!();
+        panic!(
+            "Byte start after end: the start is {byte_start} but the end is \
+             {byte_end}"
+        );
     }
 
     #[inline]
@@ -306,6 +309,9 @@ mod panic_messages {
     ) -> ! {
         debug_assert!(line_start > line_end);
 
-        panic!();
+        panic!(
+            "Line start after end: the start is {line_start} but the end is \
+             {line_end}"
+        );
     }
 }
