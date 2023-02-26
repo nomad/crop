@@ -187,6 +187,8 @@ impl<'a> ChunkSlice {
     ) -> (&'a ChunkSlice, &'a ChunkSlice) {
         let split_at =
             adjust_split_point::<WITH_RIGHT_BIAS>(self, byte_offset);
+        // SAFETY: we've adjusted the split point so now it's guaranteed to be
+        // valid.
         unsafe { self.split_unchecked(split_at) }
     }
 

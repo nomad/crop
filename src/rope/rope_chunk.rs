@@ -200,6 +200,8 @@ impl RopeChunk {
             self.as_slice(),
             byte_offset,
         );
+        // SAFETY: we've adjusted the split point so now it's guaranteed to be
+        // valid.
         unsafe { self.split_off_unchecked(split_at) }
     }
 

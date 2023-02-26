@@ -246,7 +246,7 @@ mod from_treeslice {
 
         if invalid_in_first > 0 {
             {
-                // Safety : `root` was just enclosed in a `Node::Internal`
+                // SAFETY : `root` was just enclosed in a `Node::Internal`
                 // variant.
                 let inode = unsafe {
                     Arc::get_mut(&mut root)
@@ -262,11 +262,10 @@ mod from_treeslice {
 
         if invalid_in_last > 0 {
             {
-                // Safety (as_mut_internal_unchecked): for the root to become a
-                // leaf node after the previous call to `pull_up_singular` the
-                // TreeSlice would've had to span 2 leaves, and that case case
-                // should have already been handled before calling this
-                // function.
+                // SAFETY: for the root to become a leaf node after the
+                // previous call to `pull_up_singular` the TreeSlice would've
+                // had to span 2 leaves, and that case case should have already
+                // been handled before calling this function.
                 let inode = unsafe {
                     Arc::get_mut(&mut root)
                         .unwrap()
@@ -311,7 +310,7 @@ mod from_treeslice {
         let mut offset = L::BaseMetric::zero();
 
         let mut children = {
-            // Safety: the slice's leaf count is > 1 so its root has to be an
+            // SAFETY: the slice's leaf count is > 1 so its root has to be an
             // internal node.
             let root = unsafe { slice.root().as_internal_unchecked() };
             root.children().iter()
@@ -507,9 +506,9 @@ mod from_treeslice {
 mod tree_replace {
     //! This module contains the logic used to implement [`Tree::replace()`].
     //!
-    //! TODO: explain how this works... to make a long story short we first
-    //! call [`replace_range_with_slice`] recursively until we get to the
-    //! deepest node that fully contains the replacement range.
+    //! TODO: explain how this works... we first call
+    //! [`replace_range_with_slice`] recursively until we get to the deepest
+    //! node that fully contains the replacement range.
     //!
     //! Once we get there we call [`replace_range_in_deepest`] which can either
     //! return some extra nodes to be pushed after that node if the replace
@@ -702,10 +701,14 @@ mod tree_replace {
             if last.depth() == target_depth && !last.is_underfilled() {
                 extras.push(last)
             } else {
+                debug_assert!(inode.depth() >= 2);
+
                 inode.with_child_mut(start_idx, |start| {
                     let previous_node = {
                         let n = extras.last_mut().unwrap_or(start);
                         let n = Arc::make_mut(n);
+                        // SAFETY: the inode's depth is >= 2 so all its
+                        // children are internal nodes.
                         unsafe { n.as_mut_internal_unchecked() }
                     };
 
@@ -714,6 +717,9 @@ mod tree_replace {
 
                         let l = {
                             let n = Arc::make_mut(&mut last);
+                            // SAFETY: last is at the same depth as
+                            // previous_node so it must be an internal node as
+                            // well.
                             unsafe { n.as_mut_internal_unchecked() }
                         };
 
@@ -917,6 +923,8 @@ mod tree_replace {
 
                         let l = {
                             let l = Arc::get_mut(&mut last).unwrap();
+                            // SAFETY: all the nodes in `leaves` are guaranteed
+                            // to be leaf nodes.
                             unsafe { l.as_mut_leaf_unchecked() }
                         };
 
@@ -927,8 +935,6 @@ mod tree_replace {
                         } else {
                             leaves.push(last)
                         }
-
-                        debug_assert!(!leaf.is_underfilled());
 
                         if leaves.is_empty() {
                             *extra_leaves = None;

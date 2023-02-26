@@ -124,7 +124,8 @@ struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// there is one) is 2.
     path: Vec<(&'a Inode<N, L>, usize)>,
 
-    /// The current leaves.
+    /// The current leaves. All the nodes in the slice are guaranteed to be
+    /// leaf nodes.
     leaves: &'a [Arc<Node<N, L>>],
 
     /// The index of the next leaf in [`leaves`](Self::leaves) that'll be
@@ -340,6 +341,8 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 
         if self.next_leaf_idx < self.leaves.len() {
             let lnode = &self.leaves[self.next_leaf_idx];
+            // SAFETY: all the nodes in `leaves` are guaranteed to be leaf
+            // nodes.
             let lnode = unsafe { lnode.as_leaf_unchecked() };
             self.next_leaf_idx += 1;
             self.whole_yielded += 1;
@@ -347,6 +350,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
         } else if self.whole_yielded < self.whole_total {
             self.leaves = self.next_bunch();
             let lnode = &self.leaves[0];
+            // SAFETY: same as above.
             let lnode = unsafe { lnode.as_leaf_unchecked() };
             self.next_leaf_idx = 1;
             self.whole_yielded += 1;
@@ -373,7 +377,8 @@ struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// there is one) is 2.
     path: Vec<(&'a Inode<N, L>, usize)>,
 
-    /// The current leaves.
+    /// The current leaves. All the nodes in the slice are guaranteed to be
+    /// leaf nodes.
     leaves: &'a [Arc<Node<N, L>>],
 
     /// The index of the last leaf in [`leaves`](Self::leaves) that was yielded
@@ -595,6 +600,8 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
         if self.last_leaf_idx > 0 {
             self.last_leaf_idx -= 1;
             let lnode = &self.leaves[self.last_leaf_idx];
+            // SAFETY: all the nodes in `leaves` are guaranteed to be leaf
+            // nodes.
             let lnode = unsafe { lnode.as_leaf_unchecked() };
             self.whole_yielded += 1;
             Some((lnode.as_slice(), lnode.summary()))
@@ -602,6 +609,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
             self.leaves = self.previous_bunch();
             self.last_leaf_idx = self.leaves.len() - 1;
             let lnode = &self.leaves[self.last_leaf_idx];
+            // SAFETY: same as above.
             let lnode = unsafe { lnode.as_leaf_unchecked() };
             self.whole_yielded += 1;
             Some((lnode.as_slice(), lnode.summary()))
