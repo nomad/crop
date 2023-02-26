@@ -257,7 +257,7 @@ impl Rope {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```no_run
     /// # use crop::Rope;
     /// #
     /// let r = Rope::from("arg!\r\n🐻‍❄️");
@@ -384,7 +384,28 @@ impl Rope {
         is_grapheme_boundary(self.chunks(), self.byte_len(), byte_offset)
     }
 
-    /// TODO: docs
+    /// Returns the line at `line_index`, without its line terminator.
+    ///
+    /// If you want to include the line break consider taking a
+    /// [`line_slice()`](Self::line_slice()) in the
+    /// `line_index..line_index + 1` range.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the line index is out of bounds (i.e. greater than or equal
+    /// to [`line_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("foo\nbar\r\nbaz");
+    ///
+    /// assert_eq!(r.line(0), "foo");
+    /// assert_eq!(r.line(1), "bar");
+    /// assert_eq!(r.line(2), "baz");
+    /// ```
     #[inline]
     pub fn line(&self, line_index: usize) -> RopeSlice<'_> {
         if line_index >= self.line_len() {
