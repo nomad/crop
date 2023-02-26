@@ -193,7 +193,23 @@ impl Rope {
         Bytes::from(self)
     }
 
-    /// Returns an iterator over the [`char`]s of this [`Rope`].
+    /// Returns an iterator over the [`char`]s of this `Rope`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("🐻‍❄️");
+    ///
+    /// let mut chars = r.chars();
+    ///
+    /// assert_eq!(Some('🐻'), chars.next());
+    /// assert_eq!(Some('\u{200d}'), chars.next());
+    /// assert_eq!(Some('❄'), chars.next());
+    /// assert_eq!(Some('\u{fe0f}'), chars.next());
+    /// assert_eq!(None, chars.next());
+    /// ```
     #[inline]
     pub fn chars(&self) -> Chars<'_> {
         Chars::from(self)

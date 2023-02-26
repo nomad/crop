@@ -172,13 +172,29 @@ impl<'a> RopeSlice<'a> {
         Bytes::from(self)
     }
 
-    /// Returns an iterator over the [`char`]s of this [`RopeSlice`].
+    /// Returns an iterator over the [`char`]s of this `RopeSlice`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("🐻‍❄️");
+    /// let s = r.byte_slice(4..);
+    ///
+    /// let mut chars = s.chars();
+    ///
+    /// assert_eq!(Some('\u{200d}'), chars.next());
+    /// assert_eq!(Some('❄'), chars.next());
+    /// assert_eq!(Some('\u{fe0f}'), chars.next());
+    /// assert_eq!(None, chars.next());
+    /// ```
     #[inline]
     pub fn chars(&'a self) -> Chars<'a> {
         Chars::from(self)
     }
 
-    /// Returns an iterator over the chunks of this [`RopeSlice`].
+    /// Returns an iterator over the chunks of this `RopeSlice`.
     #[inline]
     pub fn chunks(&'a self) -> Chunks<'a> {
         Chunks::from(self)
