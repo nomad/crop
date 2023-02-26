@@ -27,9 +27,9 @@ Cloning a `Rope` takes up only 16 extra bytes of memory, and its copy-on-write
 semantics allow the actual text contents to be duplicated only when different
 clones diverge due to user edits.
 
-This allows to send a snapshot of a `Rope` to a background thread to perform
-any IO or CPU-intensive computations, while the main thread is kept responsive
-and always ready for the next batch of edits.
+This allows to send snapshots of a `Rope` to background threads to perform any
+IO or CPU-intensive computations, while the main thread is kept responsive and
+always ready for the next batch of edits.
 
 ## Example usage
 
