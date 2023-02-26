@@ -5,17 +5,17 @@ I've benchmarked crop against [Ropey](https://github.com/cessen/ropey) and
 on 4 different use cases:
 
 - [creating](#creation) a rope from a string or using a builder;
-- [slicing](#slices) the rope and converting it back to an owned `Rope`;
-- [iterating](#iterators) over its chunks, bytes, `char`s, and lines;
+- [slicing](#slices) the rope and converting the slice back to an owned `Rope`;
+- [iterating](#iterators) over the rope's chunks, bytes, `char`s, and lines;
 - [editing](#edits) the rope by inserting/deleting/replacing some text.
 
 using 4 different input texts to track the change in performance as the size of
 the underlying buffer increases:
 
-- [tiny.txt](): 669 bytes, 9 lines;
-- [small.txt](): 1.5 KB, 20 lines;
-- [medium.txt](): 219 KB, 3086 lines;
-- [large.txt](): 1.5 MB, 21596 lines.
+- [tiny.txt][tiny]: 669 bytes, 9 lines;
+- [small.txt][small]: 1.5 KB, 20 lines;
+- [medium.txt][medium]: 219 KB, 3086 lines;
+- [large.txt][large]: 1.5 MB, 21596 lines.
 
 The code used to run the benchmarks can be found
 [here](https://github.com/noib3/rope_benches).
@@ -78,6 +78,11 @@ it wasn't included in the `iter_bytes` and `iter_chars` benchmarks.
 |   `cargo bench replace_large`   |      |
 |               :--:              | :--: |
 | ![replace_large][replace_large] | &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&nbsp; |
+
+[tiny]: https://github.com/noib3/rope_benches/blob/master/benches/common/tiny.txt
+[small]: https://github.com/noib3/rope_benches/blob/master/benches/common/small.txt
+[medium]: https://github.com/noib3/rope_benches/blob/master/benches/common/medium.txt
+[large]: https://github.com/noib3/rope_benches/blob/master/benches/common/large.txt
 
 [from_str]: https://user-images.githubusercontent.com/59321248/221392148-b93aca81-035e-4d2d-92c0-535e28a5a410.png
 [builder]: https://user-images.githubusercontent.com/59321248/221392170-21bea58f-e61e-4361-803f-e9e9565c3fbf.png
