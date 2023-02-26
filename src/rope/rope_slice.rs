@@ -258,7 +258,26 @@ impl<'a> RopeSlice<'a> {
         self.byte_len() == 0
     }
 
-    /// TODO: docs
+    /// Returns `true` if the given byte offset lies on a grapheme cluster
+    /// boundary.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the byte offset is out of bounds (i.e. greater than
+    /// [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("aargh!\r\n🐻‍❄️");
+    /// let s = r.line_slice(1..);
+    ///
+    /// assert!(s.is_grapheme_boundary(0));
+    /// assert!(s.is_grapheme_boundary(s.byte_len()));
+    /// assert!(!s.is_grapheme_boundary(4)); // between the 1st and 2nd code point of '🐻‍❄️'
+    /// ```
     #[cfg(feature = "graphemes")]
     #[inline]
     pub fn is_grapheme_boundary(&self, byte_offset: usize) -> bool {
