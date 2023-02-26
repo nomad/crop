@@ -253,8 +253,14 @@ where
 
         if range.start > M::zero() {
             range.start += M::measure(&self.offset);
-            range.end += M::measure(&self.offset);
-            Self::from_range_in_root(self.root, range)
+            if range.end <= self.measure::<M>() {
+                range.end += M::measure(&self.offset);
+                Self::from_range_in_root(self.root, range)
+            } else {
+                let end =
+                    L::BaseMetric::measure(&self.offset) + self.base_measure();
+                Self::slice_impl(self.root, range.start, end)
+            }
         } else if range.end <= self.measure::<M>() {
             let start = L::BaseMetric::measure(&self.offset);
             if range.end > M::zero() {

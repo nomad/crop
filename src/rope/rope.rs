@@ -491,7 +491,25 @@ impl Rope {
         line_index
     }
 
-    /// TODO: docs
+    /// Returns an immutable slice of the `Rope` in the specified line range,
+    /// where the start and end of the range are interpreted as offsets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the start is greater than the end or if the end is out of
+    /// bounds (i.e. greater than [`line_len()`](Self::line_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("foo\nbar\r\nbaz\nfoobar\n");
+    ///
+    /// assert_eq!(r.line_slice(..1), "foo\n");
+    /// assert_eq!(r.line_slice(1..3), "bar\r\nbaz\n");
+    /// assert_eq!(r.line_slice(3..), "foobar\n");
+    /// ```
     #[inline]
     pub fn line_slice<R>(&self, line_range: R) -> RopeSlice<'_>
     where

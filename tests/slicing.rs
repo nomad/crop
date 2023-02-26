@@ -123,6 +123,18 @@ fn line_slice_1() {
 }
 
 #[test]
+fn byte_slice_then_line() {
+    let r = Rope::from("foo\nbar\r\nbaz\nfoobar\n");
+    let s = r.byte_slice(2..17);
+
+    println!("{s:?}");
+
+    assert_eq!(s.line_slice(..1), "o\n");
+    assert_eq!(s.line_slice(1..3), "bar\r\nbaz\n");
+    assert_eq!(s.line_slice(3..), "foob");
+}
+
+#[test]
 fn line_slices_random() {
     let mut rng = rand::thread_rng();
 

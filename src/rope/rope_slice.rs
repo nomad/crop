@@ -415,7 +415,26 @@ impl<'a> RopeSlice<'a> {
         line_index
     }
 
-    /// TODO: docs
+    /// Returns a sub-slice of this `RopeSlice` in the specified line range,
+    /// where the start and end of the range are interpreted as offsets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the start is greater than the end or if the end is out of
+    /// bounds (i.e. greater than [`line_len()`](Self::line_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("foo\nbar\r\nbaz\nfoobar\n");
+    /// let s = r.byte_slice(2..17);
+    ///
+    /// assert_eq!(s.line_slice(..1), "o\n");
+    /// assert_eq!(s.line_slice(1..3), "bar\r\nbaz\n");
+    /// assert_eq!(s.line_slice(3..), "foob");
+    /// ```
     #[inline]
     pub fn line_slice<R>(self, line_range: R) -> RopeSlice<'a>
     where
