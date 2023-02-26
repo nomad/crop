@@ -26,37 +26,47 @@ GHz 6-Core Intel Core i7.
 ## Creation
 
 | `cargo bench from_str` | `cargo bench builder` |
-|           :--:         |          :--:         |
+|          :--:          |         :--:          |
 | ![from_str][from_str]  | ![builder][builder]   |
 
 ## Slices
 
 Unlike crop and Ropey, xi_rope doesn't have a proper `RopeSlice` type and
-slicing a `Rope` results in a newly allocated `Rope` so it hasn't been included
-in the `from_slice` benchmark.
+slicing a `Rope` results in a newly allocated `Rope` so it wasn't included in
+the `from_slice` benchmark.
 
-| `cargo bench byte_slice` | `cargo bench line_slice` |
-| :--: | :--: |
-| ![byte_slice][byte_slice] | ![line_slice][line_slice] |
+|  `cargo bench byte_slice`  | `cargo bench line_slice`  |
+|            :--:            |            :--:           |
+| ![byte_slice][byte_slice]  | ![line_slice][line_slice] |
 
 |       `cargo bench from_slice`      |      |
-|                :--:                 | :--: |
+|                 :--:                | :--: |
 | ![rope_from_slice][rope_from_slice] | &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&nbsp; |
 
 ## Iterators
 
-| `cargo bench iter_chunks` | `cargo bench iter_bytes` |
-| :--: | :--: |
-| ![Chunks](../rope-benches/graphs/iter_lines.png) | ![Bytes](../rope-benches/graphs/iter_lines.png)|
+xi_rope doesn't provide iterators over the bytes and `char`s of its `Rope` so
+it wasn't included in the `iter_bytes` and `iter_chars` benchmarks.
 
-| `cargo bench iter_chars` | `cargo bench iter_lines` |
-| :--: | :--: |
-| ![Chars](../rope-benches/graphs/iter_lines.png) | ![Lines](../rope-benches/graphs/iter_lines.png)|
+| `cargo bench iter_chunks`   | `cargo bench iter_bytes`  |
+|             :--:            |            :--:           |
+| ![iter_chunks][iter_chunks] | ![iter_bytes][iter_bytes] |
+
+| `cargo bench iter_chars`  | `cargo bench iter_lines`  |
+|            :--:           |            :--:           |
+| ![iter_chars][iter_chars] | ![iter_lines][iter_lines] |
+
 
 ## Edits
 
 [from_str]: https://user-images.githubusercontent.com/59321248/221392148-b93aca81-035e-4d2d-92c0-535e28a5a410.png
 [builder]: https://user-images.githubusercontent.com/59321248/221392170-21bea58f-e61e-4361-803f-e9e9565c3fbf.png
+
 [byte_slice]:  https://user-images.githubusercontent.com/59321248/221392230-eba905b9-d617-475b-be41-868e0c26aca6.png
 [line_slice]: https://user-images.githubusercontent.com/59321248/221392233-a00f1684-1b20-4f91-a860-a9deca4def84.png
 [rope_from_slice]: https://user-images.githubusercontent.com/59321248/221392238-f7a132c9-53e7-4124-9b9f-3f4001a1ecd9.png
+
+[iter_chunks]: https://user-images.githubusercontent.com/59321248/221393378-7a3bd6e8-274a-4fe7-bff7-61095b9dd205.png
+[iter_bytes]: https://user-images.githubusercontent.com/59321248/221393386-be9f68e9-b4d7-402c-8483-01ee55129987.png
+[iter_chars]: https://user-images.githubusercontent.com/59321248/221393393-d7c83a0c-1426-409f-ad72-8941e5179204.png
+[iter_lines]: https://user-images.githubusercontent.com/59321248/221393396-48bab915-1414-43cd-ac50-11e7e07f3390.png
