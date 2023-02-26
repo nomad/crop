@@ -59,6 +59,26 @@ it wasn't included in the `iter_bytes` and `iter_chars` benchmarks.
 
 ## Edits
 
+| `cargo bench insert_char`   |    `cargo bench insert_sentence`    |
+|             :--:            |                 :--:                |
+| ![insert_char][insert_char] | ![insert_sentence][insert_sentence] |
+
+|  `cargo bench insert_large`   |  `cargo bench delete_char`  |
+|              :--:             |             :--:            |
+| ![insert_large][insert_large] | ![delete_char][delete_char] |
+
+| `cargo bench delete_sentence`       |  `cargo bench delete_large`   |
+|                 :--:                |              :--:             |
+| ![delete_sentence][delete_sentence] | ![delete_large][delete_large] |
+
+|  `cargo bench replace_char`   |    `cargo bench replace_sentence`     |
+|              :--:             |                  :--:                 |
+| ![replace_char][replace_char] | ![replace_sentence][replace_sentence] |
+
+|   `cargo bench replace_large`   |      |
+|               :--:              | :--: |
+| ![replace_large][replace_large] | &emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&emsp;&nbsp; |
+
 [from_str]: https://user-images.githubusercontent.com/59321248/221392148-b93aca81-035e-4d2d-92c0-535e28a5a410.png
 [builder]: https://user-images.githubusercontent.com/59321248/221392170-21bea58f-e61e-4361-803f-e9e9565c3fbf.png
 
@@ -70,3 +90,13 @@ it wasn't included in the `iter_bytes` and `iter_chars` benchmarks.
 [iter_bytes]: https://user-images.githubusercontent.com/59321248/221393386-be9f68e9-b4d7-402c-8483-01ee55129987.png
 [iter_chars]: https://user-images.githubusercontent.com/59321248/221393393-d7c83a0c-1426-409f-ad72-8941e5179204.png
 [iter_lines]: https://user-images.githubusercontent.com/59321248/221393396-48bab915-1414-43cd-ac50-11e7e07f3390.png
+
+[insert_char]: https://user-images.githubusercontent.com/59321248/221394925-4186e25e-3ffa-4dec-a89a-7d9f9859cd9f.png
+[insert_sentence]: https://user-images.githubusercontent.com/59321248/221394929-0a317261-3b42-42fe-9bbb-af22d659dfdc.png
+[insert_large]: https://user-images.githubusercontent.com/59321248/221394937-476a0c8b-30e2-4d36-a94e-ad95ea2ff1fc.png
+[delete_char]:
+[delete_sentence]:
+[delete_large]:
+[replace_char]:
+[replace_sentence]:
+[replace_large]:
