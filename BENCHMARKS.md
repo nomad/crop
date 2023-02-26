@@ -94,9 +94,9 @@ it wasn't included in the `iter_bytes` and `iter_chars` benchmarks.
 [insert_char]: https://user-images.githubusercontent.com/59321248/221394925-4186e25e-3ffa-4dec-a89a-7d9f9859cd9f.png
 [insert_sentence]: https://user-images.githubusercontent.com/59321248/221394929-0a317261-3b42-42fe-9bbb-af22d659dfdc.png
 [insert_large]: https://user-images.githubusercontent.com/59321248/221394937-476a0c8b-30e2-4d36-a94e-ad95ea2ff1fc.png
-[delete_char]:
-[delete_sentence]:
-[delete_large]:
+[delete_char]: https://user-images.githubusercontent.com/59321248/221395853-25601664-407c-4153-82c2-0d1f0d6dc451.png
+[delete_sentence]: https://user-images.githubusercontent.com/59321248/221395858-832af775-63b5-46ff-8b44-2bded84692f3.png
+[delete_large]: https://user-images.githubusercontent.com/59321248/221395862-4e921f4d-f56b-49ee-986b-0cf8fb7a9d39.png
 [replace_char]:
 [replace_sentence]:
 [replace_large]:
