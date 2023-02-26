@@ -201,7 +201,23 @@ impl<'a> RopeSlice<'a> {
     }
 
     /// Returns an iterator over the extended grapheme clusters of this
-    /// [`RopeSlice`].
+    /// `RopeSlice`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("arg!\r\n🐻‍❄️");
+    /// let s = r.byte_slice(3..);
+    ///
+    /// let mut graphemes = s.graphemes();
+    ///
+    /// assert_eq!(Some("!"), graphemes.next().as_deref());
+    /// assert_eq!(Some("\r\n"), graphemes.next().as_deref());
+    /// assert_eq!(Some("🐻‍❄️"), graphemes.next().as_deref());
+    /// assert_eq!(None, graphemes.next());
+    /// ```
     #[cfg(feature = "graphemes")]
     #[inline]
     pub fn graphemes(&'a self) -> crate::iter::Graphemes<'a> {

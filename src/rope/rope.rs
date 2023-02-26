@@ -253,7 +253,25 @@ impl Rope {
     }
 
     /// Returns an iterator over the extended grapheme clusters of this
-    /// [`Rope`].
+    /// `Rope`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("arg!\r\n🐻‍❄️");
+    ///
+    /// let mut graphemes = r.graphemes();
+    ///
+    /// assert_eq!(Some("a"), graphemes.next().as_deref());
+    /// assert_eq!(Some("r"), graphemes.next().as_deref());
+    /// assert_eq!(Some("g"), graphemes.next().as_deref());
+    /// assert_eq!(Some("!"), graphemes.next().as_deref());
+    /// assert_eq!(Some("\r\n"), graphemes.next().as_deref());
+    /// assert_eq!(Some("🐻‍❄️"), graphemes.next().as_deref());
+    /// assert_eq!(None, graphemes.next());
+    /// ```
     #[cfg(feature = "graphemes")]
     #[inline]
     pub fn graphemes(&self) -> crate::iter::Graphemes<'_> {
