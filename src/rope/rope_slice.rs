@@ -149,7 +149,24 @@ impl<'a> RopeSlice<'a> {
         self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)).into()
     }
 
-    /// Returns an iterator over the bytes of this [`RopeSlice`].
+    /// Returns an iterator over the bytes of this `RopeSlice`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("foobar");
+    /// let s = r.byte_slice(1..5);
+    ///
+    /// let mut bytes = s.bytes();
+    ///
+    /// assert_eq!(Some(b'o'), bytes.next());
+    /// assert_eq!(Some(b'o'), bytes.next());
+    /// assert_eq!(Some(b'b'), bytes.next());
+    /// assert_eq!(Some(b'a'), bytes.next());
+    /// assert_eq!(None, bytes.next());
+    /// ```
     #[inline]
     pub fn bytes(&'a self) -> Bytes<'a> {
         Bytes::from(self)
