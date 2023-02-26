@@ -327,7 +327,33 @@ impl<'a> RopeSlice<'a> {
         Self { tree_slice, has_trailing_newline: false }
     }
 
-    /// TODO: docs
+    /// Returns the number of lines in the `RopeSlice`.
+    ///
+    /// The final line break is optional and doesn't count as a separate empty
+    /// line.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("a\nb\r\n");
+    ///
+    /// let s = r.byte_slice(..);
+    /// assert_eq!(s.line_len(), 2);
+    ///
+    /// let s = r.byte_slice(..3);
+    /// assert_eq!(s.line_len(), 2);
+    ///
+    /// let s = r.byte_slice(..2);
+    /// assert_eq!(s.line_len(), 1);
+    ///
+    /// let s = r.byte_slice(..1);
+    /// assert_eq!(s.line_len(), 1);
+    ///
+    /// let s = r.byte_slice(..0);
+    /// assert_eq!(s.line_len(), 0);
+    /// ```
     #[inline]
     pub fn line_len(&self) -> usize {
         self.tree_slice.summary().line_breaks + 1

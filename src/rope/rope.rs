@@ -407,7 +407,32 @@ impl Rope {
         RopeSlice { tree_slice, has_trailing_newline: false }
     }
 
-    /// TODO: docs
+    /// Returns the number of lines in the `Rope`.
+    ///
+    /// The final line break is optional and doesn't count as a separate empty
+    /// line.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let mut r = Rope::new();
+    ///
+    /// assert_eq!(r.line_len(), 0);
+    ///
+    /// r.insert(0, "a");
+    /// assert_eq!(r.line_len(), 1);
+    ///
+    /// r.insert(1, "\n");
+    /// assert_eq!(r.line_len(), 1);
+    ///
+    /// r.insert(2, "b");
+    /// assert_eq!(r.line_len(), 2);
+    ///
+    /// r.insert(3, "\r\n");
+    /// assert_eq!(r.line_len(), 2);
+    /// ```
     #[inline]
     pub fn line_len(&self) -> usize {
         self.tree.summary().line_breaks + 1
