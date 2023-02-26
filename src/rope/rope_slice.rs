@@ -454,13 +454,67 @@ impl<'a> RopeSlice<'a> {
         self.tree_slice.slice(RawLineMetric(start)..RawLineMetric(end)).into()
     }
 
-    /// Returns an iterator over the lines of this [`RopeSlice`].
+    /// Returns an iterator over the lines of this `RopeSlice`, not including
+    /// the line terminators.
+    ///
+    /// The final line break is optional and doesn't cause the iterator to
+    /// return a final empty line.
+    ///
+    /// If you want to include the line breaks consider using the
+    /// [`raw_lines()`](Self::raw_lines()) method instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("foo\nbar\r\nbaz\n");
+    /// let s = r.line_slice(1..);
+    ///
+    /// let mut lines = s.lines();
+    ///
+    /// assert_eq!("bar", lines.next().unwrap());
+    /// assert_eq!("baz", lines.next().unwrap());
+    /// assert_eq!(None, lines.next());
+    /// ```
     #[inline]
     pub fn lines(&'a self) -> Lines<'a> {
         Lines::from(self)
     }
 
-    /// TODO: docs.
+    /// Returns an iterator over the lines of this `RopeSlice`, including the
+    /// line terminators.
+    ///
+    /// The final line break is optional and doesn't cause the iterator to
+    /// return a final empty line.
+    ///
+    /// If you don't  want to include the line breaks consider using the
+    /// [`raw_lines()`](Self::raw_lines()) method instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("foo\nbar\r\nbaz\n");
+    /// let s = r.byte_slice(..r.byte_len() - 1);
+    ///
+    /// let mut raw_lines = s.raw_lines();
+    ///
+    /// assert_eq!("foo\n", raw_lines.next().unwrap());
+    /// assert_eq!("bar\r\n", raw_lines.next().unwrap());
+    /// assert_eq!("baz", raw_lines.next().unwrap());
+    /// assert_eq!(None, raw_lines.next());
+    ///
+    /// let s = r.byte_slice(..);
+    ///
+    /// let mut raw_lines = s.raw_lines();
+    ///
+    /// assert_eq!("foo\n", raw_lines.next().unwrap());
+    /// assert_eq!("bar\r\n", raw_lines.next().unwrap());
+    /// assert_eq!("baz\n", raw_lines.next().unwrap());
+    /// assert_eq!(None, raw_lines.next());
+    /// ```
     #[inline]
     pub fn raw_lines(&self) -> RawLines<'_> {
         RawLines::from(self)
