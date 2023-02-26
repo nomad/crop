@@ -286,7 +286,25 @@ impl Rope {
         self.replace(byte_offset..byte_offset, text)
     }
 
-    /// TODO: docs
+    /// Returns `true` if the given byte offset lies on a [`char`] boundary.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the byte offset is out of bounds (i.e. greater than
+    /// [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("Löwe 老虎 Léopard");
+    ///
+    /// assert!(r.is_char_boundary(0));
+    /// assert!(r.is_char_boundary(r.byte_len()));
+    /// assert!(r.is_char_boundary(6)); // between ' ' and '老'
+    /// assert!(!r.is_char_boundary(2)); // between the 1st and 2nd byte of 'ö'
+    /// ```
     #[inline]
     pub fn is_char_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
@@ -317,7 +335,7 @@ impl Rope {
         self.byte_len() == 0
     }
 
-    /// TODO: docs
+    ///
     #[cfg(feature = "graphemes")]
     #[inline]
     pub fn is_grapheme_boundary(&self, byte_offset: usize) -> bool {

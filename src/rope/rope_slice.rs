@@ -208,7 +208,26 @@ impl<'a> RopeSlice<'a> {
         crate::iter::Graphemes::from(self)
     }
 
-    /// TODO: docs
+    /// Returns `true` if the given byte offset lies on a [`char`] boundary.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the byte offset is out of bounds (i.e. greater than
+    /// [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// let r = Rope::from("Löwe 老虎 Léopard");
+    /// let s = r.byte_slice(3..);
+    ///
+    /// assert!(s.is_char_boundary(0));
+    /// assert!(s.is_char_boundary(s.byte_len()));
+    /// assert!(s.is_char_boundary(6)); // between '老' and '虎'
+    /// assert!(!s.is_char_boundary(12)); // between the 1st and 2nd byte of 'é'
+    /// ```
     #[inline]
     pub fn is_char_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
@@ -226,13 +245,13 @@ impl<'a> RopeSlice<'a> {
     /// # Examples
     ///
     /// ```
-    /// use crop::Rope;
-    ///
+    /// # use crop::Rope;
+    /// #
     /// let r = Rope::from("");
     /// assert!(r.byte_slice(..).is_empty());
     ///
     /// let r = Rope::from("foo");
-    /// assert!(!r.line_slice(0..1).is_empty());
+    /// assert!(!r.line_slice(..).is_empty());
     /// ```
     #[inline]
     pub fn is_empty(&self) -> bool {
