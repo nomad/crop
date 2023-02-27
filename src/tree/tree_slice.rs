@@ -251,26 +251,35 @@ where
         debug_assert!(range.start <= range.end);
         debug_assert!(range.end <= self.measure::<M>() + M::one());
 
-        if range.start > M::zero() {
-            range.start += M::measure(&self.offset);
-            if range.end <= self.measure::<M>() {
+        match (
+            range.start > M::zero(),
+            range.end < self.measure::<M>() + M::one(),
+        ) {
+            (true, true) => {
+                range.start += M::measure(&self.offset);
                 range.end += M::measure(&self.offset);
                 Self::from_range_in_root(self.root, range)
-            } else {
+            },
+
+            (true, false) => {
+                let start = M::measure(&self.offset) + range.start;
                 let end =
                     L::BaseMetric::measure(&self.offset) + self.base_measure();
-                Self::slice_impl(self.root, range.start, end)
-            }
-        } else if range.end <= self.measure::<M>() {
-            let start = L::BaseMetric::measure(&self.offset);
-            if range.end > M::zero() {
+                Self::slice_impl(self.root, start, end)
+            },
+
+            (false, true) if range.end > M::zero() => {
+                let start = L::BaseMetric::measure(&self.offset);
                 let end = M::measure(&self.offset) + range.end;
                 Self::slice_impl(self.root, start, end)
-            } else {
+            },
+
+            (false, true) => {
+                let start = L::BaseMetric::measure(&self.offset);
                 Self::slice_impl(self.root, start, start)
-            }
-        } else {
-            self
+            },
+
+            (false, false) => self,
         }
     }
 
