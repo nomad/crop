@@ -702,10 +702,7 @@ impl From<&str> for Rope {
     fn from(s: &str) -> Self {
         Rope {
             has_trailing_newline: last_byte_is_newline(s),
-
-            tree: Tree::from_leaves(
-                ChunkSegmenter::new(s).map(std::borrow::ToOwned::to_owned),
-            ),
+            tree: Tree::from_leaves(ChunkSegmenter::new(s).map(Into::into)),
         }
     }
 }

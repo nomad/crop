@@ -35,7 +35,7 @@ pub struct Units<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
     for Units<'a, FANOUT, L, M>
 where
-    for<'d> &'d L::Slice: Default,
+    for<'d> L::Slice<'d>: Default,
 {
     #[inline]
     fn from(tree: &'a Tree<FANOUT, L>) -> Units<'a, FANOUT, L, M> {
@@ -48,14 +48,12 @@ where
 }
 
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>>
-    From<&'a TreeSlice<'a, FANOUT, L>> for Units<'a, FANOUT, L, M>
+    From<&TreeSlice<'a, FANOUT, L>> for Units<'a, FANOUT, L, M>
 where
-    for<'d> &'d L::Slice: Default,
+    for<'d> L::Slice<'d>: Default,
 {
     #[inline]
-    fn from(
-        tree_slice: &'a TreeSlice<'a, FANOUT, L>,
-    ) -> Units<'a, FANOUT, L, M> {
+    fn from(tree_slice: &TreeSlice<'a, FANOUT, L>) -> Units<'a, FANOUT, L, M> {
         Self {
             forward: UnitsForward::from(tree_slice),
             backward: UnitsBackward::from(tree_slice),
@@ -129,7 +127,7 @@ struct UnitsForward<'a, const N: usize, L: Leaf, M: Metric<L>> {
 
     /// The `start_slice` field of the next `TreeSlice` that'll be returned by
     /// [`next`](Self::next()).
-    start_slice: &'a L::Slice,
+    start_slice: L::Slice<'a>,
 
     /// The `start_summary` field of the next `TreeSlice` that'll be returned
     /// by [`next`](Self::next()).
@@ -137,11 +135,11 @@ struct UnitsForward<'a, const N: usize, L: Leaf, M: Metric<L>> {
 
     /// The first slice in the yielding range and its summary. It's only set if
     /// we're iterating over a `TreeSlice`.
-    first_slice: Option<(&'a L::Slice, &'a L::Summary)>,
+    first_slice: Option<(L::Slice<'a>, L::Summary)>,
 
     /// The last slice in the yielding range and its summary. It's only set if
     /// we're iterating over a `TreeSlice`.
-    last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
+    last_slice: Option<(L::Slice<'a>, L::Summary)>,
 
     /// The start of the yielding range as an offset into the root.
     base_start: L::BaseMetric,
@@ -167,6 +165,8 @@ impl<const N: usize, L: Leaf, M: Metric<L>> Clone
         Self {
             path: self.path.clone(),
             yielded_in_leaf: self.yielded_in_leaf.clone(),
+            first_slice: self.first_slice.clone(),
+            last_slice: self.last_slice.clone(),
             start_summary: self.start_summary.clone(),
             ..*self
         }
@@ -176,7 +176,7 @@ impl<const N: usize, L: Leaf, M: Metric<L>> Clone
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
     for UnitsForward<'a, FANOUT, L, M>
 where
-    for<'d> &'d L::Slice: Default,
+    for<'d> L::Slice<'d>: Default,
 {
     #[inline]
     fn from(tree: &'a Tree<FANOUT, L>) -> UnitsForward<'a, FANOUT, L, M> {
@@ -185,7 +185,7 @@ where
             path: Vec::with_capacity(tree.root().depth()),
             leaf_node: tree.root(),
             yielded_in_leaf: L::Summary::default(),
-            start_slice: <&L::Slice>::default(),
+            start_slice: L::Slice::default(),
             start_summary: L::Summary::default(),
             first_slice: None,
             last_slice: None,
@@ -199,28 +199,28 @@ where
 }
 
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>>
-    From<&'a TreeSlice<'a, FANOUT, L>> for UnitsForward<'a, FANOUT, L, M>
+    From<&TreeSlice<'a, FANOUT, L>> for UnitsForward<'a, FANOUT, L, M>
 where
-    for<'d> &'d L::Slice: Default,
+    for<'d> L::Slice<'d>: Default,
 {
     #[inline]
     fn from(
-        tree_slice: &'a TreeSlice<'a, FANOUT, L>,
+        tree_slice: &TreeSlice<'a, FANOUT, L>,
     ) -> UnitsForward<'a, FANOUT, L, M> {
         Self {
             is_initialized: false,
             path: Vec::with_capacity(tree_slice.root().depth()),
             leaf_node: tree_slice.root(),
             yielded_in_leaf: L::Summary::default(),
-            start_slice: <&L::Slice>::default(),
+            start_slice: L::Slice::default(),
             start_summary: L::Summary::default(),
             first_slice: Some((
                 tree_slice.first_slice,
-                &tree_slice.first_summary,
+                tree_slice.first_summary.clone(),
             )),
             last_slice: Some((
                 tree_slice.last_slice,
-                &tree_slice.last_summary,
+                tree_slice.last_summary.clone(),
             )),
             base_start: L::BaseMetric::measure(&tree_slice.offset),
             base_yielded: L::BaseMetric::zero(),
@@ -271,10 +271,10 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                     match self.first_slice.take() {
                         Some((slice, summary)) => {
                             self.yielded_in_leaf =
-                                leaf.summary().clone() - summary;
+                                leaf.summary().clone() - &summary;
 
                             self.start_slice = slice;
-                            self.start_summary = summary.clone();
+                            self.start_summary = summary;
                         },
 
                         None => {
@@ -295,7 +295,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     /// leaf contains its `last_slice`, that'll be returned together with its
     /// `last_summary`.
     #[inline]
-    fn next_leaf(&mut self) -> (&'a L::Slice, &'a L::Summary) {
+    fn next_leaf(&mut self) -> (L::Slice<'a>, L::Summary) {
         debug_assert!(self.base_total > self.base_yielded);
 
         let mut node = loop {
@@ -331,7 +331,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                         if contains_last_slice {
                             self.last_slice.take().unwrap()
                         } else {
-                            (leaf.as_slice(), leaf.summary())
+                            (leaf.as_slice(), leaf.summary().clone())
                         }
                     };
 
@@ -522,7 +522,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             let (leaf_slice, leaf_summary) = self.next_leaf();
             self.yielded_in_leaf = L::Summary::default();
             self.start_slice = leaf_slice;
-            self.start_summary = leaf_summary.clone();
+            self.start_summary = leaf_summary;
 
             if M::measure(&self.start_summary) > M::zero() {
                 return self.next_unit_in_leaf();
@@ -548,12 +548,12 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             if contains_last_slice {
                 self.last_slice.take().unwrap()
             } else {
-                (leaf.as_slice(), leaf.summary())
+                (leaf.as_slice(), leaf.summary().clone())
             }
         };
 
         let (mut end_slice, mut end_summary, mut advance, rest, rest_summary) =
-            M::first_unit(slice, slice_summary);
+            M::first_unit(slice, &slice_summary);
 
         self.yielded_in_leaf = advance.clone();
         self.start_slice = rest;
@@ -781,7 +781,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             let (next_slice, next_summary) = self.next_leaf();
             self.yielded_in_leaf = L::Summary::default();
             self.start_slice = next_slice;
-            self.start_summary = next_summary.clone();
+            self.start_summary = next_summary;
         }
 
         // First, check if the leaf node is the root. If it is we're done.
@@ -816,7 +816,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         summary += &start_summary;
 
         let (end_slice, end_summary) = match self.last_slice.take() {
-            Some((slice, summary)) => (slice, summary.clone()),
+            Some((slice, summary)) => (slice, summary),
             None => (last_leaf.as_slice(), last_leaf.summary().clone()),
         };
 
@@ -926,7 +926,7 @@ struct UnitsBackward<'a, const N: usize, L: Leaf, M: Metric<L>> {
 
     /// The `end_slice` field of the next `TreeSlice` that'll be returned by
     /// [`previous`](Self::previous()).
-    end_slice: &'a L::Slice,
+    end_slice: L::Slice<'a>,
 
     /// The `end_summary` field of the next `TreeSlice` that'll be returned by
     /// [`previous`](Self::previous()).
@@ -934,11 +934,11 @@ struct UnitsBackward<'a, const N: usize, L: Leaf, M: Metric<L>> {
 
     /// The first slice in the yielding range and its summary. It's only set if
     /// we're iterating over a `TreeSlice`.
-    first_slice: Option<(&'a L::Slice, &'a L::Summary)>,
+    first_slice: Option<(L::Slice<'a>, L::Summary)>,
 
     /// The last slice in the yielding range and its summary. It's only set if
     /// we're iterating over a `TreeSlice`.
-    last_slice: Option<(&'a L::Slice, &'a L::Summary)>,
+    last_slice: Option<(L::Slice<'a>, L::Summary)>,
 
     /// The start of the yielding range as an offset into the root.
     base_start: L::BaseMetric,
@@ -958,6 +958,8 @@ impl<const N: usize, L: Leaf, M: Metric<L>> Clone
         Self {
             path: self.path.clone(),
             yielded_in_leaf: self.yielded_in_leaf.clone(),
+            first_slice: self.first_slice.clone(),
+            last_slice: self.last_slice.clone(),
             end_summary: self.end_summary.clone(),
             ..*self
         }
@@ -967,7 +969,7 @@ impl<const N: usize, L: Leaf, M: Metric<L>> Clone
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
     for UnitsBackward<'a, FANOUT, L, M>
 where
-    for<'d> &'d L::Slice: Default,
+    for<'d> L::Slice<'d>: Default,
 {
     #[inline]
     fn from(tree: &'a Tree<FANOUT, L>) -> UnitsBackward<'a, FANOUT, L, M> {
@@ -976,7 +978,7 @@ where
             path: Vec::with_capacity(tree.root().depth()),
             leaf_node: tree.root(),
             yielded_in_leaf: L::Summary::default(),
-            end_slice: <&L::Slice>::default(),
+            end_slice: L::Slice::default(),
             end_summary: L::Summary::default(),
             first_slice: None,
             last_slice: None,
@@ -988,28 +990,28 @@ where
 }
 
 impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>>
-    From<&'a TreeSlice<'a, FANOUT, L>> for UnitsBackward<'a, FANOUT, L, M>
+    From<&TreeSlice<'a, FANOUT, L>> for UnitsBackward<'a, FANOUT, L, M>
 where
-    for<'d> &'d L::Slice: Default,
+    for<'d> L::Slice<'d>: Default,
 {
     #[inline]
     fn from(
-        tree_slice: &'a TreeSlice<'a, FANOUT, L>,
+        tree_slice: &TreeSlice<'a, FANOUT, L>,
     ) -> UnitsBackward<'a, FANOUT, L, M> {
         Self {
             is_initialized: false,
             path: Vec::with_capacity(tree_slice.root().depth()),
             leaf_node: tree_slice.root(),
             yielded_in_leaf: L::Summary::default(),
-            end_slice: <&L::Slice>::default(),
+            end_slice: L::Slice::default(),
             end_summary: L::Summary::default(),
             first_slice: Some((
                 tree_slice.first_slice,
-                &tree_slice.first_summary,
+                tree_slice.first_summary.clone(),
             )),
             last_slice: Some((
                 tree_slice.last_slice,
-                &tree_slice.last_summary,
+                tree_slice.last_summary.clone(),
             )),
             base_start: L::BaseMetric::measure(&tree_slice.offset),
             base_remaining: tree_slice.base_measure(),
@@ -1063,10 +1065,10 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                     match self.last_slice.take() {
                         Some((slice, summary)) => {
                             self.yielded_in_leaf =
-                                leaf.summary().clone() - summary;
+                                leaf.summary().clone() - &summary;
 
                             self.end_slice = slice;
-                            self.end_summary = summary.clone();
+                            self.end_summary = summary;
                         },
 
                         None => {
@@ -1306,7 +1308,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             if contains_first_slice {
                 let (slice, summary) = self.first_slice.take().unwrap();
                 self.end_slice = slice;
-                self.end_summary = summary.clone();
+                self.end_summary = summary;
             } else {
                 self.end_slice = previous_leaf.as_slice();
                 self.end_summary = previous_leaf.summary().clone();
@@ -1331,7 +1333,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         summary += &end_summary;
 
         let (start_slice, start_summary) = match self.first_slice.take() {
-            Some((slice, summary)) => (slice, summary.clone()),
+            Some((slice, summary)) => (slice, summary),
             None => (first_leaf.as_slice(), first_leaf.summary().clone()),
         };
 
@@ -1568,7 +1570,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             if contains_first_slice {
                 let (slice, summary) = self.first_slice.take().unwrap();
                 self.end_slice = slice;
-                self.end_summary = summary.clone();
+                self.end_summary = summary;
             } else {
                 self.end_slice = previous_leaf.as_slice();
                 self.end_summary = previous_leaf.summary().clone();
@@ -1627,12 +1629,12 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             if contains_first_slice {
                 self.first_slice.take().unwrap()
             } else {
-                (leaf.as_slice(), leaf.summary())
+                (leaf.as_slice(), leaf.summary().clone())
             }
         };
 
         let (rest, rest_summary, mut start_slice, mut start_summary) =
-            M::remainder(slice, slice_summary);
+            M::remainder(slice, &slice_summary);
 
         advance += &start_summary;
 

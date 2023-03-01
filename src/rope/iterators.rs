@@ -23,9 +23,9 @@ impl<'a> From<&'a Rope> for Chunks<'a> {
     }
 }
 
-impl<'a> From<&'a RopeSlice<'a>> for Chunks<'a> {
+impl<'a> From<&RopeSlice<'a>> for Chunks<'a> {
     #[inline]
-    fn from(slice: &'a RopeSlice<'a>) -> Self {
+    fn from(slice: &RopeSlice<'a>) -> Self {
         let mut leaves = slice.tree_slice.leaves();
         if slice.byte_len() == 0 {
             let _ = leaves.next();
@@ -39,8 +39,7 @@ impl<'a> Iterator for Chunks<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        use std::ops::Deref;
-        self.leaves.next().map(|(slice, _)| slice.deref())
+        self.leaves.next().map(std::ops::Deref::deref)
     }
 
     #[inline]
@@ -53,8 +52,7 @@ impl<'a> Iterator for Chunks<'a> {
 impl DoubleEndedIterator for Chunks<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        use std::ops::Deref;
-        self.leaves.next_back().map(|(slice, _)| slice.deref())
+        self.leaves.next_back().map(std::ops::Deref::deref)
     }
 }
 
@@ -110,9 +108,9 @@ impl<'a> From<&'a Rope> for Bytes<'a> {
     }
 }
 
-impl<'a> From<&'a RopeSlice<'a>> for Bytes<'a> {
+impl<'a> From<&RopeSlice<'a>> for Bytes<'a> {
     #[inline]
-    fn from(slice: &'a RopeSlice<'a>) -> Self {
+    fn from(slice: &RopeSlice<'a>) -> Self {
         Self {
             chunks: slice.chunks(),
             forward_chunk: &[],
@@ -228,9 +226,9 @@ impl<'a> From<&'a Rope> for Chars<'a> {
     }
 }
 
-impl<'a> From<&'a RopeSlice<'a>> for Chars<'a> {
+impl<'a> From<&RopeSlice<'a>> for Chars<'a> {
     #[inline]
-    fn from(slice: &'a RopeSlice<'a>) -> Self {
+    fn from(slice: &RopeSlice<'a>) -> Self {
         Self {
             chunks: slice.chunks(),
             forward_chunk: "",
@@ -353,9 +351,9 @@ impl<'a> From<&'a Rope> for RawLines<'a> {
     }
 }
 
-impl<'a> From<&'a RopeSlice<'a>> for RawLines<'a> {
+impl<'a> From<&RopeSlice<'a>> for RawLines<'a> {
     #[inline]
-    fn from(slice: &'a RopeSlice<'a>) -> Self {
+    fn from(slice: &RopeSlice<'a>) -> Self {
         Self {
             units: slice.tree_slice.units::<RawLineMetric>(),
             lines_yielded: 0,
@@ -426,9 +424,9 @@ impl<'a> From<&'a Rope> for Lines<'a> {
     }
 }
 
-impl<'a> From<&'a RopeSlice<'a>> for Lines<'a> {
+impl<'a> From<&RopeSlice<'a>> for Lines<'a> {
     #[inline]
-    fn from(slice: &'a RopeSlice<'a>) -> Self {
+    fn from(slice: &RopeSlice<'a>) -> Self {
         Self {
             units: slice.tree_slice.units::<LineMetric>(),
             lines_yielded: 0,
@@ -540,9 +538,9 @@ mod graphemes {
         }
     }
 
-    impl<'a> From<&'a RopeSlice<'a>> for Graphemes<'a> {
+    impl<'a> From<&RopeSlice<'a>> for Graphemes<'a> {
         #[inline]
-        fn from(slice: &'a RopeSlice<'a>) -> Self {
+        fn from(slice: &RopeSlice<'a>) -> Self {
             let len = slice.byte_len();
 
             Self {

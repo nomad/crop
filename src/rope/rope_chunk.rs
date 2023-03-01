@@ -4,7 +4,13 @@ use super::chunk_slice::ChunkSlice;
 use super::metrics::ByteMetric;
 use super::utils::*;
 use crate::range_bounds_to_start_end;
-use crate::tree::{BalancedLeaf, Leaf, ReplaceableLeaf, Summarize};
+use crate::tree::{
+    AsSlice,
+    BalancedLeaf,
+    BaseMeasured,
+    ReplaceableLeaf,
+    Summarize,
+};
 
 #[cfg(any(test, feature = "small_chunks"))]
 const ROPE_CHUNK_MAX_BYTES: usize = 4;
@@ -34,12 +40,6 @@ impl Default for RopeChunk {
 }
 
 impl RopeChunk {
-    #[inline]
-    fn as_slice(&self) -> &ChunkSlice {
-        use std::borrow::Borrow;
-        self.borrow()
-    }
-
     /// Balances `left` using `right`.
     ///
     /// # Panics
@@ -77,7 +77,7 @@ impl RopeChunk {
 
         *left_summary += to_left_summary;
 
-        *right = new_right.to_owned();
+        *right = Self::from(new_right);
 
         *right_summary -= to_left_summary;
 
@@ -235,13 +235,6 @@ impl RopeChunk {
     }
 }
 
-impl std::borrow::Borrow<ChunkSlice> for RopeChunk {
-    #[inline]
-    fn borrow(&self) -> &ChunkSlice {
-        (&*self.text).into()
-    }
-}
-
 impl std::ops::Deref for RopeChunk {
     type Target = String;
 
@@ -334,10 +327,20 @@ impl SubAssign<&Self> for ChunkSummary {
     }
 }
 
+impl From<&ChunkSlice> for RopeChunk {
+    #[inline]
+    fn from(slice: &ChunkSlice) -> Self {
+        // This ensures that the `RopeChunk` has the right capacity.
+        let mut chunk = RopeChunk::default();
+        chunk.push_str(slice);
+        chunk
+    }
+}
+
 impl From<&str> for RopeChunk {
     #[inline]
     fn from(s: &str) -> Self {
-        <&ChunkSlice>::from(s).to_owned()
+        <&ChunkSlice>::from(s).into()
     }
 }
 
@@ -350,10 +353,17 @@ impl Summarize for RopeChunk {
     }
 }
 
-impl Leaf for RopeChunk {
-    type BaseMetric = ByteMetric;
+impl AsSlice for RopeChunk {
+    type Slice<'a> = &'a ChunkSlice;
 
-    type Slice = ChunkSlice;
+    #[inline]
+    fn as_slice(&self) -> &ChunkSlice {
+        (&*self.text).into()
+    }
+}
+
+impl BaseMeasured for RopeChunk {
+    type BaseMetric = ByteMetric;
 }
 
 impl BalancedLeaf for RopeChunk {
@@ -405,22 +415,22 @@ impl BalancedLeaf for RopeChunk {
     }
 
     #[inline]
-    fn balance_slices<'a>(
-        (left, &left_summary): (&'a ChunkSlice, &'a ChunkSummary),
-        (right, &right_summary): (&'a ChunkSlice, &'a ChunkSummary),
+    fn balance_slices(
+        (left, &left_summary): (&ChunkSlice, &ChunkSummary),
+        (right, &right_summary): (&ChunkSlice, &ChunkSummary),
     ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
         if left.len() >= RopeChunk::min_bytes()
             && right.len() >= RopeChunk::min_bytes()
         {
             (
-                (left.to_owned(), left_summary),
-                Some((right.to_owned(), right_summary)),
+                (Self::from(left), left_summary),
+                Some((Self::from(right), right_summary)),
             )
         }
         // If both slices can fit in a single chunk we join them.
         else if left.len() + right.len() <= RopeChunk::max_bytes() {
             let left = {
-                let mut l = left.to_owned();
+                let mut l = Self::from(left);
                 l.push_str(right);
                 l
             };
@@ -704,7 +714,7 @@ impl<'a> ExtraLeaves<'a> {
             chunk
         } else {
             debug_assert!(remaining >= RopeChunk::chunk_min());
-            let mut last = self.slice.to_owned();
+            let mut last = RopeChunk::from(self.slice);
             last.push_str(self.last);
             last
         };

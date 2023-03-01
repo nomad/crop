@@ -41,7 +41,7 @@ impl<const FANOUT: usize, L: BalancedLeaf> From<TreeSlice<'_, FANOUT, L>>
             debug_assert!(slice.root().is_leaf());
 
             Arc::new(Node::Leaf(Lnode::new(
-                slice.first_slice.to_owned(),
+                slice.first_slice.into(),
                 slice.summary,
             )))
         } else if slice.leaf_count() == 2 {
@@ -136,7 +136,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
     /// plus the `M`-measure of all the leaves before it.
     #[inline]
-    pub fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
+    pub fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'_>, M)
     where
         M: Metric<L>,
     {
@@ -165,7 +165,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
     /// Replaces a range of the `Tree` with the given leaf slice.
     #[inline]
-    pub fn replace<M>(&mut self, range: Range<M>, slice: &L::Slice)
+    pub fn replace<M>(&mut self, range: Range<M>, slice: L::Slice<'_>)
     where
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
@@ -196,7 +196,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     where
         M: SlicingMetric<L>,
         L::BaseMetric: SlicingMetric<L>,
-        for<'d> &'d L::Slice: Default,
+        for<'d> L::Slice<'d>: Default,
     {
         debug_assert!(M::zero() <= range.start);
         debug_assert!(range.start <= range.end);
@@ -215,7 +215,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     pub fn units<M>(&self) -> Units<'_, FANOUT, L, M>
     where
         M: Metric<L>,
-        for<'d> &'d L::Slice: Default,
+        for<'d> L::Slice<'d>: Default,
     {
         Units::from(self)
     }
@@ -378,7 +378,7 @@ mod from_treeslice {
     fn cut_start_rec<const N: usize, L: BalancedLeaf>(
         node: &Arc<Node<N, L>>,
         take_from: L::BaseMetric,
-        start_slice: &L::Slice,
+        start_slice: L::Slice<'_>,
         start_summary: L::Summary,
         invalid_nodes: &mut usize,
     ) -> Arc<Node<N, L>> {
@@ -429,7 +429,7 @@ mod from_treeslice {
             },
 
             Node::Leaf(_) => {
-                let lnode = Lnode::new(start_slice.to_owned(), start_summary);
+                let lnode = Lnode::new(start_slice.into(), start_summary);
 
                 if lnode.is_underfilled() {
                     *invalid_nodes += 1;
@@ -445,7 +445,7 @@ mod from_treeslice {
     fn cut_end_rec<const N: usize, L: BalancedLeaf>(
         node: &Arc<Node<N, L>>,
         take_up_to: L::BaseMetric,
-        end_slice: &L::Slice,
+        end_slice: L::Slice<'_>,
         end_summary: L::Summary,
         invalid_nodes: &mut usize,
     ) -> Arc<Node<N, L>> {
@@ -491,7 +491,7 @@ mod from_treeslice {
             },
 
             Node::Leaf(_) => {
-                let lnode = Lnode::new(end_slice.to_owned(), end_summary);
+                let lnode = Lnode::new(end_slice.into(), end_summary);
 
                 if lnode.is_underfilled() {
                     *invalid_nodes = 1;
@@ -532,7 +532,7 @@ mod tree_replace {
     pub(super) fn replace_range_with_slice<const N: usize, M, L>(
         node: &mut Arc<Node<N, L>>,
         mut range: Range<M>,
-        slice: &L::Slice,
+        slice: L::Slice<'_>,
     ) -> Option<Vec<Arc<Node<N, L>>>>
     where
         M: Metric<L>,
@@ -617,7 +617,7 @@ mod tree_replace {
     fn replace_range_in_deepest<const N: usize, M, L>(
         node: &mut Arc<Node<N, L>>,
         range: Range<M>,
-        slice: &L::Slice,
+        slice: L::Slice<'_>,
     ) -> Option<Vec<Arc<Node<N, L>>>>
     where
         M: Metric<L>,
@@ -753,7 +753,7 @@ mod tree_replace {
     fn inode_replace_nodes_in_start_and_end_subtrees<const N: usize, M, L>(
         inode: &mut Inode<N, L>,
         range: Range<M>,
-        slice: &L::Slice,
+        slice: L::Slice<'_>,
     ) -> (usize, usize, bool, bool, Option<Vec<Arc<Node<N, L>>>>)
     where
         M: Metric<L>,
@@ -831,7 +831,7 @@ mod tree_replace {
     fn replace_nodes_in_start_subtree<const N: usize, M, L>(
         node: &mut Node<N, L>,
         replace_from: M,
-        slice: &L::Slice,
+        slice: L::Slice<'_>,
         should_rebalance: &mut bool,
     ) -> Option<impl ExactSizeIterator<Item = Arc<Node<N, L>>>>
     where
@@ -1651,6 +1651,31 @@ mod tests {
 
     type LeavesMetric = usize;
 
+    #[derive(Copy, Clone, Debug, PartialEq)]
+    pub struct UsizeSlice<'a>(pub &'a usize);
+
+    impl From<UsizeSlice<'_>> for usize {
+        fn from(s: UsizeSlice<'_>) -> Self {
+            *s.0
+        }
+    }
+
+    impl Summarize for UsizeSlice<'_> {
+        type Summary = Count;
+
+        fn summarize(&self) -> Self::Summary {
+            self.0.summarize()
+        }
+    }
+
+    impl AsSlice for usize {
+        type Slice<'a> = UsizeSlice<'a>;
+
+        fn as_slice(&self) -> UsizeSlice<'_> {
+            UsizeSlice(self)
+        }
+    }
+
     impl Metric<usize> for LeavesMetric {
         fn zero() -> Self {
             0
@@ -1665,9 +1690,8 @@ mod tests {
         }
     }
 
-    impl Leaf for usize {
+    impl BaseMeasured for usize {
         type BaseMetric = LeavesMetric;
-        type Slice = Self;
     }
 
     #[test]

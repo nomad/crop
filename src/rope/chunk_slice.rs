@@ -37,7 +37,7 @@ impl PartialEq<ChunkSlice> for str {
     }
 }
 
-impl Summarize for ChunkSlice {
+impl Summarize for &ChunkSlice {
     type Summary = ChunkSummary;
 
     #[inline]
@@ -55,18 +55,6 @@ impl std::ops::Deref for ChunkSlice {
     #[inline]
     fn deref(&self) -> &Self::Target {
         &self.text
-    }
-}
-
-impl ToOwned for ChunkSlice {
-    type Owned = RopeChunk;
-
-    #[inline]
-    fn to_owned(&self) -> Self::Owned {
-        // This ensures that the `RopeChunk` has the right capacity.
-        let mut chunk = RopeChunk::default();
-        chunk.push_str(self);
-        chunk
     }
 }
 
@@ -98,7 +86,7 @@ impl<'a> ChunkSlice {
         }
 
         let left = {
-            let mut l = left.to_owned();
+            let mut l = RopeChunk::from(left);
             l.push_str(to_left);
             l
         };
@@ -107,7 +95,7 @@ impl<'a> ChunkSlice {
 
         let left_summary = left_summary + to_left_summary;
 
-        let right = new_right.to_owned();
+        let right = RopeChunk::from(new_right);
 
         let right_summary = right_summary - to_left_summary;
 
@@ -145,7 +133,7 @@ impl<'a> ChunkSlice {
         }
 
         let right = {
-            let mut r = to_right.to_owned();
+            let mut r = RopeChunk::from(to_right);
             r.push_str(right);
             r
         };
@@ -154,7 +142,7 @@ impl<'a> ChunkSlice {
 
         let right_summary = right_summary + to_right_summary;
 
-        let left = new_left.to_owned();
+        let left = RopeChunk::from(new_left);
 
         let left_summary = left_summary - to_right_summary;
 

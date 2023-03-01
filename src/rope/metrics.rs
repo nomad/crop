@@ -79,7 +79,10 @@ impl SlicingMetric<RopeChunk> for ByteMetric {
         chunk: &'a ChunkSlice,
         ByteMetric(up_to): Self,
         &summary: &ChunkSummary,
-    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
+    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary)
+    where
+        'a: 'a,
+    {
         if up_to == chunk.len() {
             (chunk, summary, "".into(), ChunkSummary::default())
         } else {
@@ -162,7 +165,10 @@ impl SlicingMetric<RopeChunk> for RawLineMetric {
         chunk: &'a ChunkSlice,
         RawLineMetric(at): Self,
         summary: &ChunkSummary,
-    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
+    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary)
+    where
+        'a: 'a,
+    {
         // This is the index of the byte *after* the newline, or the byte
         // length of the chunk if the newline is the last byte.
         let left_bytes = str_indices::lines_lf::to_byte_idx(chunk, at);
@@ -193,7 +199,10 @@ impl UnitMetric<RopeChunk> for RawLineMetric {
         ChunkSummary,
         &'a ChunkSlice,
         ChunkSummary,
-    ) {
+    )
+    where
+        'a: 'a,
+    {
         let (first, first_summary, rest, rest_summary) =
             Self::split(chunk, RawLineMetric(1), summary);
 
@@ -212,7 +221,10 @@ impl DoubleEndedUnitMetric<RopeChunk> for RawLineMetric {
         &'a ChunkSlice,
         ChunkSummary,
         ChunkSummary,
-    ) {
+    )
+    where
+        'a: 'a,
+    {
         let mut last_summary =
             ChunkSummary { bytes: summary.bytes, line_breaks: 0 };
 
@@ -243,7 +255,10 @@ impl DoubleEndedUnitMetric<RopeChunk> for RawLineMetric {
     fn remainder<'a>(
         chunk: &'a ChunkSlice,
         summary: &ChunkSummary,
-    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
+    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary)
+    where
+        'a: 'a,
+    {
         let mut remainder_summary =
             ChunkSummary { bytes: summary.bytes, line_breaks: 0 };
 
@@ -333,7 +348,10 @@ impl UnitMetric<RopeChunk> for LineMetric {
         ChunkSummary,
         &'a ChunkSlice,
         ChunkSummary,
-    ) {
+    )
+    where
+        'a: 'a,
+    {
         let (mut first, mut first_summary, advance, rest, rest_summary) =
             RawLineMetric::first_unit(chunk, summary);
 
@@ -361,7 +379,10 @@ impl DoubleEndedUnitMetric<RopeChunk> for LineMetric {
         &'a ChunkSlice,
         ChunkSummary,
         ChunkSummary,
-    ) {
+    )
+    where
+        'a: 'a,
+    {
         let (rest, rest_summary, mut last, mut last_summary, advance) =
             RawLineMetric::last_unit(chunk, summary);
 
@@ -390,7 +411,10 @@ impl DoubleEndedUnitMetric<RopeChunk> for LineMetric {
     fn remainder<'a>(
         chunk: &'a ChunkSlice,
         summary: &ChunkSummary,
-    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary) {
+    ) -> (&'a ChunkSlice, ChunkSummary, &'a ChunkSlice, ChunkSummary)
+    where
+        'a: 'a,
+    {
         RawLineMetric::remainder(chunk, summary)
     }
 }

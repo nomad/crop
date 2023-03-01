@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 use std::fmt::Debug;
 use std::ops::{Add, AddAssign, RangeBounds, Sub, SubAssign};
 
@@ -15,18 +14,27 @@ pub trait Summarize: Debug {
     fn summarize(&self) -> Self::Summary;
 }
 
-pub trait Leaf: Summarize + Borrow<Self::Slice> + Sized {
+pub trait BaseMeasured: Summarize {
     type BaseMetric: Metric<Self>;
-
-    type Slice: ?Sized
-        + Summarize<Summary = <Self as Summarize>::Summary>
-        + ToOwned<Owned = Self>;
 }
+
+pub trait AsSlice: Summarize + for<'a> From<Self::Slice<'a>> {
+    type Slice<'a>: Copy + Summarize<Summary = Self::Summary>
+    where
+        Self: 'a;
+
+    fn as_slice(&self) -> Self::Slice<'_>;
+}
+
+pub trait Leaf: Summarize + BaseMeasured + AsSlice {}
+
+impl<T: Summarize + BaseMeasured + AsSlice> Leaf for T {}
 
 pub trait BalancedLeaf: Leaf {
     /// Returns whether the leaf node is too small to be on its own and should
     /// be rebalanced with another leaf.
-    fn is_underfilled(slice: &Self::Slice, summary: &Self::Summary) -> bool;
+    fn is_underfilled(slice: Self::Slice<'_>, summary: &Self::Summary)
+        -> bool;
 
     /// Balance two leaves.
     ///
@@ -42,9 +50,9 @@ pub trait BalancedLeaf: Leaf {
     /// The second element of the tuple can be omitted if the two slices can be
     /// combined into a single leaf.
     #[allow(clippy::type_complexity)]
-    fn balance_slices<'a>(
-        left: (&'a Self::Slice, &'a Self::Summary),
-        right: (&'a Self::Slice, &'a Self::Summary),
+    fn balance_slices(
+        left: (Self::Slice<'_>, &Self::Summary),
+        right: (Self::Slice<'_>, &Self::Summary),
     ) -> ((Self, Self::Summary), Option<(Self, Self::Summary)>);
 }
 
@@ -60,7 +68,7 @@ pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
         &mut self,
         summary: &mut Self::Summary,
         range: R,
-        slice: &Self::Slice,
+        slice: Self::Slice<'_>,
     ) -> Option<Self::ExtraLeaves>
     where
         R: RangeBounds<M>;
@@ -70,7 +78,7 @@ pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
     fn remove(&mut self, summary: &mut Self::Summary, up_to: M);
 }
 
-pub trait Metric<L: Leaf>:
+pub trait Metric<L: Summarize + ?Sized>:
     Debug
     + Copy
     + Ord
@@ -103,10 +111,10 @@ pub trait SlicingMetric<L: Leaf>: Metric<L> {
     /// `left_summary + right_summary = summary`.
     #[allow(clippy::type_complexity)]
     fn split<'a>(
-        slice: &'a L::Slice,
+        slice: L::Slice<'a>,
         at: Self,
         summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary);
+    ) -> (L::Slice<'a>, L::Summary, L::Slice<'a>, L::Summary);
 }
 
 /// Allows iterating forward over the units of this metric.
@@ -124,9 +132,9 @@ pub trait UnitMetric<L: Leaf>: Metric<L> {
     /// In any case it must always hold `summary == advance + rest_summary`.
     #[allow(clippy::type_complexity)]
     fn first_unit<'a>(
-        slice: &'a L::Slice,
+        slice: L::Slice<'a>,
         summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary, L::Summary, &'a L::Slice, L::Summary);
+    ) -> (L::Slice<'a>, L::Summary, L::Summary, L::Slice<'a>, L::Summary);
 }
 
 /// Allows iterating backward over the units of this metric.
@@ -144,9 +152,9 @@ pub trait DoubleEndedUnitMetric<L: Leaf>: UnitMetric<L> {
     /// In any case it must always hold `summary == rest_summary + advance`.
     #[allow(clippy::type_complexity)]
     fn last_unit<'a>(
-        slice: &'a L::Slice,
+        slice: L::Slice<'a>,
         summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary, L::Summary);
+    ) -> (L::Slice<'a>, L::Summary, L::Slice<'a>, L::Summary, L::Summary);
 
     /// It's possible for a leaf slice to contain some content that extends
     /// past the end of its last `M`-unit. This is referred to as "the
@@ -162,7 +170,7 @@ pub trait DoubleEndedUnitMetric<L: Leaf>: UnitMetric<L> {
     /// of the leaf slice.
     #[allow(clippy::type_complexity)]
     fn remainder<'a>(
-        slice: &'a L::Slice,
+        slice: L::Slice<'a>,
         summary: &L::Summary,
-    ) -> (&'a L::Slice, L::Summary, &'a L::Slice, L::Summary);
+    ) -> (L::Slice<'a>, L::Summary, L::Slice<'a>, L::Summary);
 }

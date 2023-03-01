@@ -1,7 +1,6 @@
 use std::ops::RangeBounds;
 
 use super::traits::*;
-use super::{Leaf, Metric};
 
 #[derive(Clone, Default)]
 pub(super) struct Lnode<L: Leaf> {
@@ -43,8 +42,8 @@ impl<L: Leaf> Lnode<L> {
     }
 
     #[inline]
-    pub(super) fn as_slice(&self) -> &L::Slice {
-        self.value.borrow()
+    pub(super) fn as_slice(&self) -> L::Slice<'_> {
+        self.value.as_slice()
     }
 
     #[inline]
@@ -99,7 +98,7 @@ impl<L: Leaf> Lnode<L> {
     pub(super) fn replace<M, R>(
         &mut self,
         range: R,
-        slice: &L::Slice,
+        slice: L::Slice<'_>,
     ) -> Option<impl ExactSizeIterator<Item = Self>>
     where
         M: Metric<L>,

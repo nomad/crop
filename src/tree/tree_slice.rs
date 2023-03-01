@@ -1,7 +1,7 @@
 use std::ops::Range;
 use std::sync::Arc;
 
-use super::{Leaf, Leaves, Metric, Node, SlicingMetric, Summarize, Units};
+use super::*;
 
 /// An immutable slice of a [`Tree`].
 #[derive(Debug)]
@@ -19,13 +19,13 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     pub(super) summary: L::Summary,
 
     /// The right sub-slice of the leaf containing the start of the sliced range.
-    pub(super) first_slice: &'a L::Slice,
+    pub(super) first_slice: L::Slice<'a>,
 
     /// [`first_slice`](Self::first_slice)'s summary.
     pub(super) first_summary: L::Summary,
 
     /// The left sub-slice of the leaf containing the end of the sliced range.
-    pub(super) last_slice: &'a L::Slice,
+    pub(super) last_slice: L::Slice<'a>,
 
     /// [`last_slice`](Self::last_slice)'s summary.
     pub(super) last_summary: L::Summary,
@@ -143,19 +143,19 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     #[inline]
-    pub fn end_slice(&'a self) -> &'a L::Slice {
+    pub fn end_slice(&self) -> L::Slice<'a> {
         self.last_slice
     }
 
     #[inline]
-    pub fn end_summary(&'a self) -> &'a L::Summary {
+    pub fn end_summary(&self) -> &L::Summary {
         &self.last_summary
     }
 
     /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
     /// plus the `M`-measure of all the leaves before it.
     #[inline]
-    pub fn leaf_at_measure<M>(&'a self, measure: M) -> (&'a L::Slice, M)
+    pub fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'a>, M)
     where
         M: Metric<L>,
     {
@@ -185,7 +185,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     #[inline]
-    pub fn leaves(&'a self) -> Leaves<'a, FANOUT, L> {
+    pub fn leaves(&self) -> Leaves<'a, FANOUT, L> {
         Leaves::from(self)
     }
 
@@ -195,12 +195,12 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     #[inline]
-    pub(super) fn root(&self) -> &Arc<Node<FANOUT, L>> {
+    pub(super) fn root(&self) -> &'a Arc<Node<FANOUT, L>> {
         self.root
     }
 
     #[inline]
-    pub fn start_slice(&self) -> &L::Slice {
+    pub fn start_slice(&self) -> L::Slice<'a> {
         self.first_slice
     }
 
@@ -217,7 +217,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
 
 impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L>
 where
-    for<'d> &'d L::Slice: Default,
+    for<'d> L::Slice<'d>: Default,
 {
     #[inline]
     pub(super) fn from_range_in_root<M>(
@@ -352,7 +352,7 @@ where
     }
 
     #[inline]
-    pub fn units<M>(&'a self) -> Units<'a, FANOUT, L, M>
+    pub fn units<M>(&self) -> Units<'a, FANOUT, L, M>
     where
         M: Metric<L>,
     {

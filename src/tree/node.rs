@@ -223,7 +223,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn leaf_at_measure<M>(&self, measure: M) -> (&L::Slice, M)
+    pub(super) fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'_>, M)
     where
         M: Metric<L>,
     {
