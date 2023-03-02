@@ -470,6 +470,7 @@ impl ExactSizeIterator for Lines<'_> {
 
 impl std::iter::FusedIterator for Lines<'_> {}
 
+#[cfg_attr(docsrs, doc(cfg(feature = "graphemes")))]
 #[cfg(feature = "graphemes")]
 pub use graphemes::Graphemes;
 

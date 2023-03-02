@@ -15,6 +15,7 @@ exclude = ["/.github/*", "/examples/**", "/fuzz/**", "/tests/**", "/BENCHMARKS.m
 
 [package.metadata.docs.rs]
 features = ["graphemes", "simd"]
+rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["simd"]

@@ -217,6 +217,7 @@ impl<'a> RopeSlice<'a> {
     /// assert_eq!(Some("🐻‍❄️"), graphemes.next().as_deref());
     /// assert_eq!(None, graphemes.next());
     /// ```
+    #[cfg_attr(docsrs, doc(cfg(feature = "graphemes")))]
     #[cfg(feature = "graphemes")]
     #[inline]
     pub fn graphemes(&self) -> crate::iter::Graphemes<'a> {
@@ -293,6 +294,7 @@ impl<'a> RopeSlice<'a> {
     /// assert!(s.is_grapheme_boundary(s.byte_len()));
     /// assert!(!s.is_grapheme_boundary(4)); // between the 1st and 2nd code point of '🐻‍❄️'
     /// ```
+    #[cfg_attr(docsrs, doc(cfg(feature = "graphemes")))]
     #[cfg(feature = "graphemes")]
     #[inline]
     pub fn is_grapheme_boundary(&self, byte_offset: usize) -> bool {
