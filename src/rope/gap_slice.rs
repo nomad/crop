@@ -16,9 +16,27 @@ pub(super) struct GapSlice<'a> {
 impl std::fmt::Debug for GapSlice<'_> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        todo!();
+        f.write_str("\"")?;
+        debug_no_quotes(self.first_segment(), f)?;
+        write!(f, "{:~^1$}", "", self.len_middle_gap())?;
+        debug_no_quotes(self.second_segment(), f)?;
+        write!(f, "{:~^1$}", "", self.len_trailing_gap())?;
+        f.write_str("\"")?;
+        Ok(())
     }
 }
+
+// impl<'a> From<&'a str> for GapSlice<'a> {
+//     #[inline]
+//     fn from(s: &str) -> Self {
+//         Self {
+//             bytes: s.as_bytes(),
+//             len_first_segment: s.len() as u16,
+//             len_gap: 0,
+//             len_second_segment: 0,
+//         }
+//     }
+// }
 
 impl<'a> GapSlice<'a> {
     /// Returns the byte at the given index.
@@ -112,17 +130,17 @@ impl<'a> GapSlice<'a> {
         unsafe { std::str::from_utf8_unchecked(&self.bytes[start..end]) }
     }
 
-    /// Return the segment containing the given byte index.
-    #[inline]
-    pub(super) fn segment_at_index(&self, byte_index: usize) -> &'a str {
-        debug_assert!(byte_index < self.len());
+    // /// Return the segment containing the given byte index.
+    // #[inline]
+    // pub(super) fn segment_at_index(&self, byte_index: usize) -> &'a str {
+    //     debug_assert!(byte_index < self.len());
 
-        if byte_index < self.len_first_segment() {
-            self.first_segment()
-        } else {
-            self.second_segment()
-        }
-    }
+    //     if byte_index < self.len_first_segment() {
+    //         self.first_segment()
+    //     } else {
+    //         self.second_segment()
+    //     }
+    // }
 }
 
 impl Summarize for GapSlice<'_> {
@@ -135,5 +153,17 @@ impl Summarize for GapSlice<'_> {
             line_breaks: lines_lf::count_breaks(self.first_segment())
                 + lines_lf::count_breaks(self.second_segment()),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::rope::gap_buffer::GapBuffer;
+    use crate::tree::AsSlice;
+
+    #[test]
+    fn debug_slice() {
+        let buffer = GapBuffer::<10>::from("Hello");
+        assert_eq!("\"Hello~~~~~\"", format!("{:?}", buffer.as_slice()));
     }
 }

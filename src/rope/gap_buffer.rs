@@ -29,7 +29,7 @@ pub(super) struct GapBuffer<const MAX_BYTES: usize> {
 impl<const MAX_BYTES: usize> std::fmt::Debug for GapBuffer<MAX_BYTES> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        todo!();
+        std::fmt::Debug::fmt(&self.as_slice(), f)
     }
 }
 

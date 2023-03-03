@@ -132,6 +132,28 @@ pub(super) fn chunks_eq_chunks(
     }
 }
 
+/// Writes the `Debug` output of the given string to the formatter without
+/// enclosing it in double quotes.
+pub(super) fn debug_no_quotes(
+    s: &str,
+    f: &mut std::fmt::Formatter<'_>,
+) -> std::fmt::Result {
+    let mut written = 0;
+
+    for (idx, char) in s.char_indices() {
+        let escape = char.escape_debug();
+        if escape.len() != 1 {
+            f.write_str(&s[written..idx])?;
+            for c in escape {
+                f.write_char(c)?;
+            }
+            written = idx + char.len_utf8();
+        }
+    }
+
+    f.write_str(&s[written..])
+}
+
 /// Iterates over the string slices yielded by [`Chunks`], writing the debug
 /// output of each chunk to a formatter.
 #[inline]
@@ -140,20 +162,7 @@ pub(super) fn debug_chunks(
     f: &mut std::fmt::Formatter<'_>,
 ) -> std::fmt::Result {
     for chunk in chunks {
-        // This is basically the Debug impl of a string slice except it doesn't
-        // enclose the output in double quotes and also escapes single quotes.
-        let mut from = 0;
-        for (idx, char) in chunk.char_indices() {
-            let esc = char.escape_debug();
-            if esc.len() != 1 {
-                f.write_str(&chunk[from..idx])?;
-                for c in esc {
-                    f.write_char(c)?;
-                }
-                from = idx + char.len_utf8();
-            }
-        }
-        f.write_str(&chunk[from..])?;
+        debug_no_quotes(chunk, f)?;
     }
 
     Ok(())
