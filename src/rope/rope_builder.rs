@@ -1,4 +1,4 @@
-use super::rope_chunk::RopeChunk;
+use super::rope::RopeChunk;
 use super::utils::*;
 use super::Rope;
 use crate::tree::TreeBuilder;
@@ -20,18 +20,18 @@ impl RopeBuilder {
     {
         let mut text = text.as_ref();
 
-        loop {
-            let rest = self.buffer.push_with_remainder(text.into());
+        // loop {
+        //     let rest = self.buffer.push_with_remainder(text.into());
 
-            if rest.is_empty() {
-                self.rope_has_trailing_newline =
-                    last_byte_is_newline(&self.buffer);
-                break;
-            } else {
-                self.tree_builder.append(std::mem::take(&mut self.buffer));
-                text = rest;
-            }
-        }
+        //     if rest.is_empty() {
+        //         self.rope_has_trailing_newline =
+        //             last_byte_is_newline(&self.buffer);
+        //         break;
+        //     } else {
+        //         self.tree_builder.append(std::mem::take(&mut self.buffer));
+        //         text = rest;
+        //     }
+        // }
 
         self
     }
@@ -56,7 +56,8 @@ impl RopeBuilder {
     pub fn build(mut self) -> Rope {
         if !self.buffer.is_empty() {
             self.rope_has_trailing_newline =
-                last_byte_is_newline(&self.buffer);
+                self.buffer.has_trailing_newline();
+
             self.tree_builder.append(self.buffer);
         }
 

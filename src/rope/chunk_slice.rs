@@ -1,4 +1,5 @@
-use super::rope_chunk::{ChunkSummary, RopeChunk};
+use super::gap_chunk::GapSummary;
+use super::rope_chunk::RopeChunk;
 use super::utils::*;
 use crate::tree::Summarize;
 
@@ -38,11 +39,11 @@ impl PartialEq<ChunkSlice> for str {
 }
 
 impl Summarize for &ChunkSlice {
-    type Summary = ChunkSummary;
+    type Summary = GapSummary;
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        ChunkSummary {
+        GapSummary {
             bytes: self.text.len(),
             line_breaks: str_indices::lines_lf::count_breaks(&self.text),
         }
@@ -68,10 +69,10 @@ impl<'a> ChunkSlice {
     #[inline]
     pub(super) fn balance_left_with_right(
         left: &Self,
-        left_summary: ChunkSummary,
+        left_summary: GapSummary,
         right: &Self,
-        right_summary: ChunkSummary,
-    ) -> ((RopeChunk, ChunkSummary), (RopeChunk, ChunkSummary)) {
+        right_summary: GapSummary,
+    ) -> ((RopeChunk, GapSummary), (RopeChunk, GapSummary)) {
         debug_assert!(left.len() < RopeChunk::min_bytes());
         debug_assert!(right.len() > RopeChunk::min_bytes());
         debug_assert!(left.len() + right.len() > RopeChunk::max_bytes());
@@ -114,10 +115,10 @@ impl<'a> ChunkSlice {
     #[inline]
     pub(super) fn balance_right_with_left(
         left: &Self,
-        left_summary: ChunkSummary,
+        left_summary: GapSummary,
         right: &Self,
-        right_summary: ChunkSummary,
-    ) -> ((RopeChunk, ChunkSummary), (RopeChunk, ChunkSummary)) {
+        right_summary: GapSummary,
+    ) -> ((RopeChunk, GapSummary), (RopeChunk, GapSummary)) {
         debug_assert!(left.len() > RopeChunk::min_bytes());
         debug_assert!(right.len() < RopeChunk::min_bytes());
         debug_assert!(left.len() + right.len() > RopeChunk::max_bytes());

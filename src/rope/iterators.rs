@@ -1,5 +1,6 @@
+use super::gap_buffer::GapBuffer;
 use super::metrics::{LineMetric, RawLineMetric};
-use super::rope_chunk::RopeChunk;
+use super::rope::RopeChunk;
 use super::{Rope, RopeSlice};
 use crate::tree::{Leaves, Units};
 
@@ -10,16 +11,18 @@ use crate::tree::{Leaves, Units};
 #[derive(Clone)]
 pub struct Chunks<'a> {
     leaves: Leaves<'a, { Rope::fanout() }, RopeChunk>,
+    forward_extra_second: Option<&'a str>,
+    backward_extra_first: Option<&'a str>,
 }
 
 impl<'a> From<&'a Rope> for Chunks<'a> {
     #[inline]
     fn from(rope: &'a Rope) -> Self {
         let mut leaves = rope.tree.leaves();
-        if rope.byte_len() == 0 {
+        if rope.is_empty() {
             let _ = leaves.next();
         }
-        Self { leaves }
+        Self { leaves, forward_extra_second: None, backward_extra_first: None }
     }
 }
 
@@ -27,10 +30,10 @@ impl<'a> From<&RopeSlice<'a>> for Chunks<'a> {
     #[inline]
     fn from(slice: &RopeSlice<'a>) -> Self {
         let mut leaves = slice.tree_slice.leaves();
-        if slice.byte_len() == 0 {
+        if slice.is_empty() {
             let _ = leaves.next();
         }
-        Self { leaves }
+        Self { leaves, forward_extra_second: None, backward_extra_first: None }
     }
 }
 
@@ -39,27 +42,52 @@ impl<'a> Iterator for Chunks<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        self.leaves.next().map(std::ops::Deref::deref)
+        if let Some(extra) = self.forward_extra_second.take() {
+            Some(extra)
+        } else {
+            let Some(chunk) = self.leaves.next() else {
+                return self.backward_extra_first.take();
+            };
+
+            if chunk.first_segment().is_empty() {
+                debug_assert!(!chunk.second_segment().is_empty());
+                Some(chunk.second_segment())
+            } else {
+                if !chunk.second_segment().is_empty() {
+                    self.forward_extra_second = Some(chunk.second_segment());
+                }
+                Some(chunk.first_segment())
+            }
+        }
     }
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        let exact = self.len();
-        (exact, Some(exact))
+        let exact = self.leaves.len();
+        (exact, Some(exact * 2))
     }
 }
 
 impl DoubleEndedIterator for Chunks<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.leaves.next_back().map(std::ops::Deref::deref)
-    }
-}
+        if let Some(extra) = self.backward_extra_first.take() {
+            Some(extra)
+        } else {
+            let Some(chunk) = self.leaves.next() else {
+                return self.forward_extra_second.take();
+            };
 
-impl ExactSizeIterator for Chunks<'_> {
-    #[inline]
-    fn len(&self) -> usize {
-        self.leaves.len()
+            if chunk.second_segment().is_empty() {
+                debug_assert!(!chunk.first_segment().is_empty());
+                Some(chunk.first_segment())
+            } else {
+                if !chunk.first_segment().is_empty() {
+                    self.backward_extra_first = Some(chunk.first_segment());
+                }
+                Some(chunk.second_segment())
+            }
+        }
     }
 }
 

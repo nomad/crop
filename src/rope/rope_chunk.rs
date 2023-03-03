@@ -1,6 +1,7 @@
 use std::ops::{Add, AddAssign, Range, RangeBounds, Sub, SubAssign};
 
 use super::chunk_slice::ChunkSlice;
+use super::gap_chunk::GapSummary;
 use super::metrics::ByteMetric;
 use super::utils::*;
 use crate::range_bounds_to_start_end;
@@ -49,9 +50,9 @@ impl RopeChunk {
     #[inline]
     fn balance_left_with_right(
         left: &mut Self,
-        left_summary: &mut ChunkSummary,
+        left_summary: &mut GapSummary,
         right: &mut Self,
-        right_summary: &mut ChunkSummary,
+        right_summary: &mut GapSummary,
     ) {
         // TODO: this is basically the same as
         // `ChunkSlice::balance_left_with_right()` excess it doesn't allocate a
@@ -94,9 +95,9 @@ impl RopeChunk {
     #[inline]
     fn balance_right_with_left(
         left: &mut Self,
-        left_summary: &mut ChunkSummary,
+        left_summary: &mut GapSummary,
         right: &mut Self,
-        right_summary: &mut ChunkSummary,
+        right_summary: &mut GapSummary,
     ) {
         ((*left, *left_summary), (*right, *right_summary)) =
             ChunkSlice::balance_right_with_left(
@@ -251,82 +252,6 @@ impl std::ops::DerefMut for RopeChunk {
     }
 }
 
-#[derive(Copy, Clone, Default, Debug, PartialEq)]
-pub(super) struct ChunkSummary {
-    pub(super) bytes: usize,
-    pub(super) line_breaks: usize,
-}
-
-impl Add<Self> for ChunkSummary {
-    type Output = Self;
-
-    #[inline]
-    fn add(mut self, rhs: Self) -> Self {
-        self += rhs;
-        self
-    }
-}
-
-impl Sub<Self> for ChunkSummary {
-    type Output = Self;
-
-    #[inline]
-    fn sub(mut self, rhs: Self) -> Self {
-        self -= rhs;
-        self
-    }
-}
-
-impl Add<&Self> for ChunkSummary {
-    type Output = Self;
-
-    #[inline]
-    fn add(mut self, rhs: &Self) -> Self {
-        self += rhs;
-        self
-    }
-}
-
-impl Sub<&Self> for ChunkSummary {
-    type Output = Self;
-
-    #[inline]
-    fn sub(mut self, rhs: &Self) -> Self {
-        self -= rhs;
-        self
-    }
-}
-
-impl AddAssign<Self> for ChunkSummary {
-    #[inline]
-    fn add_assign(&mut self, rhs: Self) {
-        self.bytes += rhs.bytes;
-        self.line_breaks += rhs.line_breaks;
-    }
-}
-
-impl SubAssign<Self> for ChunkSummary {
-    #[inline]
-    fn sub_assign(&mut self, rhs: Self) {
-        self.bytes -= rhs.bytes;
-        self.line_breaks -= rhs.line_breaks;
-    }
-}
-
-impl AddAssign<&Self> for ChunkSummary {
-    #[inline]
-    fn add_assign(&mut self, rhs: &Self) {
-        *self += *rhs;
-    }
-}
-
-impl SubAssign<&Self> for ChunkSummary {
-    #[inline]
-    fn sub_assign(&mut self, rhs: &Self) {
-        *self -= *rhs;
-    }
-}
-
 impl From<&ChunkSlice> for RopeChunk {
     #[inline]
     fn from(slice: &ChunkSlice) -> Self {
@@ -345,7 +270,7 @@ impl From<&str> for RopeChunk {
 }
 
 impl Summarize for RopeChunk {
-    type Summary = ChunkSummary;
+    type Summary = GapSummary;
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
@@ -368,14 +293,14 @@ impl BaseMeasured for RopeChunk {
 
 impl BalancedLeaf for RopeChunk {
     #[inline]
-    fn is_underfilled(_: &ChunkSlice, summary: &ChunkSummary) -> bool {
+    fn is_underfilled(_: &ChunkSlice, summary: &GapSummary) -> bool {
         summary.bytes < Self::min_bytes()
     }
 
     #[inline]
     fn balance_leaves(
-        (left, left_summary): (&mut Self, &mut ChunkSummary),
-        (right, right_summary): (&mut Self, &mut ChunkSummary),
+        (left, left_summary): (&mut Self, &mut GapSummary),
+        (right, right_summary): (&mut Self, &mut GapSummary),
     ) {
         if left.len() >= RopeChunk::min_bytes()
             && right.len() >= RopeChunk::min_bytes()
@@ -386,7 +311,7 @@ impl BalancedLeaf for RopeChunk {
             left.push_str(right);
             right.clear();
             *left_summary += *right_summary;
-            *right_summary = ChunkSummary::default();
+            *right_summary = GapSummary::default();
         }
         // If the left side is lacking we take text from the right side.
         else if left.len() < RopeChunk::min_bytes() {
@@ -416,9 +341,9 @@ impl BalancedLeaf for RopeChunk {
 
     #[inline]
     fn balance_slices(
-        (left, &left_summary): (&ChunkSlice, &ChunkSummary),
-        (right, &right_summary): (&ChunkSlice, &ChunkSummary),
-    ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
+        (left, &left_summary): (&ChunkSlice, &GapSummary),
+        (right, &right_summary): (&ChunkSlice, &GapSummary),
+    ) -> ((Self, GapSummary), Option<(Self, GapSummary)>) {
         if left.len() >= RopeChunk::min_bytes()
             && right.len() >= RopeChunk::min_bytes()
         {
@@ -474,7 +399,7 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
     #[inline]
     fn replace<R>(
         &mut self,
-        summary: &mut ChunkSummary,
+        summary: &mut GapSummary,
         range: R,
         mut slice: &ChunkSlice,
     ) -> Option<Self::ExtraLeaves>
@@ -577,7 +502,7 @@ impl ReplaceableLeaf<ByteMetric> for RopeChunk {
     }
 
     #[inline]
-    fn remove(&mut self, summary: &mut ChunkSummary, up_to: ByteMetric) {
+    fn remove(&mut self, summary: &mut GapSummary, up_to: ByteMetric) {
         let extra = self.replace(summary, ..up_to, "".into());
         debug_assert!(extra.is_none());
     }

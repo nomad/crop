@@ -2,7 +2,7 @@ use std::ops::RangeBounds;
 
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
-use super::rope_chunk::RopeChunk;
+use super::rope::RopeChunk;
 use super::utils::*;
 use super::Rope;
 use crate::range_bounds_to_start_end;
@@ -22,7 +22,7 @@ impl<'a> RopeSlice<'a> {
 
         let last = self.tree_slice.end_slice();
 
-        assert_eq!(self.has_trailing_newline, last_byte_is_newline(last))
+        assert_eq!(self.has_trailing_newline, last.has_trailing_newline())
     }
 
     /// Returns the byte at `byte_index`.
@@ -53,7 +53,7 @@ impl<'a> RopeSlice<'a> {
         let (chunk, ByteMetric(chunk_byte_offset)) =
             self.tree_slice.leaf_at_measure(ByteMetric(byte_index + 1));
 
-        chunk.as_bytes()[byte_index - chunk_byte_offset]
+        chunk.byte(byte_index - chunk_byte_offset)
     }
 
     /// Returns the length of the `RopeSlice` in bytes.
@@ -339,7 +339,7 @@ impl<'a> RopeSlice<'a> {
 
         if tree_slice.summary().line_breaks == 1 {
             let byte_end = tree_slice.summary().bytes
-                - bytes_line_break(tree_slice.end_slice());
+                - bytes_line_break(tree_slice.end_slice().last_segment());
 
             tree_slice = tree_slice.slice(ByteMetric(0)..ByteMetric(byte_end));
         }
@@ -527,7 +527,10 @@ impl<'a> From<TreeSlice<'a, { Rope::fanout() }, RopeChunk>> for RopeSlice<'a> {
     #[inline]
     fn from(tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>) -> Self {
         Self {
-            has_trailing_newline: last_byte_is_newline(tree_slice.end_slice()),
+            has_trailing_newline: tree_slice
+                .end_slice()
+                .has_trailing_newline(),
+
             tree_slice,
         }
     }
