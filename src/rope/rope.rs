@@ -43,14 +43,14 @@ impl Rope {
             return;
         }
 
-        let mut chunks = self.chunks().peekable();
+        let mut chunks = self.tree.leaves().peekable();
 
         while let Some(chunk) = chunks.next() {
             assert!(chunk.len() >= RopeChunk::chunk_min());
 
-            if ends_in_cr(chunk) {
+            if ends_in_cr(chunk.last_segment()) {
                 if let Some(next) = chunks.peek().copied() {
-                    assert!(!starts_with_lf(next));
+                    assert!(!starts_with_lf(next.first_segment()));
                 }
             }
         }

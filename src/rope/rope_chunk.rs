@@ -143,8 +143,6 @@ impl RopeChunk {
         self.len() >= Self::chunk_min() && self.len() <= Self::chunk_max()
     }
 
-    /// Pushes as mush of `slice` as possible into this chunk, returning the
-    /// rest.
     #[inline]
     pub(super) fn push_with_remainder<'a>(
         &mut self,

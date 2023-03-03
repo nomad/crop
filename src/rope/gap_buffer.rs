@@ -39,7 +39,7 @@ impl<const MAX_BYTES: usize> Default for GapBuffer<MAX_BYTES> {
         Self {
             bytes: Box::new([0u8; MAX_BYTES]),
             len_first_segment: 0,
-            len_gap: MAX_BYTES as u16,
+            len_gap: 0,
             len_second_segment: 0,
         }
     }
@@ -145,6 +145,33 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// The number of bytes `RopeChunk`s should aim to stay over.
     pub(super) const fn min_bytes() -> usize {
         MAX_BYTES / 2
+    }
+
+    /// Pushes as mush of the slice as possible into this chunk, returning the
+    /// rest (if any).
+    pub(super) fn push_with_remainder<'a>(
+        &mut self,
+        s: &'a str,
+    ) -> Option<&'a str> {
+        debug_assert!(s.len() <= MAX_BYTES);
+        debug_assert_eq!(self.len_middle_gap(), 0);
+        debug_assert_eq!(self.len_second_segment(), 0);
+
+        let space_left = MAX_BYTES - self.len_first_segment();
+        let (push, rest) = split_adjusted::<false>(s, space_left);
+
+        debug_assert!(push.len() <= space_left);
+
+        let pushed_range = {
+            let start = self.len_first_segment();
+            let end = start + push.len();
+            start..end
+        };
+
+        self.bytes[pushed_range].copy_from_slice(push.as_bytes());
+        self.len_first_segment += push.len() as u16;
+
+        (!rest.is_empty()).then_some(rest)
     }
 
     #[inline]

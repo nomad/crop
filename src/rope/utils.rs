@@ -44,6 +44,15 @@ pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
     candidate
 }
 
+#[inline]
+pub(super) fn split_adjusted<const WITH_RIGHT_BIAS: bool>(
+    s: &str,
+    candidate: usize,
+) -> (&str, &str) {
+    let split_point = adjust_split_point::<WITH_RIGHT_BIAS>(s, candidate);
+    (&s[..split_point], &s[split_point..])
+}
+
 /// Returns the number of bytes that `s`'s trailing line break takes up.
 ///
 /// NOTE: this function assumes that `s` ends with a newline, if it doesn't
