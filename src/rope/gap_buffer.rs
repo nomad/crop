@@ -322,6 +322,7 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
 impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
     for GapBuffer<MAX_BYTES>
 {
+    type Replacement<'a> = &'a str;
     type ExtraLeaves = std::vec::IntoIter<Self>;
 
     #[inline]
@@ -329,19 +330,12 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
         &mut self,
         summary: &mut ChunkSummary,
         range: R,
-        mut slice: GapSlice<'_>,
+        mut slice: &str,
     ) -> Option<Self::ExtraLeaves>
     where
         R: RangeBounds<ByteMetric>,
     {
         todo!();
-    }
-
-    #[inline]
-    fn remove(&mut self, summary: &mut ChunkSummary, up_to: ByteMetric) {
-        todo!();
-        // let extra = self.replace(summary, ..up_to, "".into());
-        // debug_assert!(extra.is_none());
     }
 }
 

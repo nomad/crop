@@ -163,17 +163,20 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M::measure(self.summary())
     }
 
-    /// Replaces a range of the `Tree` with the given leaf slice.
+    /// Replaces a range of the `Tree` with the given replacement.
     #[inline]
-    pub fn replace<M>(&mut self, range: Range<M>, slice: L::Slice<'_>)
-    where
+    pub fn replace<M>(
+        &mut self,
+        range: Range<M>,
+        replace_with: L::Replacement<'_>,
+    ) where
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
         if let Some(extras) = tree_replace::replace_range_with_slice(
             &mut self.root,
             range,
-            slice,
+            replace_with,
         ) {
             debug_assert!(extras
                 .iter()
@@ -532,14 +535,14 @@ mod tree_replace {
     pub(super) fn replace_range_with_slice<const N: usize, M, L>(
         node: &mut Arc<Node<N, L>>,
         mut range: Range<M>,
-        slice: L::Slice<'_>,
+        replace_with: L::Replacement<'_>,
     ) -> Option<Vec<Arc<Node<N, L>>>>
     where
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
         let Node::Internal(inode) = Arc::make_mut(node) else {
-            return replace_range_in_deepest(node, range, slice)
+            return replace_range_in_deepest(node, range, replace_with)
         };
 
         // The index of the child containing the entire replacement range.
@@ -563,12 +566,16 @@ mod tree_replace {
                     range.end -= offset;
 
                     extras = inode.with_child_mut(idx, |child| {
-                        replace_range_with_slice(child, range, slice)
+                        replace_range_with_slice(child, range, replace_with)
                     });
 
                     break;
                 } else {
-                    return replace_range_in_deepest(node, range, slice);
+                    return replace_range_in_deepest(
+                        node,
+                        range,
+                        replace_with,
+                    );
                 };
             }
         }
@@ -617,7 +624,7 @@ mod tree_replace {
     fn replace_range_in_deepest<const N: usize, M, L>(
         node: &mut Arc<Node<N, L>>,
         range: Range<M>,
-        slice: L::Slice<'_>,
+        replace_with: L::Replacement<'_>,
     ) -> Option<Vec<Arc<Node<N, L>>>>
     where
         M: Metric<L>,
@@ -627,7 +634,7 @@ mod tree_replace {
             Node::Internal(inode) => inode,
 
             Node::Leaf(leaf) => {
-                return leaf.replace(range, slice).map(|extras| {
+                return leaf.replace(range, replace_with).map(|extras| {
                     extras.map(Node::Leaf).map(Arc::new).collect()
                 });
             },
@@ -639,7 +646,11 @@ mod tree_replace {
             start_should_rebalance,
             end_should_rebalance,
             extra_leaves,
-        ) = inode_replace_nodes_in_start_and_end_subtrees(inode, range, slice);
+        ) = inode_replace_nodes_in_start_and_end_subtrees(
+            inode,
+            range,
+            replace_with,
+        );
 
         let Some(mut extra_leaves) = extra_leaves else {
             inode.drain(start_idx + 1..end_idx);
@@ -753,7 +764,7 @@ mod tree_replace {
     fn inode_replace_nodes_in_start_and_end_subtrees<const N: usize, M, L>(
         inode: &mut Inode<N, L>,
         range: Range<M>,
-        slice: L::Slice<'_>,
+        replace_with: L::Replacement<'_>,
     ) -> (usize, usize, bool, bool, Option<Vec<Arc<Node<N, L>>>>)
     where
         M: Metric<L>,
@@ -781,7 +792,7 @@ mod tree_replace {
                     replace_nodes_in_start_subtree(
                         Arc::make_mut(child),
                         range.start + child_measure - offset,
-                        slice,
+                        replace_with,
                         &mut start_should_rebalance,
                     )
                 });
@@ -831,7 +842,7 @@ mod tree_replace {
     fn replace_nodes_in_start_subtree<const N: usize, M, L>(
         node: &mut Node<N, L>,
         replace_from: M,
-        slice: L::Slice<'_>,
+        replace_with: L::Replacement<'_>,
         should_rebalance: &mut bool,
     ) -> Option<impl ExactSizeIterator<Item = Arc<Node<N, L>>>>
     where
@@ -842,7 +853,8 @@ mod tree_replace {
             Node::Internal(inode) => inode,
 
             Node::Leaf(leaf) => {
-                if let Some(extra_leaves) = leaf.replace(replace_from.., slice)
+                if let Some(extra_leaves) =
+                    leaf.replace(replace_from.., replace_with)
                 {
                     return Some(extra_leaves.map(Node::Leaf).map(Arc::new));
                 } else {
@@ -872,7 +884,7 @@ mod tree_replace {
                     replace_nodes_in_start_subtree(
                         Arc::make_mut(child),
                         replace_from + child_measure - offset,
-                        slice,
+                        replace_with,
                         should_rebalance,
                     )
                 });
@@ -914,7 +926,7 @@ mod tree_replace {
             Node::Internal(inode) => inode,
 
             Node::Leaf(leaf) => {
-                leaf.remove(replace_up_to);
+                leaf.remove_up_to(replace_up_to);
 
                 if leaf.is_underfilled() {
                     if let Some(leaves) = extra_leaves {

@@ -657,7 +657,7 @@ impl Rope {
             }
         }
 
-        // self.tree.replace(ByteMetric(start)..ByteMetric(end), text.into());
+        self.tree.replace(ByteMetric(start)..ByteMetric(end), text);
 
         if update_trailing {
             self.has_trailing_newline =

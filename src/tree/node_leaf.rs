@@ -86,19 +86,23 @@ impl<L: Leaf> Lnode<L> {
     }
 
     #[inline]
-    pub(super) fn remove<M>(&mut self, up_to: M)
+    pub(super) fn remove_up_to<M>(&mut self, up_to: M)
     where
         M: Metric<L>,
         L: ReplaceableLeaf<M>,
     {
-        self.value.remove(&mut self.summary, up_to);
+        self.value.replace(
+            &mut self.summary,
+            ..up_to,
+            L::Replacement::default(),
+        );
     }
 
     #[inline]
     pub(super) fn replace<M, R>(
         &mut self,
         range: R,
-        slice: L::Slice<'_>,
+        replace_with: L::Replacement<'_>,
     ) -> Option<impl ExactSizeIterator<Item = Self>>
     where
         M: Metric<L>,
@@ -106,7 +110,7 @@ impl<L: Leaf> Lnode<L> {
         L: ReplaceableLeaf<M>,
     {
         self.value
-            .replace(&mut self.summary, range, slice)
+            .replace(&mut self.summary, range, replace_with)
             .map(|extra_leaves| extra_leaves.map(Self::from))
     }
 

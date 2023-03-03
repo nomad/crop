@@ -57,6 +57,7 @@ pub trait BalancedLeaf: Leaf + for<'a> From<Self::Slice<'a>> {
 }
 
 pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
+    type Replacement<'a>: Default;
     type ExtraLeaves: ExactSizeIterator<Item = Self>;
 
     /// Replace the contents of the leaf in the given range with `slice`. If
@@ -68,14 +69,10 @@ pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
         &mut self,
         summary: &mut Self::Summary,
         range: R,
-        slice: Self::Slice<'_>,
+        replace_with: Self::Replacement<'_>,
     ) -> Option<Self::ExtraLeaves>
     where
         R: RangeBounds<M>;
-
-    /// Remove the contents of the leaf up to `up_to`. The leaf is allowed to
-    /// be underfilled after calling this function.
-    fn remove(&mut self, summary: &mut Self::Summary, up_to: M);
 }
 
 pub trait Metric<L: Summarize + ?Sized>:
