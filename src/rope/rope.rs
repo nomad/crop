@@ -1,6 +1,6 @@
 use std::ops::RangeBounds;
 
-use super::gap_buffer::{GapBuffer, StringSegmenter};
+use super::gap_buffer::GapBuffer;
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
 use super::utils::*;
@@ -46,7 +46,7 @@ impl Rope {
         let mut chunks = self.chunks().peekable();
 
         while let Some(chunk) = chunks.next() {
-            assert!(chunk.len() >= RopeChunk::min_bytes());
+            assert!(chunk.len() >= RopeChunk::chunk_min());
 
             if ends_in_cr(chunk) {
                 if let Some(next) = chunks.peek().copied() {
@@ -708,7 +708,9 @@ impl From<&str> for Rope {
     fn from(s: &str) -> Self {
         Rope {
             has_trailing_newline: last_byte_is_newline(s),
-            tree: Tree::from_leaves(StringSegmenter::new(s)),
+            tree: Tree::from_leaves(
+                RopeChunk::chunk_segmenter(s).map(RopeChunk::from),
+            ),
         }
     }
 }

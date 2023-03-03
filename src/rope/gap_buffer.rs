@@ -45,7 +45,46 @@ impl<const MAX_BYTES: usize> Default for GapBuffer<MAX_BYTES> {
     }
 }
 
+impl<const MAX_BYTES: usize> From<&str> for GapBuffer<MAX_BYTES> {
+    /// # Panics
+    ///
+    /// Panics if the byte length of the string is greater than `MAX_BYTES`.
+    #[inline]
+    fn from(s: &str) -> Self {
+        debug_assert!(s.len() <= MAX_BYTES);
+
+        let bytes = {
+            let mut b = Box::new([0u8; MAX_BYTES]);
+            b[0..s.len()].copy_from_slice(s.as_bytes());
+            b
+        };
+
+        Self {
+            bytes,
+            len_first_segment: s.len() as u16,
+            len_gap: 0,
+            len_second_segment: 0,
+        }
+    }
+}
+
 impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
+    /// The number of bytes `RopeChunk`s must always stay over.
+    pub(super) const fn chunk_min() -> usize {
+        if Self::min_bytes() > 3 {
+            // The wiggle room is 3 bytes for the reason already explained in
+            // the comment above.
+            Self::min_bytes() - 3
+        } else {
+            1
+        }
+    }
+
+    #[inline]
+    pub(super) fn chunk_segmenter(s: &str) -> ChunkSegmenter<'_, MAX_BYTES> {
+        ChunkSegmenter { s, yielded: 0 }
+    }
+
     #[inline]
     fn first_segment(&self) -> &str {
         // SAFETY: all the methods are guaranteed to always keep the bytes in
@@ -221,7 +260,12 @@ impl<const MAX_BYTES: usize> AsSlice for GapBuffer<MAX_BYTES> {
 
     #[inline]
     fn as_slice(&self) -> GapSlice<'_> {
-        todo!();
+        GapSlice {
+            bytes: &*self.bytes,
+            len_first_segment: self.len_first_segment,
+            len_gap: self.len_gap,
+            len_second_segment: self.len_second_segment,
+        }
     }
 }
 
@@ -274,22 +318,59 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
     }
 }
 
-pub(super) struct StringSegmenter<'a, const MAX_BYTES: usize> {
+/// An iterator over the valid split points of a `ChunkSlice`.
+///
+/// All the `ChunkSlice`s yielded by this iterator are guaranteed to never
+/// split char boundaries and CRLF pairs and to be within the chunk bounds of
+/// [`RopeChunk`]s.
+///
+/// The only exception is if the slice fed to [`Self::new()`] is shorter than
+/// [`RopeChunk::chunk_min()`], in which case this will only yield that slice.
+pub(super) struct ChunkSegmenter<'a, const MAX_BYTES: usize> {
     s: &'a str,
+    yielded: usize,
 }
 
-impl<'a, const MAX_BYTES: usize> StringSegmenter<'a, MAX_BYTES> {
-    #[inline]
-    pub(super) fn new(s: &'a str) -> Self {
-        Self { s }
-    }
-}
-
-impl<'a, const MAX_BYTES: usize> Iterator for StringSegmenter<'a, MAX_BYTES> {
-    type Item = GapBuffer<MAX_BYTES>;
+impl<'a, const MAX_BYTES: usize> Iterator for ChunkSegmenter<'a, MAX_BYTES> {
+    type Item = &'a str;
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        todo!();
+        let mut remaining = self.s.len() - self.yielded;
+
+        let chunk = if remaining == 0 {
+            return None;
+        } else if remaining > MAX_BYTES {
+            let mut chunk_len = MAX_BYTES;
+
+            remaining -= chunk_len;
+
+            let min = GapBuffer::<MAX_BYTES>::min_bytes();
+
+            if remaining < min {
+                chunk_len -= min - remaining;
+            }
+
+            chunk_len =
+                adjust_split_point::<true>(&self.s[self.yielded..], chunk_len);
+
+            &self.s[self.yielded..(self.yielded + chunk_len)]
+        } else {
+            debug_assert!(
+                self.yielded == 0
+                    || remaining >= GapBuffer::<MAX_BYTES>::chunk_min()
+            );
+
+            &self.s[self.s.len() - remaining..]
+        };
+
+        self.yielded += chunk.len();
+
+        Some(chunk)
     }
+}
+
+impl<const MAX_BYTES: usize> std::iter::FusedIterator
+    for ChunkSegmenter<'_, MAX_BYTES>
+{
 }

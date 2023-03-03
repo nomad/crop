@@ -7,10 +7,10 @@ use crate::tree::Summarize;
 /// A slice of a [`GapBuffer`](super::gap_buffer::GapBuffer).
 #[derive(Copy, Clone, Default)]
 pub(super) struct GapSlice<'a> {
-    bytes: &'a [u8],
-    len_first_segment: u16,
-    len_gap: u16,
-    len_second_segment: u16,
+    pub(super) bytes: &'a [u8],
+    pub(super) len_first_segment: u16,
+    pub(super) len_gap: u16,
+    pub(super) len_second_segment: u16,
 }
 
 impl std::fmt::Debug for GapSlice<'_> {
