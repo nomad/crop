@@ -18,7 +18,7 @@ pub trait BaseMeasured: Summarize {
     type BaseMetric: Metric<Self>;
 }
 
-pub trait AsSlice: Summarize + for<'a> From<Self::Slice<'a>> {
+pub trait AsSlice: Summarize {
     type Slice<'a>: Copy + Summarize<Summary = Self::Summary>
     where
         Self: 'a;
@@ -30,7 +30,7 @@ pub trait Leaf: Summarize + BaseMeasured + AsSlice {}
 
 impl<T: Summarize + BaseMeasured + AsSlice> Leaf for T {}
 
-pub trait BalancedLeaf: Leaf {
+pub trait BalancedLeaf: Leaf + for<'a> From<Self::Slice<'a>> {
     /// Returns whether the leaf node is too small to be on its own and should
     /// be rebalanced with another leaf.
     fn is_underfilled(slice: Self::Slice<'_>, summary: &Self::Summary)
