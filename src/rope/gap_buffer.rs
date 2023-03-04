@@ -137,10 +137,10 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         self.len_second_segment as _
     }
 
-    #[inline]
-    fn len_trailing_gap(&self) -> usize {
-        MAX_BYTES - self.len_middle_gap() - self.len()
-    }
+    // #[inline]
+    // fn len_trailing_gap(&self) -> usize {
+    //     MAX_BYTES - self.len_middle_gap() - self.len()
+    // }
 
     /// The number of bytes `RopeChunk`s should aim to stay over.
     pub(super) const fn min_bytes() -> usize {
@@ -327,14 +327,14 @@ impl<const MAX_BYTES: usize> From<GapSlice<'_>> for GapBuffer<MAX_BYTES> {
             // Add the slice's first segment plus part of its second segment to
             // our first segment.
 
+            buffer.bytes[..slice.len_first_segment()]
+                .copy_from_slice(slice.first_segment().as_bytes());
+
             let space_left_on_first =
                 target_len_first - slice.len_first_segment();
 
             let (to_first, rest) =
                 split_adjusted::<true>(second_segment, space_left_on_first);
-
-            buffer.bytes[..slice.len_first_segment()]
-                .copy_from_slice(slice.first_segment().as_bytes());
 
             let range = {
                 let start = slice.len_first_segment();
@@ -364,10 +364,15 @@ impl<const MAX_BYTES: usize> AsSlice for GapBuffer<MAX_BYTES> {
 
     #[inline]
     fn as_slice(&self) -> GapSlice<'_> {
+        let end = if !self.second_segment().is_empty() {
+            self.len() + self.len_middle_gap()
+        } else {
+            self.len_first_segment()
+        };
+
         GapSlice {
-            bytes: &*self.bytes,
+            bytes: &self.bytes[..end],
             len_first_segment: self.len_first_segment,
-            len_gap: self.len_gap,
             len_second_segment: self.len_second_segment,
         }
     }
@@ -392,7 +397,7 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
         (left, &left_summary): (GapSlice<'_>, &ChunkSummary),
         (right, &right_summary): (GapSlice<'_>, &ChunkSummary),
     ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
-        todo!();
+        ((left.into(), left_summary), Some((right.into(), right_summary)))
     }
 }
 

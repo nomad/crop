@@ -9,7 +9,6 @@ use crate::tree::Summarize;
 pub(super) struct GapSlice<'a> {
     pub(super) bytes: &'a [u8],
     pub(super) len_first_segment: u16,
-    pub(super) len_gap: u16,
     pub(super) len_second_segment: u16,
 }
 
@@ -18,9 +17,8 @@ impl std::fmt::Debug for GapSlice<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.write_str("\"")?;
         debug_no_quotes(self.first_segment(), f)?;
-        write!(f, "{:~^1$}", "", self.len_middle_gap())?;
+        write!(f, "{:~^1$}", "", self.len_gap())?;
         debug_no_quotes(self.second_segment(), f)?;
-        write!(f, "{:~^1$}", "", self.len_trailing_gap())?;
         f.write_str("\"")?;
         Ok(())
     }
@@ -107,8 +105,8 @@ impl<'a> GapSlice<'a> {
     }
 
     #[inline]
-    fn len_middle_gap(&self) -> usize {
-        self.len_gap as _
+    fn len_gap(&self) -> usize {
+        self.bytes.len() - self.len()
     }
 
     #[inline]
@@ -116,15 +114,15 @@ impl<'a> GapSlice<'a> {
         self.len_second_segment as _
     }
 
-    #[inline]
-    fn len_trailing_gap(&self) -> usize {
-        self.bytes.len() - self.len() - self.len_middle_gap()
-    }
+    // #[inline]
+    // fn len_trailing_gap(&self) -> usize {
+    //     self.bytes.len() - self.len() - self.len_middle_gap()
+    // }
 
     #[inline]
     pub(super) fn second_segment(&self) -> &'a str {
-        let start = self.len_first_segment() + self.len_middle_gap();
-        let end = start + self.len_second_segment();
+        let end = self.bytes.len();
+        let start = end - self.len_second_segment();
         // SAFETY: all the methods are guaranteed to always keep the bytes in
         // the second segment as valid UTF-8.
         unsafe { std::str::from_utf8_unchecked(&self.bytes[start..end]) }

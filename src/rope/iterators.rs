@@ -1,4 +1,3 @@
-use super::gap_buffer::GapBuffer;
 use super::metrics::{LineMetric, RawLineMetric};
 use super::rope::RopeChunk;
 use super::{Rope, RopeSlice};
