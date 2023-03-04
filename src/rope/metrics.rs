@@ -85,7 +85,26 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        todo!();
+        if up_to == chunk.len() {
+            (chunk, summary, GapSlice::empty(), ChunkSummary::empty())
+        } else {
+            let (left, right) = chunk.split_at_offset(up_to);
+
+            // Summarize the shorter side, then get the other summary by
+            // subtracting it from the total.
+
+            let (left_summary, right_summary) = if up_to < chunk.len() / 2 {
+                let left_summary = left.summarize();
+                let right_summary = summary - left_summary;
+                (left_summary, right_summary)
+            } else {
+                let right_summary = right.summarize();
+                let left_summary = summary - right_summary;
+                (left_summary, right_summary)
+            };
+
+            (left, left_summary, right, right_summary)
+        }
     }
 }
 
@@ -153,7 +172,18 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        todo!();
+        let split_at = chunk.byte_of_line(at);
+
+        let (left, right) = chunk.split_at_offset(split_at);
+
+        let left_summary = ChunkSummary { bytes: split_at, line_breaks: at };
+
+        let right_summary = ChunkSummary {
+            bytes: chunk.len() - split_at,
+            line_breaks: summary.line_breaks - at,
+        };
+
+        (left, left_summary, right, right_summary)
     }
 }
 
@@ -168,7 +198,14 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        todo!();
+        let (first, first_summary, rest, rest_summary) =
+            <Self as SlicingMetric<GapBuffer<MAX_BYTES>>>::split(
+                chunk,
+                RawLineMetric(1),
+                summary,
+            );
+
+        (first, first_summary, first_summary, rest, rest_summary)
     }
 }
 
@@ -183,7 +220,34 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        todo!();
+        let mut last_summary =
+            ChunkSummary { bytes: summary.bytes, line_breaks: 0 };
+
+        let bytes = chunk
+            .first_segment()
+            .bytes()
+            .chain(chunk.second_segment().bytes());
+
+        for (idx, byte) in bytes.rev().enumerate() {
+            if byte == b'\n' {
+                if idx == 0 {
+                    last_summary.line_breaks = 1;
+                } else {
+                    last_summary.bytes = idx;
+                    break;
+                }
+            }
+        }
+
+        let (rest, last) =
+            chunk.split_at_offset(chunk.len() - last_summary.bytes);
+
+        let rest_summary = ChunkSummary {
+            bytes: chunk.len() - last_summary.bytes,
+            line_breaks: summary.line_breaks - last_summary.line_breaks,
+        };
+
+        (rest, rest_summary, last, last_summary, last_summary)
     }
 
     #[inline]
@@ -194,7 +258,14 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        todo!();
+        if chunk.has_trailing_newline() {
+            (chunk, *summary, GapSlice::empty(), ChunkSummary::empty())
+        } else {
+            let (rest, rest_summary, last, last_summary, _) =
+                <Self as DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>>::last_unit(chunk, summary);
+
+            (rest, rest_summary, last, last_summary)
+        }
     }
 }
 
@@ -259,7 +330,21 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>> for LineMetric {
     where
         'a: 'a,
     {
-        todo!();
+        let (mut first, mut first_summary, advance, rest, rest_summary) =
+            <RawLineMetric as UnitMetric<GapBuffer<MAX_BYTES>>>::first_unit(
+                chunk, summary,
+            );
+
+        debug_assert!(first.has_trailing_newline());
+        debug_assert_eq!(first_summary.line_breaks, 1);
+
+        let bytes_line_break = bytes_line_break(first.last_segment());
+
+        first = first.byte_slice(..first.len() - bytes_line_break);
+        first_summary.bytes -= bytes_line_break;
+        first_summary.line_breaks = 0;
+
+        (first, first_summary, advance, rest, rest_summary)
     }
 }
 
@@ -274,7 +359,25 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        todo!();
+        let (rest, rest_summary, mut last, mut last_summary, advance) =
+            <RawLineMetric as DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>>::last_unit(chunk, summary);
+
+        debug_assert_eq!(last_summary, advance);
+
+        if last_summary.line_breaks == 0 {
+            return (rest, rest_summary, last, last_summary, last_summary);
+        }
+
+        debug_assert!(last.has_trailing_newline());
+        debug_assert_eq!(last_summary.line_breaks, 1);
+
+        let bytes_line_break = bytes_line_break(last.last_segment());
+
+        last = last.byte_slice(..last.len() - bytes_line_break);
+        last_summary.bytes -= bytes_line_break;
+        last_summary.line_breaks = 0;
+
+        (rest, rest_summary, last, last_summary, advance)
     }
 
     #[inline]
@@ -285,6 +388,6 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        todo!();
+        <RawLineMetric as DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>>::remainder(chunk, summary)
     }
 }

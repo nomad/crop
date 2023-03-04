@@ -1,10 +1,15 @@
+use std::ops::RangeBounds;
+
 use str_indices::lines_lf;
 
 use super::gap_buffer::ChunkSummary;
 use super::utils::*;
+use crate::range_bounds_to_start_end;
 use crate::tree::Summarize;
 
 /// A slice of a [`GapBuffer`](super::gap_buffer::GapBuffer).
+///
+/// TODO: docs
 #[derive(Copy, Clone, Default)]
 pub(super) struct GapSlice<'a> {
     pub(super) bytes: &'a [u8],
@@ -53,6 +58,28 @@ impl<'a> GapSlice<'a> {
             self.second_segment().as_bytes()
                 [byte_index - self.len_first_segment()]
         }
+    }
+
+    #[inline]
+    pub(super) fn byte_slice<R>(&self, byte_range: R) -> GapSlice<'a>
+    where
+        R: RangeBounds<usize>,
+    {
+        let (start, end) =
+            range_bounds_to_start_end(byte_range, 0, self.len());
+
+        todo!();
+    }
+
+    /// Returns the byte offset of the start of the given line.
+    #[inline]
+    pub(super) fn byte_of_line(&self, line_index: usize) -> usize {
+        todo!();
+    }
+
+    #[inline]
+    pub(super) fn empty() -> Self {
+        Self::default()
     }
 
     #[inline]
@@ -126,6 +153,11 @@ impl<'a> GapSlice<'a> {
         // SAFETY: all the methods are guaranteed to always keep the bytes in
         // the second segment as valid UTF-8.
         unsafe { std::str::from_utf8_unchecked(&self.bytes[start..end]) }
+    }
+
+    #[inline]
+    pub(super) fn split_at_offset(&self, byte_offset: usize) -> (Self, Self) {
+        (self.byte_slice(..byte_offset), self.byte_slice(byte_offset..))
     }
 
     // /// Return the segment containing the given byte index.

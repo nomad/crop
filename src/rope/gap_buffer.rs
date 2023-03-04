@@ -192,6 +192,13 @@ pub(super) struct ChunkSummary {
     pub(super) line_breaks: usize,
 }
 
+impl ChunkSummary {
+    #[inline]
+    pub(super) fn empty() -> Self {
+        Self::default()
+    }
+}
+
 impl Add<Self> for ChunkSummary {
     type Output = Self;
 
@@ -397,6 +404,7 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
         (left, &left_summary): (GapSlice<'_>, &ChunkSummary),
         (right, &right_summary): (GapSlice<'_>, &ChunkSummary),
     ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
+        // todo!();
         ((left.into(), left_summary), Some((right.into(), right_summary)))
     }
 }
