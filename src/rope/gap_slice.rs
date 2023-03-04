@@ -68,7 +68,34 @@ impl<'a> GapSlice<'a> {
         let (start, end) =
             range_bounds_to_start_end(byte_range, 0, self.len());
 
-        todo!();
+        debug_assert!(start <= end);
+        debug_assert!(end <= self.len());
+
+        match (
+            start <= self.len_first_segment(),
+            end <= self.len_first_segment(),
+        ) {
+            (true, true) => Self {
+                bytes: &self.bytes[start..end],
+                len_first_segment: (end - start) as u16,
+                len_second_segment: 0,
+            },
+
+            (true, false) => Self {
+                bytes: &self.bytes[start..end + self.len_gap()],
+                len_first_segment: self.len_first_segment - (start as u16),
+                len_second_segment: (end as u16) - self.len_first_segment,
+            },
+
+            (false, false) => Self {
+                bytes: &self.bytes
+                    [start + self.len_gap()..end + self.len_gap()],
+                len_first_segment: 0,
+                len_second_segment: (end - start) as u16,
+            },
+
+            (false, true) => unreachable!(),
+        }
     }
 
     /// Returns the byte offset of the start of the given line.

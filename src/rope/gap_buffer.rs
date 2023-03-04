@@ -308,7 +308,7 @@ impl<const MAX_BYTES: usize> From<GapSlice<'_>> for GapBuffer<MAX_BYTES> {
 
             let to_first = adjust_split_point::<true>(
                 slice.first_segment(),
-                target_len_first as usize,
+                target_len_first,
             );
 
             buffer.bytes[..to_first].copy_from_slice(
