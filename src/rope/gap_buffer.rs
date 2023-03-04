@@ -278,7 +278,84 @@ impl<const MAX_BYTES: usize> BaseMeasured for GapBuffer<MAX_BYTES> {
 impl<const MAX_BYTES: usize> From<GapSlice<'_>> for GapBuffer<MAX_BYTES> {
     #[inline]
     fn from(slice: GapSlice<'_>) -> Self {
-        todo!();
+        // In the general case the slice will have less than `MAX_BYTES` bytes.
+        //
+        // We create an owned `GapBuffer` by splitting the bytes of the slice
+        // equally between the first and second segments. Any remaining space
+        // is left as a middle gap.
+
+        let mut buffer = Self {
+            bytes: Box::new([0u8; MAX_BYTES]),
+            len_first_segment: 0,
+            len_gap: (MAX_BYTES - slice.len()) as u16,
+            len_second_segment: 0,
+        };
+
+        let target_len_first = slice.len() / 2;
+
+        let mut second_segment = slice.second_segment();
+
+        if slice.len_first_segment() >= target_len_first {
+            // Add everything up to the target to our first segment, then add
+            // the rest to our second segment.
+
+            let to_first = adjust_split_point::<true>(
+                slice.first_segment(),
+                target_len_first as usize,
+            );
+
+            buffer.bytes[..to_first].copy_from_slice(
+                &slice.first_segment().as_bytes()[..to_first],
+            );
+
+            buffer.len_first_segment = to_first as u16;
+
+            let range = {
+                let to_second = slice.len_first_segment() - to_first;
+                let end = MAX_BYTES - second_segment.len();
+                let start = end - to_second;
+                start..end
+            };
+
+            buffer.bytes[range].copy_from_slice(
+                &slice.first_segment().as_bytes()[to_first..],
+            );
+
+            buffer.len_second_segment =
+                (slice.len_first_segment() - to_first) as u16;
+        } else {
+            // Add the slice's first segment plus part of its second segment to
+            // our first segment.
+
+            let space_left_on_first =
+                target_len_first - slice.len_first_segment();
+
+            let (to_first, rest) =
+                split_adjusted::<true>(second_segment, space_left_on_first);
+
+            buffer.bytes[..slice.len_first_segment()]
+                .copy_from_slice(slice.first_segment().as_bytes());
+
+            let range = {
+                let start = slice.len_first_segment();
+                let end = start + to_first.len();
+                start..end
+            };
+
+            buffer.bytes[range].copy_from_slice(to_first.as_bytes());
+
+            buffer.len_first_segment =
+                (slice.len_first_segment() + to_first.len()) as u16;
+
+            second_segment = rest;
+        }
+
+        buffer.bytes[MAX_BYTES - second_segment.len()..]
+            .copy_from_slice(second_segment.as_bytes());
+
+        buffer.len_second_segment += second_segment.len() as u16;
+
+        buffer
     }
 }
 
