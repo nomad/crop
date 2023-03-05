@@ -277,6 +277,14 @@ impl ChunkSummary {
     pub(super) fn empty() -> Self {
         Self::default()
     }
+
+    #[inline]
+    pub(super) fn from_str(s: &str) -> Self {
+        Self {
+            bytes: s.len(),
+            line_breaks: str_indices::lines_lf::count_breaks(s),
+        }
+    }
 }
 
 impl Add<Self> for ChunkSummary {
@@ -484,8 +492,127 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
         (left, &left_summary): (GapSlice<'_>, &ChunkSummary),
         (right, &right_summary): (GapSlice<'_>, &ChunkSummary),
     ) -> ((Self, ChunkSummary), Option<(Self, ChunkSummary)>) {
-        // todo!();
-        ((left.into(), left_summary), Some((right.into(), right_summary)))
+        // Neither side is underfilled.
+        if left.len() >= Self::min_bytes() && right.len() >= Self::min_bytes()
+        {
+            ((left.into(), left_summary), Some((right.into(), right_summary)))
+        }
+        // The two slices can be combined in a single chunk.
+        else if left.len() + right.len() <= MAX_BYTES {
+            let combined = Self::from_segments(&[
+                left.first_segment(),
+                left.second_segment(),
+                right.first_segment(),
+                right.second_segment(),
+            ]);
+
+            ((combined, left_summary + right_summary), None)
+        }
+        // The left side is underfilled -> take text from the right side.
+        else if left.len() < Self::min_bytes() {
+            debug_assert!(right.len() > Self::min_bytes());
+
+            let missing = Self::min_bytes() - left.len();
+
+            if right.len_first_segment() >= missing {
+                let (to_left, keep_right) =
+                    split_adjusted::<true>(right.first_segment(), missing);
+
+                let to_left_summary = ChunkSummary::from_str(to_left);
+
+                let left = Self::from_segments(&[
+                    left.first_segment(),
+                    left.second_segment(),
+                    to_left,
+                ]);
+
+                let right =
+                    Self::from_segments(&[keep_right, right.second_segment()]);
+
+                (
+                    (left, left_summary + to_left_summary),
+                    Some((right, right_summary - to_left_summary)),
+                )
+            } else {
+                let missing = missing - right.len_first_segment();
+
+                let (to_left, keep_right) =
+                    split_adjusted::<true>(right.second_segment(), missing);
+
+                let to_left_summary =
+                    ChunkSummary::from_str(right.first_segment())
+                        + ChunkSummary::from_str(to_left);
+
+                let left = Self::from_segments(&[
+                    left.first_segment(),
+                    left.second_segment(),
+                    right.first_segment(),
+                    to_left,
+                ]);
+
+                let right = Self::from_segments(&[keep_right]);
+
+                (
+                    (left, left_summary + to_left_summary),
+                    Some((right, right_summary - to_left_summary)),
+                )
+            }
+        }
+        // The right side is underfilled -> take text from the left side.
+        else if right.len() < Self::min_bytes() {
+            debug_assert!(left.len() > Self::min_bytes());
+
+            let missing = Self::min_bytes() - right.len();
+
+            if left.len_second_segment() >= missing {
+                let (keep_left, to_right) = split_adjusted::<true>(
+                    left.second_segment(),
+                    left.len_second_segment() - missing,
+                );
+
+                let to_right_summary = ChunkSummary::from_str(to_right);
+
+                let left =
+                    Self::from_segments(&[left.first_segment(), keep_left]);
+
+                let right = Self::from_segments(&[
+                    to_right,
+                    right.first_segment(),
+                    right.second_segment(),
+                ]);
+
+                (
+                    (left, left_summary - to_right_summary),
+                    Some((right, right_summary + to_right_summary)),
+                )
+            } else {
+                let missing = missing - left.len_second_segment();
+
+                let (keep_left, to_right) = split_adjusted::<true>(
+                    left.first_segment(),
+                    left.len_first_segment() - missing,
+                );
+
+                let to_right_summary = ChunkSummary::from_str(to_right)
+                    + ChunkSummary::from_str(left.second_segment());
+
+                let left = Self::from_segments(&[keep_left]);
+
+                let right = Self::from_segments(&[
+                    to_right,
+                    left.second_segment(),
+                    right.first_segment(),
+                    right.second_segment(),
+                ]);
+
+                (
+                    (left, left_summary - to_right_summary),
+                    Some((right, right_summary + to_right_summary)),
+                )
+            }
+        } else {
+            unreachable!();
+        }
     }
 }
 

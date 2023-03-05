@@ -178,7 +178,7 @@ impl<'a> GapSlice<'a> {
     }
 
     #[inline]
-    fn len_second_segment(&self) -> usize {
+    pub(super) fn len_second_segment(&self) -> usize {
         self.len_second_segment as _
     }
 
