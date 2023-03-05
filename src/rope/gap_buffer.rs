@@ -153,7 +153,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 for &segment in segments {
                     let range = {
                         let start = start as usize;
-                        let end = start + to_second.len();
+                        let end = start + segment.len();
                         start..end
                     };
 
@@ -233,7 +233,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         &mut self,
         s: &'a str,
     ) -> Option<&'a str> {
-        debug_assert!(s.len() <= MAX_BYTES);
+        debug_assert!(self.len() <= MAX_BYTES);
         debug_assert_eq!(self.len_middle_gap(), 0);
         debug_assert_eq!(self.len_second_segment(), 0);
 
@@ -459,14 +459,29 @@ impl<const MAX_BYTES: usize> AsSlice for GapBuffer<MAX_BYTES> {
 
     #[inline]
     fn as_slice(&self) -> GapSlice<'_> {
-        let end = if !self.second_segment().is_empty() {
-            self.len() + self.len_middle_gap()
-        } else {
-            self.len_first_segment()
+        let range = match (
+            self.len_first_segment() == 0,
+            self.len_second_segment() == 0,
+        ) {
+            (true, true) => 0..0,
+
+            (true, false) => {
+                let start = self.len_first_segment() + self.len_middle_gap();
+                let end = start + self.len_second_segment();
+                start..end
+            },
+
+            (false, true) => 0..self.len_first_segment(),
+
+            (false, false) => {
+                0..self.len_first_segment()
+                    + self.len_middle_gap()
+                    + self.len_second_segment()
+            },
         };
 
         GapSlice {
-            bytes: &self.bytes[..end],
+            bytes: &self.bytes[range],
             len_first_segment: self.len_first_segment,
             len_second_segment: self.len_second_segment,
         }
@@ -596,14 +611,14 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
                 let to_right_summary = ChunkSummary::from_str(to_right)
                     + ChunkSummary::from_str(left.second_segment());
 
-                let left = Self::from_segments(&[keep_left]);
-
                 let right = Self::from_segments(&[
                     to_right,
                     left.second_segment(),
                     right.first_segment(),
                     right.second_segment(),
                 ]);
+
+                let left = Self::from_segments(&[keep_left]);
 
                 (
                     (left, left_summary - to_right_summary),
@@ -669,8 +684,10 @@ impl<'a, const MAX_BYTES: usize> Iterator for ChunkSegmenter<'a, MAX_BYTES> {
                 chunk_len -= min - remaining;
             }
 
-            chunk_len =
-                adjust_split_point::<true>(&self.s[self.yielded..], chunk_len);
+            chunk_len = adjust_split_point::<false>(
+                &self.s[self.yielded..],
+                chunk_len,
+            );
 
             &self.s[self.yielded..(self.yielded + chunk_len)]
         } else {

@@ -73,7 +73,7 @@ impl DoubleEndedIterator for Chunks<'_> {
         if let Some(extra) = self.backward_extra_first.take() {
             Some(extra)
         } else {
-            let Some(chunk) = self.leaves.next() else {
+            let Some(chunk) = self.leaves.next_back() else {
                 return self.forward_extra_second.take();
             };
 
