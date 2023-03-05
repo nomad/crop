@@ -48,23 +48,13 @@ impl<const MAX_BYTES: usize> Default for GapBuffer<MAX_BYTES> {
 impl<const MAX_BYTES: usize> From<&str> for GapBuffer<MAX_BYTES> {
     /// # Panics
     ///
-    /// Panics if the byte length of the string is greater than `MAX_BYTES`.
+    /// Panics if the string is empty or if its byte length is greater than
+    /// `MAX_BYTES`.
     #[inline]
     fn from(s: &str) -> Self {
+        debug_assert!(!s.is_empty());
         debug_assert!(s.len() <= MAX_BYTES);
-
-        let bytes = {
-            let mut b = Box::new([0u8; MAX_BYTES]);
-            b[0..s.len()].copy_from_slice(s.as_bytes());
-            b
-        };
-
-        Self {
-            bytes,
-            len_first_segment: s.len() as u16,
-            len_gap: 0,
-            len_second_segment: 0,
-        }
+        Self::from_segments(&[s])
     }
 }
 
@@ -94,6 +84,96 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 &self.bytes[..self.len_first_segment()],
             )
         }
+    }
+
+    /// TODO: docs
+    ///
+    /// # Panics
+    ///
+    /// Panics if the combined byte length of all the segments is zero or if
+    /// it's greater than `MAX_BYTES`.
+    ///
+    /// TODO: examples
+    #[inline]
+    fn from_segments(segments: &[&str]) -> Self {
+        let total_len = segments.iter().map(|s| s.len() as u16).sum::<u16>();
+
+        debug_assert!(total_len > 0);
+        debug_assert!(total_len <= MAX_BYTES as u16);
+
+        let add_to_first = total_len / 2;
+
+        let mut bytes = Box::new([0u8; MAX_BYTES]);
+
+        let mut len_first_segment = 0;
+
+        let mut segments = segments.iter();
+
+        for &segment in segments.by_ref() {
+            if len_first_segment + segment.len() as u16 <= add_to_first {
+                let range = {
+                    let start = len_first_segment as usize;
+                    let end = start + segment.len();
+                    start..end
+                };
+
+                bytes[range].copy_from_slice(segment.as_bytes());
+
+                len_first_segment += segment.len() as u16;
+            } else {
+                let (to_first, to_second) = split_adjusted::<true>(
+                    segment,
+                    (add_to_first - len_first_segment) as usize,
+                );
+
+                let range = {
+                    let start = len_first_segment as usize;
+                    let end = start + to_first.len();
+                    start..end
+                };
+
+                bytes[range].copy_from_slice(to_first.as_bytes());
+
+                len_first_segment += to_first.len() as u16;
+
+                let len_second_segment = total_len - len_first_segment;
+
+                let mut start = MAX_BYTES as u16 - len_second_segment;
+
+                let range = {
+                    let start = start as usize;
+                    let end = start + to_second.len();
+                    start..end
+                };
+
+                bytes[range].copy_from_slice(to_second.as_bytes());
+
+                start += to_second.len() as u16;
+
+                for &segment in segments {
+                    let range = {
+                        let start = start as usize;
+                        let end = start + to_second.len();
+                        start..end
+                    };
+
+                    bytes[range].copy_from_slice(segment.as_bytes());
+
+                    start += segment.len() as u16;
+                }
+
+                return Self {
+                    bytes,
+                    len_first_segment,
+                    len_second_segment,
+                    len_gap: MAX_BYTES as u16
+                        - len_first_segment
+                        - len_second_segment,
+                };
+            }
+        }
+
+        unreachable!("This can only be reached if the total length is zero");
     }
 
     /// Returns `true` if it ends with a newline (either LF or CRLF).

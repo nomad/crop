@@ -235,6 +235,6 @@ mod tests {
     #[test]
     fn debug_slice() {
         let buffer = GapBuffer::<10>::from("Hello");
-        assert_eq!("\"Hello~~~~~\"", format!("{:?}", buffer.as_slice()));
+        assert_eq!("\"He~~~~~llo\"", format!("{:?}", buffer.as_slice()));
     }
 }

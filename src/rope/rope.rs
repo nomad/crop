@@ -23,7 +23,7 @@ const CHUNK_MAX_BYTES: usize = 4;
 #[cfg(not(any(test, feature = "small_chunks")))]
 const CHUNK_MAX_BYTES: usize = 1024;
 
-pub(super) type RopeChunk = GapBuffer<{ Rope::chunk_max_bytes() }>;
+pub(super) type RopeChunk = GapBuffer<CHUNK_MAX_BYTES>;
 
 /// A UTF-8 text rope.
 #[derive(Clone, Default)]
@@ -218,10 +218,6 @@ impl Rope {
     #[inline]
     pub fn chunks(&self) -> Chunks<'_> {
         Chunks::from(self)
-    }
-
-    pub(super) const fn chunk_max_bytes() -> usize {
-        CHUNK_MAX_BYTES
     }
 
     /// Deletes the contents of the `Rope` within the specified byte range,
