@@ -311,6 +311,9 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     }
 
     #[inline]
+    fn replace(&mut self, byte_range: Range<usize>, s: &str) {}
+
+    #[inline]
     fn second_segment(&self) -> &str {
         // SAFETY: all the methods are guaranteed to always keep the bytes in
         // the second segment as valid UTF-8.
@@ -319,6 +322,11 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 &self.bytes[..self.len_first_segment()],
             )
         }
+    }
+
+    #[inline]
+    fn summarize_byte_range(&self, byte_range: Range<usize>) -> ChunkSummary {
+        todo!();
     }
 }
 
@@ -706,6 +714,7 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
     for GapBuffer<MAX_BYTES>
 {
     type Replacement<'a> = &'a str;
+
     type ExtraLeaves = std::vec::IntoIter<Self>;
 
     #[inline]
@@ -730,33 +739,54 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
             (s, e)
         };
 
-        // len - end + start + s.len() <= MAX
-        // MAX - gap - end + start + s.len() <= MAX
-        // s.len() + (end - start) <= gap
-
         if s.len() + (end - start) <= self.len_gap() {
-            match (end > start, !s.is_empty()) {
-                // (true, true) => self.replace(&mut summary, start..end, s),
-                (true, true) => todo!(),
+            *summary += ChunkSummary::from_str(s);
 
-                // (true, false) => self.delete(&mut summary, start..end),
-                (true, false) => todo!(),
-
-                (false, true) => {
-                    *summary += ChunkSummary::from_str(s);
-                    self.insert(start, s)
-                },
-
-                (false, false) => {},
+            if end > start {
+                *summary -= self.summarize_byte_range(start..end);
+                self.replace(start..end, s);
+            } else {
+                self.insert(start, s)
             }
 
             return None;
         }
 
-        // This shouldn't be too too different from the contiguous case, except
-        // it is.
+        // a) split point falls in first segment
+        //
+        // - split gap buffer, we now have 2 segments as "last";
+        //
+        // - self.len() < min -> push text from the slice, push from the
+        // segments of "last" if necessary;
+        //
+        // - slice + last < min -> add to slice from right side of self's first
+        // segment
+        //
+        // - create ChunkResegmenter from
+        // [slice, last.first_segment(), last.second_segment()]
+        //
+        //
+        // b) split point falls in second segment
+        //
+        // - split gap buffer, we now have 1 segment as "last";
+        //
+        // - self.len() < min -> push text from the slice, push from last if
+        // necessary;
+        //
+        // - slice + last < min -> add to slice from right side of self's last
+        // segment, add all self's last segment + slice self's first segment if
+        // necessary
+        //
+        // - create ChunkResegmenter from [slice, last]
 
-        todo!();
+        let extras = &mut [];
+
+        Some(
+            ChunkResegmenter::<MAX_BYTES>::new(extras)
+                .map(Self::from)
+                .collect::<Vec<_>>()
+                .into_iter(),
+        )
     }
 }
 
@@ -816,5 +846,76 @@ impl<'a, const MAX_BYTES: usize> Iterator for ChunkSegmenter<'a, MAX_BYTES> {
 
 impl<const MAX_BYTES: usize> std::iter::FusedIterator
     for ChunkSegmenter<'_, MAX_BYTES>
+{
+}
+
+pub(super) struct ChunkResegmenter<'a, const MAX_BYTES: usize> {
+    segments: &'a mut [&'a str],
+    start: usize,
+    yielded: usize,
+    total: usize,
+}
+
+impl<'a, const MAX_BYTES: usize> ChunkResegmenter<'a, MAX_BYTES> {
+    #[inline]
+    fn new(segments: &'a mut [&'a str]) -> Self {
+        Self {
+            total: segments.iter().map(|s| s.len()).sum::<usize>(),
+            segments,
+            yielded: 0,
+            start: 0,
+        }
+    }
+}
+
+impl<'a, const MAX_BYTES: usize> Iterator for ChunkResegmenter<'a, MAX_BYTES> {
+    type Item = GapBuffer<MAX_BYTES>;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.yielded == self.total {
+            return None;
+        }
+
+        debug_assert!(
+            self.total - self.yielded >= GapBuffer::<MAX_BYTES>::chunk_min()
+        );
+
+        let mut end = self.start;
+
+        let mut bytes_in_slice_range = 0;
+
+        for (idx, &segment) in self.segments.iter().enumerate() {
+            if bytes_in_slice_range + segment.len() > MAX_BYTES {
+                end += idx;
+                break;
+            } else {
+                bytes_in_slice_range += segment.len()
+            }
+        }
+
+        let (left, right) = split_adjusted::<true>(
+            self.segments[end],
+            MAX_BYTES - bytes_in_slice_range,
+        );
+
+        self.segments[end] = left;
+
+        let next = GapBuffer::<MAX_BYTES>::from_segments(
+            &self.segments[self.start..=end],
+        );
+
+        self.segments[end] = right;
+
+        self.start = end;
+
+        self.yielded += next.len();
+
+        Some(next)
+    }
+}
+
+impl<const MAX_BYTES: usize> std::iter::FusedIterator
+    for ChunkResegmenter<'_, MAX_BYTES>
 {
 }
