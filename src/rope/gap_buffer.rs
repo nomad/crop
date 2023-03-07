@@ -324,9 +324,84 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         }
     }
 
+    /// Returns the summary obtained by summarizing only the text in the given
+    /// byte range.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `total` is different from the output of `self.summarize()` or
+    /// if either the start or the end of the byte range don't lie on a char
+    /// boundary.
     #[inline]
-    fn summarize_byte_range(&self, byte_range: Range<usize>) -> ChunkSummary {
-        todo!();
+    fn summarize_byte_range(
+        &self,
+        byte_range: Range<usize>,
+        total: ChunkSummary,
+    ) -> ChunkSummary {
+        debug_assert_eq!(total, self.summarize());
+
+        let Range { start, end } = byte_range;
+
+        debug_assert!(start <= end);
+        debug_assert!(end <= self.len());
+        debug_assert!(self.is_char_boundary(start));
+        debug_assert!(self.is_char_boundary(end));
+
+        // Get the summary by directly summarizing the byte range.
+        if end - start <= self.len() / 2 {
+            match (
+                start <= self.len_first_segment(),
+                end <= self.len_first_segment(),
+            ) {
+                (true, true) => {
+                    ChunkSummary::from_str(&self.first_segment()[start..end])
+                },
+
+                (true, false) => {
+                    let end = end - self.len_first_segment();
+                    ChunkSummary::from_str(&self.first_segment()[start..])
+                        + ChunkSummary::from_str(&self.second_segment()[..end])
+                },
+
+                (false, false) => {
+                    let start = start - self.len_first_segment();
+                    let end = end - self.len_first_segment();
+                    ChunkSummary::from_str(&self.second_segment()[start..end])
+                },
+
+                _ => unreachable!("start <= end"),
+            }
+        }
+        // Get the summary by subtracting the opposite byte ranges from the
+        // total.
+        else {
+            let complement = match (
+                start <= self.len_first_segment(),
+                end <= self.len_first_segment(),
+            ) {
+                (true, true) => {
+                    ChunkSummary::from_str(&self.first_segment()[..start])
+                        + ChunkSummary::from_str(&self.first_segment()[end..])
+                },
+
+                (true, false) => {
+                    let end = end - self.len_first_segment();
+                    ChunkSummary::from_str(&self.first_segment()[..start])
+                        + ChunkSummary::from_str(&self.second_segment()[end..])
+                },
+
+                (false, false) => {
+                    let start = start - self.len_first_segment();
+                    let end = end - self.len_first_segment();
+                    ChunkSummary::from_str(&self.second_segment()[..start])
+                        + ChunkSummary::from_str(&self.second_segment()[end..])
+                },
+
+                _ => unreachable!("start <= end"),
+            };
+
+            total - complement
+        }
     }
 }
 
@@ -740,12 +815,12 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
         };
 
         if s.len() + (end - start) <= self.len_gap() {
-            *summary += ChunkSummary::from_str(s);
-
             if end > start {
-                *summary -= self.summarize_byte_range(start..end);
+                *summary -= self.summarize_byte_range(start..end, *summary);
+                *summary += ChunkSummary::from_str(s);
                 self.replace(start..end, s);
             } else {
+                *summary += ChunkSummary::from_str(s);
                 self.insert(start, s)
             }
 
