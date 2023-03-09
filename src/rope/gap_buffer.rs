@@ -290,7 +290,6 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         &mut self,
         s: &'a str,
     ) -> Option<&'a str> {
-        debug_assert_eq!(self.len_gap(), 0);
         debug_assert_eq!(self.len_second_segment(), 0);
 
         let space_left = MAX_BYTES - self.len_first_segment();
@@ -404,7 +403,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         // the second segment as valid UTF-8.
         unsafe {
             std::str::from_utf8_unchecked(
-                &self.bytes[..self.len_first_segment()],
+                &self.bytes[MAX_BYTES - self.len_second_segment()..],
             )
         }
     }
@@ -1250,7 +1249,7 @@ impl<'a, const CHUNKS: usize, const MAX_BYTES: usize> Iterator
                 last_chunk_len = remaining - bytes_in_next - min_bytes
             }
 
-            let (left, right) = split_adjusted::<true>(
+            let (left, right) = split_adjusted::<false>(
                 self.segments[idx_last],
                 last_chunk_len,
             );
@@ -1350,6 +1349,17 @@ mod tests {
         let mut resegmenter = ChunkResegmenter::<3, 4>::new(chunks);
 
         assert_eq!("ab", resegmenter.next().unwrap());
+        assert_eq!(None, resegmenter.next());
+    }
+
+    #[test]
+    fn chunk_resegmenter_5() {
+        let chunks = ["こんい"];
+        let mut resegmenter = ChunkResegmenter::<1, 4>::new(chunks);
+
+        assert_eq!("こ", resegmenter.next().unwrap());
+        assert_eq!("ん", resegmenter.next().unwrap());
+        assert_eq!("い", resegmenter.next().unwrap());
         assert_eq!(None, resegmenter.next());
     }
 }

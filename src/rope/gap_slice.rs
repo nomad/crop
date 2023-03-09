@@ -125,8 +125,8 @@ impl<'a> GapSlice<'a> {
 
     #[inline]
     pub(super) fn first_segment(&self) -> &'a str {
-        // SAFETY: all the methods are guaranteed to always keep the bytes in
-        // the first segment as valid UTF-8.
+        // SAFETY: this `GapSlice` was obtained by slicing a `GapBuffer` whose
+        // first `len_first_segment` bytes were valid UTF-8.
         unsafe {
             std::str::from_utf8_unchecked(
                 &self.bytes[..self.len_first_segment()],
@@ -189,11 +189,13 @@ impl<'a> GapSlice<'a> {
 
     #[inline]
     pub(super) fn second_segment(&self) -> &'a str {
-        let end = self.bytes.len();
-        let start = end - self.len_second_segment();
-        // SAFETY: all the methods are guaranteed to always keep the bytes in
-        // the second segment as valid UTF-8.
-        unsafe { std::str::from_utf8_unchecked(&self.bytes[start..end]) }
+        // SAFETY: this `GapSlice` was obtained by slicing a `GapBuffer` whose
+        // last `len_second_segment` bytes were valid UTF-8.
+        unsafe {
+            std::str::from_utf8_unchecked(
+                &self.bytes[self.bytes.len() - self.len_second_segment()..],
+            )
+        }
     }
 
     #[inline]
