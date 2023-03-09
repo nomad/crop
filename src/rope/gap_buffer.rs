@@ -343,7 +343,59 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         s: &str,
         truncate_from: usize,
     ) {
-        todo!();
+        let Range { start, end } = byte_range;
+
+        debug_assert!(start <= end);
+        debug_assert!(end <= truncate_from);
+        debug_assert!(truncate_from <= self.len());
+        debug_assert!(self.is_char_boundary(start));
+        debug_assert!(self.is_char_boundary(end));
+        debug_assert!(self.is_char_boundary(truncate_from));
+
+        let first = self.as_slice().byte_slice(..start);
+        let second = self.as_slice().byte_slice(end..truncate_from);
+
+        // TODO: do this properly.
+
+        *self = Self::from_segments(&[
+            first.first_segment(),
+            first.second_segment(),
+            s,
+            second.first_segment(),
+            second.second_segment(),
+        ]);
+
+        // match (
+        //     start <= self.len_first_segment(),
+        //     end <= self.len_first_segment(),
+        //     truncate_from <= self.len_first_segment(),
+        // ) {
+        //     (true, true, true) => {
+        //         self.len_second_segment = 0;
+
+        //         if (end - start) <= s.len() {
+        //             todo!();
+        //         }
+        //         // self.bytes[start..end].
+
+        //         self.len_first_segment =
+        //             (start + s.len() + (truncate_from - end)) as u16;
+        //     },
+
+        //     (true, true, false) => {
+        //         todo!();
+        //     },
+
+        //     (true, false, false) => {
+        //         todo!();
+        //     },
+
+        //     (false, false, false) => {
+        //         todo!();
+        //     },
+
+        //     _ => unreachable!(),
+        // }
     }
 
     #[inline]
