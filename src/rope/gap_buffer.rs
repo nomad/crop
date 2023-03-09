@@ -448,7 +448,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     ///
     /// ```
     /// let mut buffer = GapBuffer::<10>::from("aaabbbb"); // "aaa~~~bbbb"
-    /// buffer.truncate_and_push(4, cc); // => "aaa~~~~bcc"
+    /// buffer.truncate_and_push(4, "cc"); // => "aaa~~~~bcc"
     /// assert_eq!(buffer.first_segment(), "aaa");
     /// assert_eq!(buffer.second_segment(), "bcc");
     ///
@@ -459,7 +459,29 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// ```
     #[inline]
     fn truncate_and_push(&mut self, byte_offset: usize, push_back: &str) {
-        todo!();
+        debug_assert!(byte_offset <= self.len());
+        debug_assert!(self.is_char_boundary(byte_offset));
+        debug_assert!(byte_offset + push_back.len() <= MAX_BYTES);
+
+        if byte_offset <= self.len_first_segment() {
+            self.len_first_segment = (byte_offset + push_back.len()) as u16;
+            self.len_second_segment = 0;
+            let pushed_range = {
+                let start = byte_offset;
+                start..start + push_back.len()
+            };
+            self.bytes[pushed_range].copy_from_slice(push_back.as_bytes());
+        } else {
+            let len_moved = byte_offset - self.len_first_segment();
+            let move_range = {
+                let start = MAX_BYTES - self.len_second_segment();
+                start..start + len_moved
+            };
+            let push_from = MAX_BYTES - push_back.len();
+            self.bytes.copy_within(move_range, push_from - len_moved);
+            self.bytes[push_from..].copy_from_slice(push_back.as_bytes());
+            self.len_second_segment = (len_moved + push_back.len()) as u16;
+        }
     }
 }
 
