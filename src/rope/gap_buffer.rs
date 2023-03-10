@@ -58,6 +58,109 @@ impl<const MAX_BYTES: usize> From<&str> for GapBuffer<MAX_BYTES> {
 }
 
 impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
+    #[inline]
+    fn append(&mut self, s: &str) {
+        debug_assert!(s.len() <= self.len_gap());
+
+        let start = MAX_BYTES - self.len_second_segment();
+
+        // Shift the second segment to the left.
+        self.bytes.copy_within(start.., start - s.len());
+
+        // Append the string.
+        self.bytes[MAX_BYTES - s.len()..].copy_from_slice(s.as_bytes());
+
+        self.len_second_segment += s.len() as u16;
+    }
+
+    #[inline]
+    fn append_two(&mut self, a: &str, b: &str) {
+        debug_assert!(a.len() + b.len() <= self.len_gap());
+
+        // Shift the second segment to the left.
+        let start = MAX_BYTES - self.len_second_segment();
+        self.bytes.copy_within(start.., start - a.len() - b.len());
+
+        // Append the first string.
+        let range = {
+            let end = MAX_BYTES - b.len();
+            end - a.len()..end
+        };
+        self.bytes[range].copy_from_slice(a.as_bytes());
+
+        // Append the second string.
+        let range = MAX_BYTES - b.len()..MAX_BYTES;
+        self.bytes[range].copy_from_slice(b.as_bytes());
+
+        self.len_second_segment += (a.len() + b.len()) as u16;
+    }
+
+    #[inline]
+    fn prepend(&mut self, s: &str) {
+        debug_assert!(s.len() <= self.len_gap());
+
+        // Shift the first segment to the right.
+        let len_first = self.len_first_segment();
+        self.bytes.copy_within(..len_first, s.len());
+
+        // Prepend the string.
+        self.bytes[..s.len()].copy_from_slice(s.as_bytes());
+
+        self.len_first_segment += s.len() as u16;
+    }
+
+    #[inline]
+    fn prepend_two(&mut self, a: &str, b: &str) {
+        debug_assert!(a.len() + b.len() <= self.len_gap());
+
+        // Shift the first segment to the right.
+        let len_first = self.len_first_segment();
+        self.bytes.copy_within(..len_first, a.len() + b.len());
+
+        // Prepend the first string.
+        self.bytes[..a.len()].copy_from_slice(a.as_bytes());
+
+        // Prepend the second string.
+        self.bytes[a.len()..a.len() + b.len()].copy_from_slice(b.as_bytes());
+
+        self.len_first_segment += (a.len() + b.len()) as u16;
+    }
+
+    #[inline]
+    fn remove_up_to(&mut self, byte_offset: usize) {
+        debug_assert!(self.is_char_boundary(byte_offset));
+
+        if byte_offset <= self.len_first_segment() {
+            let len_moved = self.len_first_segment() - byte_offset;
+            let moved_range = {
+                let end = self.len_first_segment();
+                end - len_moved..end
+            };
+            self.bytes.copy_within(moved_range, 0);
+            self.len_first_segment = len_moved as u16;
+        } else {
+            self.len_first_segment = 0;
+            self.len_second_segment -=
+                (byte_offset - self.len_first_segment()) as u16;
+        }
+    }
+
+    #[inline]
+    fn remove_from(&mut self, byte_offset: usize) {
+        debug_assert!(self.is_char_boundary(byte_offset));
+
+        if byte_offset <= self.len_first_segment() {
+            self.len_first_segment = byte_offset as u16;
+            self.len_second_segment = 0;
+        } else {
+            let byte_offset = byte_offset - self.len_first_segment();
+            let start = MAX_BYTES - self.len_second_segment();
+            let end = start + byte_offset;
+            self.bytes.copy_within(start..end, MAX_BYTES - byte_offset);
+            self.len_second_segment = byte_offset as u16;
+        }
+    }
+
     /// The number of bytes `RopeChunk`s must always stay over.
     pub(super) const fn chunk_min() -> usize {
         if Self::min_bytes() > 3 {
@@ -757,33 +860,109 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
         (left, left_summary): (&mut Self, &mut ChunkSummary),
         (right, right_summary): (&mut Self, &mut ChunkSummary),
     ) {
+        // The two leaves can be combined in a single chunk.
         if left.len() + right.len() <= MAX_BYTES {
-            // aa--bbb + c-----ddd
-            //
-            // tot is 2 + 3 +  1 + 3 = 9 / 2 = 4, 5
-            //
-            // aabb---bcddd
-            //
-            // this is basically the same as from_segments except the first
-            // segment is owned
-        } else if left.len() < Self::min_bytes() {
+            let range = MAX_BYTES - left.len_second_segment()..MAX_BYTES;
+            let start = left.len_first_segment();
+            left.bytes.copy_within(range, start);
+            left.len_first_segment += left.len_second_segment;
+
+            let range = {
+                let end = MAX_BYTES - right.len_second_segment();
+                end - right.len_first_segment()..end
+            };
+
+            left.bytes[range]
+                .copy_from_slice(right.first_segment().as_bytes());
+
+            left.bytes[MAX_BYTES - right.len_second_segment()..]
+                .copy_from_slice(right.second_segment().as_bytes());
+
+            left.len_second_segment =
+                right.len_first_segment + right.len_second_segment;
+
+            *left_summary += *right_summary;
+
+            right.len_first_segment = 0;
+            right.len_second_segment = 0;
+            *right_summary = ChunkSummary::empty();
+        }
+        // The left side is underfilled -> take text from the right side.
+        else if left.len() < Self::min_bytes() {
             debug_assert!(right.len() > Self::min_bytes());
 
             let missing = Self::min_bytes() - left.len();
 
-            // we have to take 5 bytes from right
-            // we have to  push them
+            if missing <= right.len_first_segment() {
+                let (to_left, _) =
+                    split_adjusted::<false>(right.first_segment(), missing);
 
-            // 1. move all of left's second segment to first
-            // 2. move min(len, 5) from right's first to left's second
-            // 3. this is fucking ugly ngl
+                let to_left_summary = ChunkSummary::from_str(to_left);
 
-            // missin
-            todo!();
-        } else if right.len() < Self::min_bytes() {
+                left.append(to_left);
+
+                right.remove_up_to(to_left.len());
+
+                *left_summary += to_left_summary;
+                *right_summary -= to_left_summary;
+            } else {
+                let missing = missing - right.len_first_segment();
+
+                let (to_left, _) =
+                    split_adjusted::<false>(right.second_segment(), missing);
+
+                let to_left_summary =
+                    ChunkSummary::from_str(right.first_segment())
+                        + ChunkSummary::from_str(to_left);
+
+                left.append_two(right.first_segment(), to_left);
+
+                right.remove_up_to(right.len_first_segment() + to_left.len());
+
+                *left_summary += to_left_summary;
+                *right_summary -= to_left_summary;
+            }
+        }
+        // The right side is underfilled -> take text from the left side.
+        else if right.len() < Self::min_bytes() {
             debug_assert!(right.len() > Self::min_bytes());
 
             let missing = Self::min_bytes() - right.len();
+
+            if missing <= left.len_first_segment() {
+                let (_, to_right) = split_adjusted::<true>(
+                    left.second_segment(),
+                    left.len_second_segment() - missing,
+                );
+
+                let to_right_summary = ChunkSummary::from_str(to_right);
+
+                right.prepend(to_right);
+
+                left.remove_from(left.len() - to_right.len());
+
+                *left_summary -= to_right_summary;
+                *right_summary += to_right_summary;
+            } else {
+                let missing = missing - left.len_second_segment();
+
+                let (_, to_right) = split_adjusted::<false>(
+                    left.first_segment(),
+                    left.len_first_segment() - missing,
+                );
+
+                let to_right_summary = ChunkSummary::from_str(to_right)
+                    + ChunkSummary::from_str(left.second_segment());
+
+                right.prepend_two(to_right, left.second_segment());
+
+                left.remove_from(
+                    left.len() - left.len_second_segment() - to_right.len(),
+                );
+
+                *left_summary -= to_right_summary;
+                *right_summary += to_right_summary;
+            }
         }
     }
 
@@ -818,8 +997,6 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
                 let (to_left, keep_right) =
                     split_adjusted::<true>(right.first_segment(), missing);
 
-                let to_left_summary = ChunkSummary::from_str(to_left);
-
                 let left = Self::from_segments(&[
                     left.first_segment(),
                     left.second_segment(),
@@ -828,6 +1005,8 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
 
                 let right =
                     Self::from_segments(&[keep_right, right.second_segment()]);
+
+                let to_left_summary = ChunkSummary::from_str(to_left);
 
                 (
                     (left, left_summary + to_left_summary),
