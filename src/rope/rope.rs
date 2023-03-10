@@ -43,20 +43,15 @@ impl Rope {
             return;
         }
 
-        let mut chunks = self.tree.leaves().peekable();
-
-        while let Some(chunk) = chunks.next() {
-            assert!(chunk.len() >= RopeChunk::chunk_min());
-
-            // TODO: this currently fails on the builder and in
-            // Rope::replace().
-            //
-            // if ends_in_cr(chunk.last_segment()) {
-            //     if let Some(next) = chunks.peek().copied() {
-            //         assert!(!starts_with_lf(next.first_segment()));
-            //         assert!(!starts_with_lf(next.first_segment()));
-            //     }
-            // }
+        for chunk in self.tree.leaves() {
+            assert!(
+                chunk.len() >= RopeChunk::chunk_min(),
+                "The chunk {:?} was supposed to contain at least {} bytes \
+                 but actually contains {}",
+                chunk,
+                RopeChunk::chunk_min(),
+                chunk.len()
+            );
         }
     }
 

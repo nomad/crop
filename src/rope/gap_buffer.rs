@@ -284,6 +284,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
         let offset = byte_offset;
 
+        #[allow(clippy::comparison_chain)]
         // The offset splits the first segment => move all the text after the
         // offset to the start of the second segment.
         //
@@ -442,6 +443,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         debug_assert_eq!(end, self.len_first_segment());
 
         if !s.is_empty() {
+            #[allow(clippy::comparison_chain)]
             // We're adding more text than we're deleting.
             if len_replaced < s.len() {
                 let adding = s.len() - len_replaced;

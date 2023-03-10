@@ -168,15 +168,6 @@ pub(super) fn debug_chunks(
     Ok(())
 }
 
-/// Returns `true` if the last byte in the string slice is a carriage return.
-///
-/// # Panics
-///
-/// This function will panic if the string slice is empty.
-pub(super) fn ends_in_cr(s: &str) -> bool {
-    s.as_bytes()[s.len() - 1] == b'\r'
-}
-
 /// Returns whether `byte_offset` is a grapheme boundary in the string
 /// constructed by concatenating the chunks yielded by `chunks`.
 #[cfg(feature = "graphemes")]
@@ -245,11 +236,6 @@ pub(super) fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
 #[inline]
 pub(super) fn last_byte_is_newline(s: &str) -> bool {
     !s.is_empty() && s.as_bytes()[s.len() - 1] == b'\n'
-}
-
-/// Returns whether the first byte of the string is a newline (0x0A).
-pub(super) fn starts_with_lf(s: &str) -> bool {
-    !s.is_empty() && s.as_bytes()[0] == b'\n'
 }
 
 pub(super) use panic_messages::*;
