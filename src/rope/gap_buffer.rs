@@ -277,36 +277,31 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         last_byte_is_newline(self.last_segment())
     }
 
-    /// Inserts the string at the given byte offset, moving the gap to the new
-    /// insertion point if necessary.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the byte offset is not a char boundary of if the byte length
-    /// of the string is greater than the length of the gap.
+    /// TODO: docs
     #[inline]
-    pub(super) fn insert(&mut self, insert_at: usize, s: &str) {
-        debug_assert!(self.is_char_boundary(insert_at));
-        debug_assert!(s.len() <= self.len_gap());
+    fn move_gap_to_offset(&mut self, byte_offset: usize) {
+        debug_assert!(self.is_char_boundary(byte_offset));
 
-        // The insertion point splits the first segment => move all the
-        // text after the insertion to the start of the second segment.
+        let offset = byte_offset;
+
+        // The offset splits the first segment => move all the text after the
+        // offset to the start of the second segment.
         //
         // aa|bb~~~ccc => aa~~~bbccc
-        if insert_at < self.len_first_segment() {
-            let move_range = insert_at..self.len_first_segment();
-            let len_moved = self.len_first_segment() - insert_at;
+        if offset < self.len_first_segment() {
+            let move_range = offset..self.len_first_segment();
+            let len_moved = self.len_first_segment() - offset;
             self.len_second_segment += len_moved as u16;
             let start = MAX_BYTES - self.len_second_segment();
             self.bytes.copy_within(move_range, start);
             self.len_first_segment -= len_moved as u16;
         }
-        // The insertion point splits the second segment => move all the
-        // text before the insertion to the end of the first segment.
+        // The offset splits the second segment => move all the text before the
+        // offset to the end of the first segment.
         //
         // aaa~~~bb|cc => aaabb~~cc
-        else if insert_at > self.len_first_segment() {
-            let len_moved = insert_at - self.len_first_segment();
+        else if offset > self.len_first_segment() {
+            let len_moved = offset - self.len_first_segment();
             let move_range = {
                 let start = MAX_BYTES - self.len_second_segment();
                 let end = start + len_moved;
@@ -317,6 +312,24 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
             self.len_first_segment += len_moved as u16;
             self.len_second_segment -= len_moved as u16;
         }
+
+        debug_assert_eq!(offset, self.len_first_segment());
+    }
+
+    /// Inserts the string at the given byte offset, moving the gap to the new
+    /// insertion point if necessary.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the byte offset is not a char boundary of if the byte length
+    /// of the string is greater than the length of the gap.
+    #[inline]
+    pub(super) fn insert(&mut self, insert_at: usize, s: &str) {
+        debug_assert!(insert_at <= self.len());
+        debug_assert!(self.is_char_boundary(insert_at));
+        debug_assert!(s.len() <= self.len_gap());
+
+        self.move_gap_to_offset(insert_at);
 
         debug_assert_eq!(insert_at, self.len_first_segment());
 
@@ -414,7 +427,46 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
     #[inline]
     fn replace(&mut self, byte_range: Range<usize>, s: &str) {
-        todo!();
+        let Range { start, end } = byte_range;
+
+        let len_replaced = end - start;
+
+        debug_assert!(start <= end);
+        debug_assert!(end <= self.len());
+        debug_assert!(self.is_char_boundary(start));
+        debug_assert!(self.is_char_boundary(end));
+        debug_assert!(s.len() <= len_replaced + self.len_gap());
+
+        self.move_gap_to_offset(end);
+
+        debug_assert_eq!(end, self.len_first_segment());
+
+        if !s.is_empty() {
+            // We're adding more text than we're deleting.
+            if len_replaced < s.len() {
+                let adding = s.len() - len_replaced;
+
+                let replace = &s.as_bytes()[..len_replaced];
+                let add = &s.as_bytes()[len_replaced..];
+
+                self.bytes[start..end].copy_from_slice(replace);
+
+                self.bytes[end..end + adding].copy_from_slice(add);
+
+                self.len_first_segment += adding as u16;
+            }
+            // We're deleting more text than we're adding.
+            else if len_replaced > s.len() {
+                self.bytes[start..start + s.len()]
+                    .copy_from_slice(s.as_bytes());
+
+                self.len_first_segment = (start + s.len()) as u16;
+            } else {
+                self.bytes[start..end].copy_from_slice(s.as_bytes());
+            }
+        } else {
+            self.len_first_segment -= len_replaced as u16;
+        }
     }
 
     /// Replaces the text in the byte range with the string, then removes all
