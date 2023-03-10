@@ -802,9 +802,10 @@ mod tree_replace {
         }
 
         let mut extra_leaves = extra_leaves.map(|leaves| {
-            let l = leaves.collect::<Vec<_>>();
-            debug_assert!(l.iter().all(|l| l.is_leaf()));
-            l
+            let leaves = leaves.collect::<Vec<_>>();
+            debug_assert!(!leaves.is_empty());
+            debug_assert!(leaves.iter().all(|l| l.is_leaf()));
+            leaves
         });
 
         for (idx, child) in indexes.map(|idx| (idx, inode.child(idx))) {

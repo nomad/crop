@@ -49,7 +49,13 @@ impl<'a> Iterator for Chunks<'a> {
             };
 
             if chunk.first_segment().is_empty() {
+                #[cfg(feature = "small_chunks")]
+                if chunk.second_segment().is_empty() {
+                    return self.next();
+                }
+
                 debug_assert!(!chunk.second_segment().is_empty());
+
                 Some(chunk.second_segment())
             } else {
                 if !chunk.second_segment().is_empty() {
@@ -78,7 +84,13 @@ impl DoubleEndedIterator for Chunks<'_> {
             };
 
             if chunk.second_segment().is_empty() {
+                #[cfg(feature = "small_chunks")]
+                if chunk.first_segment().is_empty() {
+                    return self.next_back();
+                }
+
                 debug_assert!(!chunk.first_segment().is_empty());
+
                 Some(chunk.first_segment())
             } else {
                 if !chunk.first_segment().is_empty() {

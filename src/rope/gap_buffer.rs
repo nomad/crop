@@ -29,7 +29,11 @@ pub(super) struct GapBuffer<const MAX_BYTES: usize> {
 impl<const MAX_BYTES: usize> std::fmt::Debug for GapBuffer<MAX_BYTES> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        std::fmt::Debug::fmt(&self.as_slice(), f)
+        f.write_str("\"")?;
+        debug_no_quotes(self.first_segment(), f)?;
+        write!(f, "{:~^1$}", "", self.len_gap())?;
+        debug_no_quotes(self.second_segment(), f)?;
+        f.write_str("\"")
     }
 }
 
@@ -47,13 +51,15 @@ impl<const MAX_BYTES: usize> Default for GapBuffer<MAX_BYTES> {
 impl<const MAX_BYTES: usize> From<&str> for GapBuffer<MAX_BYTES> {
     /// # Panics
     ///
-    /// Panics if the string is empty or if its byte length is greater than
-    /// `MAX_BYTES`.
+    /// Panics if the string's byte length is greater than `MAX_BYTES`.
     #[inline]
     fn from(s: &str) -> Self {
-        debug_assert!(!s.is_empty());
         debug_assert!(s.len() <= MAX_BYTES);
-        Self::from_segments(&[s])
+        if s.is_empty() {
+            Self::default()
+        } else {
+            Self::from_segments(&[s])
+        }
     }
 }
 
@@ -163,13 +169,9 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
     /// The number of bytes `RopeChunk`s must always stay over.
     pub(super) const fn chunk_min() -> usize {
-        if Self::min_bytes() > 3 {
-            // The wiggle room is 3 bytes for the reason already explained in
-            // the comment above.
-            Self::min_bytes() - 3
-        } else {
-            1
-        }
+        // The wiggle room is 3 bytes for the reason already explained in
+        // the comment above.
+        Self::min_bytes().saturating_sub(3)
     }
 
     #[inline]
@@ -201,6 +203,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         let total_len = segments.iter().map(|s| s.len() as u16).sum::<u16>();
 
         debug_assert!(total_len > 0);
+
         debug_assert!(total_len <= MAX_BYTES as u16);
 
         let add_to_first = total_len / 2;
@@ -483,7 +486,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// let mut buffer = GapBuffer::<10>::from("aaabbb"); // "aaa~~~~bbb"
     ///
     /// // Replace "ab" with "ccc", then truncate before the last `b`.
@@ -623,6 +626,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 (true, true) => {
                     ChunkSummary::from_str(&self.first_segment()[..start])
                         + ChunkSummary::from_str(&self.first_segment()[end..])
+                        + ChunkSummary::from_str(self.second_segment())
                 },
 
                 (true, false) => {
@@ -634,7 +638,10 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 (false, false) => {
                     let start = start - self.len_first_segment();
                     let end = end - self.len_first_segment();
-                    ChunkSummary::from_str(&self.second_segment()[..start])
+                    ChunkSummary::from_str(self.first_segment())
+                        + ChunkSummary::from_str(
+                            &self.second_segment()[..start],
+                        )
                         + ChunkSummary::from_str(&self.second_segment()[end..])
                 },
 
@@ -654,7 +661,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     ///
     /// # Examples
     ///
-    /// ```
+    /// ```ignore
     /// let mut buffer = GapBuffer::<10>::from("aaabbbb"); // "aaa~~~bbbb"
     /// buffer.truncate_and_push(4, "cc"); // => "aaa~~~~bcc"
     /// assert_eq!(buffer.first_segment(), "aaa");
@@ -979,11 +986,11 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
         }
         // The right side is underfilled -> take text from the left side.
         else if right.len() < Self::min_bytes() {
-            debug_assert!(right.len() > Self::min_bytes());
+            debug_assert!(left.len() > Self::min_bytes());
 
             let missing = Self::min_bytes() - right.len();
 
-            if missing <= left.len_first_segment() {
+            if missing <= left.len_second_segment() {
                 let (_, to_right) = split_adjusted::<true>(
                     left.second_segment(),
                     left.len_second_segment() - missing,
@@ -1178,7 +1185,7 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
             (s, e)
         };
 
-        if replacement.len() + (end - start) <= self.len_gap() {
+        if replacement.len() <= (end - start) + self.len_gap() {
             if end > start {
                 *summary -= self.summarize_byte_range(start..end, *summary);
                 *summary += ChunkSummary::from_str(replacement);
@@ -1301,7 +1308,7 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
         // self.
         else if replacement.len() + (self.len() - end) < Self::min_bytes() {
             let missing =
-                Self::min_bytes() - replacement.len() - self.len() + end;
+                Self::min_bytes() - replacement.len() - (self.len() - end);
 
             let (this_left, this_right) = if start <= self.len_first_segment()
             {
@@ -1344,7 +1351,7 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
         ])
         .collect();
 
-        if end == truncate_from {
+        if truncate_from == end {
             self.truncate_and_push(start, push_back);
         } else {
             self.replace_and_truncate(start..end, push_back, truncate_from);
@@ -1352,7 +1359,11 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
 
         *summary = self.summarize();
 
-        Some(extras.into_iter())
+        if cfg!(feature = "small_chunks") {
+            (!extras.is_empty()).then_some(extras.into_iter())
+        } else {
+            Some(extras.into_iter())
+        }
     }
 }
 
@@ -1374,27 +1385,33 @@ impl<'a, const MAX_BYTES: usize> Iterator for ChunkSegmenter<'a, MAX_BYTES> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let mut remaining = self.s.len() - self.yielded;
+        let remaining = self.s.len() - self.yielded;
 
         let chunk = if remaining == 0 {
             return None;
         } else if remaining > MAX_BYTES {
-            let mut chunk_len = MAX_BYTES;
-
-            remaining -= chunk_len;
-
             let min = GapBuffer::<MAX_BYTES>::min_bytes();
 
-            if remaining < min {
-                chunk_len -= min - remaining;
-            }
+            let chunk_len = if remaining - MAX_BYTES >= min {
+                MAX_BYTES
+            } else {
+                // Take `chunk_len` such that `remaining - chunk_len = min`.
+                remaining - min
+            };
 
-            chunk_len = adjust_split_point::<false>(
+            let mut adjusted_len = adjust_split_point::<false>(
                 &self.s[self.yielded..],
                 chunk_len,
             );
 
-            &self.s[self.yielded..(self.yielded + chunk_len)]
+            if adjusted_len == 0 {
+                adjusted_len = adjust_split_point::<true>(
+                    &self.s[self.yielded..],
+                    chunk_len,
+                );
+            }
+
+            &self.s[self.yielded..(self.yielded + adjusted_len)]
         } else {
             debug_assert!(
                 self.yielded == 0
@@ -1434,7 +1451,11 @@ impl<'a, const CHUNKS: usize, const MAX_BYTES: usize>
     fn new(segments: [&'a str; CHUNKS]) -> Self {
         let total = segments.iter().map(|s| s.len()).sum::<usize>();
 
-        debug_assert!(total >= GapBuffer::<MAX_BYTES>::chunk_min());
+        debug_assert!(
+            total >= GapBuffer::<MAX_BYTES>::chunk_min(),
+            "{segments:?} don't add up to at least {} bytes",
+            GapBuffer::<MAX_BYTES>::chunk_min()
+        );
 
         Self { total, segments, yielded: 0, start: 0 }
     }
@@ -1482,12 +1503,28 @@ impl<'a, const CHUNKS: usize, const MAX_BYTES: usize> Iterator
                 last_chunk_len = remaining - bytes_in_next - min_bytes
             }
 
-            let (left, right) = split_adjusted::<false>(
+            let (mut left, mut right) = split_adjusted::<false>(
                 self.segments[idx_last],
                 last_chunk_len,
             );
 
-            self.segments[idx_last] = left;
+            // This can happen with e.g. ["🌎", "!"] and MAX_BYTES = 4.
+            if (self.segments[self.start..idx_last]
+                .iter()
+                .map(|s| s.len())
+                .sum::<usize>()
+                + left.len())
+                == 0
+            {
+                (left, right) = split_adjusted::<true>(
+                    self.segments[idx_last],
+                    last_chunk_len,
+                );
+
+                self.segments[idx_last] = left;
+            } else {
+                self.segments[idx_last] = left;
+            }
 
             let next = GapBuffer::<MAX_BYTES>::from_segments(
                 &self.segments[self.start..=idx_last],
@@ -1533,6 +1570,19 @@ mod tests {
         fn eq(&self, _rhs: &GapBuffer<N>) -> bool {
             unimplemented!();
         }
+    }
+
+    #[test]
+    fn chunk_segmenter_0() {
+        let chunk = "Hello Earth 🌎!";
+        let mut segmenter = GapBuffer::<4>::chunk_segmenter(chunk);
+
+        assert_eq!("Hell", segmenter.next().unwrap());
+        assert_eq!("o Ea", segmenter.next().unwrap());
+        assert_eq!("rth ", segmenter.next().unwrap());
+        assert_eq!("🌎", segmenter.next().unwrap());
+        assert_eq!("!", segmenter.next().unwrap());
+        assert_eq!(None, segmenter.next());
     }
 
     #[test]
@@ -1593,6 +1643,17 @@ mod tests {
         assert_eq!("こ", resegmenter.next().unwrap());
         assert_eq!("ん", resegmenter.next().unwrap());
         assert_eq!("い", resegmenter.next().unwrap());
+        assert_eq!(None, resegmenter.next());
+    }
+
+    #[test]
+    fn chunk_resegmenter_6() {
+        let chunks = [" 🌎", "!"];
+        let mut resegmenter = ChunkResegmenter::<2, 4>::new(chunks);
+
+        assert_eq!(" ", resegmenter.next().unwrap());
+        assert_eq!("🌎", resegmenter.next().unwrap());
+        assert_eq!("!", resegmenter.next().unwrap());
         assert_eq!(None, resegmenter.next());
     }
 }

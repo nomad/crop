@@ -24,8 +24,7 @@ impl std::fmt::Debug for GapSlice<'_> {
         debug_no_quotes(self.first_segment(), f)?;
         write!(f, "{:~^1$}", "", self.len_gap())?;
         debug_no_quotes(self.second_segment(), f)?;
-        f.write_str("\"")?;
-        Ok(())
+        f.write_str("\"")
     }
 }
 

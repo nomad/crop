@@ -43,7 +43,13 @@ impl Rope {
             return;
         }
 
-        for chunk in self.tree.leaves() {
+        let leaves = self.tree.leaves();
+
+        if leaves.len() == 1 {
+            return;
+        }
+
+        for chunk in leaves {
             assert!(
                 chunk.len() >= RopeChunk::chunk_min(),
                 "The chunk {:?} was supposed to contain at least {} bytes \

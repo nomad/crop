@@ -116,6 +116,13 @@ fn insert_7() {
 }
 
 #[test]
+fn insert_8() {
+    let mut r = Rope::from("Hello Earth!");
+    r.insert(11, " 🌎");
+    assert_eq!(r, "Hello Earth 🌎!");
+}
+
+#[test]
 fn insert_small_random() {
     let mut rng = rand::thread_rng();
 
