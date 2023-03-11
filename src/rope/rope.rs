@@ -12,7 +12,7 @@ use crate::tree::Tree;
 const FANOUT: usize = 4;
 
 #[cfg(not(any(test, feature = "fanout_4", feature = "fanout_24")))]
-const FANOUT: usize = 8;
+const FANOUT: usize = 16;
 
 #[cfg(feature = "fanout_24")]
 const FANOUT: usize = 24;
