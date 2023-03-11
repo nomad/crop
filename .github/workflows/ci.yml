@@ -19,6 +19,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
       - run: cargo test --features graphemes --no-fail-fast
 
+  test-small-chunks-fanout-prod:
+    name: test-small-chunks-fanout-prod
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
+      - run: cargo test --features graphemes,small_chunks --no-fail-fast
+
   test-small-chunks-fanout-4:
     name: test-small-chunks-fanout-4
     runs-on: ubuntu-latest
@@ -26,22 +34,6 @@ jobs:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@nightly
       - run: cargo test --features graphemes,fanout_4,small_chunks --no-fail-fast
-
-  test-small-chunks-fanout-8:
-    name: test-small-chunks-fanout-8
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo test --features graphemes,small_chunks --no-fail-fast
-
-  test-small-chunks-fanout-24:
-    name: test-small-chunks-fanout-24
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo test --features graphemes,fanout_24,small_chunks --no-fail-fast
 
   bench:
     name: bench

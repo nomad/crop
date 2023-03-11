@@ -8,14 +8,11 @@ use super::RopeSlice;
 use crate::range_bounds_to_start_end;
 use crate::tree::Tree;
 
-#[cfg(all(any(test, feature = "fanout_4"), not(feature = "fanout_24")))]
+#[cfg(any(test, feature = "fanout_4"))]
 const FANOUT: usize = 4;
 
-#[cfg(not(any(test, feature = "fanout_4", feature = "fanout_24")))]
+#[cfg(not(any(test, feature = "fanout_4")))]
 const FANOUT: usize = 16;
-
-#[cfg(feature = "fanout_24")]
-const FANOUT: usize = 24;
 
 #[cfg(any(test, feature = "small_chunks"))]
 const CHUNK_MAX_BYTES: usize = 4;

@@ -26,7 +26,6 @@ simd = ["str_indices/simd"]
 # Private features
 small_chunks = []
 fanout_4 = []
-fanout_24 = []
 deep_trees = ["small_chunks", "fanout_4"]
 dp = ["deep_trees"]
 
