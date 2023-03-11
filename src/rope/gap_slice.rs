@@ -100,21 +100,20 @@ impl<'a> GapSlice<'a> {
     /// Returns the byte offset of the start of the given line.
     #[inline]
     pub(super) fn byte_of_line(&self, line_index: usize) -> usize {
-        let offset_first_segment =
+        let mut byte_offset =
             lines_lf::to_byte_idx(self.first_segment(), line_index);
 
-        if offset_first_segment < self.len_first_segment() {
-            offset_first_segment
-        } else {
+        if byte_offset == self.len_first_segment() {
             let line_breaks_in_first_segment =
                 lines_lf::count_breaks(self.first_segment());
 
-            self.len_first_segment()
-                + lines_lf::to_byte_idx(
-                    self.second_segment(),
-                    line_index - line_breaks_in_first_segment,
-                )
+            byte_offset += lines_lf::to_byte_idx(
+                self.second_segment(),
+                line_index - line_breaks_in_first_segment,
+            )
         }
+
+        byte_offset
     }
 
     #[inline]
