@@ -492,8 +492,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// // Replace "ab" with "ccc", then truncate before the last `b`.
     /// buffer.replace_and_truncate(2..4, "ccc", 5); // "aac~~~~ccb"
     ///
-    /// assert_eq!(buffer.first_segment(), "aac");
-    /// assert_eq!(buffer.second_segment(), "ccb");
+    /// assert_eq!(buffer, "aacccb");
     /// ```
     #[inline]
     fn replace_and_truncate(
@@ -511,50 +510,13 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         debug_assert!(self.is_char_boundary(end));
         debug_assert!(self.is_char_boundary(truncate_from));
 
-        let first = self.as_slice().byte_slice(..start);
-        let second = self.as_slice().byte_slice(end..truncate_from);
+        // This is slightly sub-optimal because both `truncate_and_push()` and
+        // `replace()` leave a valid `GapBuffer`, however the complexity of
+        // doing it properly is probably not worth the marginal performance
+        // gains that it would bring (if any).
 
-        // TODO: do this properly.
-
-        *self = Self::from_segments(&[
-            first.first_segment(),
-            first.second_segment(),
-            s,
-            second.first_segment(),
-            second.second_segment(),
-        ]);
-
-        // match (
-        //     start <= self.len_first_segment(),
-        //     end <= self.len_first_segment(),
-        //     truncate_from <= self.len_first_segment(),
-        // ) {
-        //     (true, true, true) => {
-        //         self.len_second_segment = 0;
-
-        //         if (end - start) <= s.len() {
-        //             todo!();
-        //         }
-        //         // self.bytes[start..end].
-
-        //         self.len_first_segment =
-        //             (start + s.len() + (truncate_from - end)) as u16;
-        //     },
-
-        //     (true, true, false) => {
-        //         todo!();
-        //     },
-
-        //     (true, false, false) => {
-        //         todo!();
-        //     },
-
-        //     (false, false, false) => {
-        //         todo!();
-        //     },
-
-        //     _ => unreachable!(),
-        // }
+        self.truncate_and_push(truncate_from, "");
+        self.replace(byte_range, s);
     }
 
     #[inline]
