@@ -541,8 +541,14 @@ mod tree_replace {
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
-        let Node::Internal(inode) = Arc::make_mut(node) else {
-            return replace_range_in_deepest(node, range, replace_with)
+        let inode = match Arc::make_mut(node) {
+            Node::Internal(inode) => inode,
+
+            Node::Leaf(leaf) => {
+                return leaf.replace(range, replace_with).map(|extras| {
+                    extras.map(Node::Leaf).map(Arc::new).collect()
+                });
+            },
         };
 
         // The index of the child containing the entire replacement range.
@@ -630,14 +636,8 @@ mod tree_replace {
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
-        let inode = match Arc::make_mut(node) {
-            Node::Internal(inode) => inode,
-
-            Node::Leaf(leaf) => {
-                return leaf.replace(range, replace_with).map(|extras| {
-                    extras.map(Node::Leaf).map(Arc::new).collect()
-                });
-            },
+        let inode = unsafe {
+            Arc::get_mut(node).unwrap_unchecked().as_mut_internal_unchecked()
         };
 
         let (
