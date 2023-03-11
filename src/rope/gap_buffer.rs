@@ -283,6 +283,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// TODO: docs
     #[inline]
     fn move_gap_to_offset(&mut self, byte_offset: usize) {
+        debug_assert!(byte_offset <= self.len());
         debug_assert!(self.is_char_boundary(byte_offset));
 
         let offset = byte_offset;
@@ -1135,17 +1136,13 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
     where
         R: RangeBounds<ByteMetric>,
     {
-        let (start, end) = {
-            let (s, e) = range_bounds_to_start_end(range, 0, self.len());
+        let (start, end) = range_bounds_to_start_end(range, 0, self.len());
 
-            debug_assert!(s <= e);
-            debug_assert!(e <= self.len());
+        debug_assert!(start <= end);
+        debug_assert!(end <= self.len());
 
-            assert!(self.is_char_boundary(s));
-            assert!(self.is_char_boundary(e));
-
-            (s, e)
-        };
+        assert!(self.is_char_boundary(start));
+        assert!(self.is_char_boundary(end));
 
         if replacement.len() <= (end - start) + self.len_gap() {
             if end > start {
