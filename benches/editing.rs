@@ -17,11 +17,20 @@ fn bench_insert(group: &mut BenchmarkGroup<WallTime>, insert: &str) {
         let mut r = Rope::from(s);
         let mut ranges = PercentRanges::new(r.byte_len()).cycle();
         let mut i = 0;
+        let orig_len = r.byte_len();
+
         bench.iter(|| {
             let range = ranges.next().unwrap();
             let at = if i % 2 == 0 { range.start } else { range.end };
             r.insert(at, insert);
             i += 1;
+
+            // Take the Rope back to its original length when it grows by more
+            // than 50%.
+            if r.byte_len() >= (1.5 * (orig_len as f32)) as usize {
+                r.delete(..r.byte_len() - orig_len);
+                ranges = PercentRanges::new(r.byte_len()).cycle();
+            }
         });
     }
 
