@@ -164,9 +164,9 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
             self.bytes.copy_within(moved_range, 0);
             self.len_first_segment = len_moved as u16;
         } else {
-            self.len_first_segment = 0;
             self.len_second_segment -=
                 (byte_offset - self.len_first_segment()) as u16;
+            self.len_first_segment = 0;
         }
     }
 
@@ -1548,6 +1548,14 @@ mod tests {
         fn eq(&self, _rhs: &GapBuffer<N>) -> bool {
             unimplemented!();
         }
+    }
+
+    #[test]
+    fn remove_up_to_0() {
+        let mut buffer = GapBuffer::<10>::from("aaabbb");
+        buffer.move_gap_to_offset(2);
+        buffer.remove_up_to(4);
+        assert_eq!("bb", buffer);
     }
 
     #[test]
