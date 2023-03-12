@@ -241,7 +241,37 @@ pub(super) fn last_byte_is_newline(s: &str) -> bool {
 pub(super) use panic_messages::*;
 
 mod panic_messages {
-    #[inline]
+    #[track_caller]
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn byte_offset_not_char_boundary(
+        s: &str,
+        byte_offset: usize,
+    ) -> ! {
+        debug_assert!(byte_offset <= s.len());
+        debug_assert!(!s.is_char_boundary(byte_offset));
+
+        // TODO: use `floor_char_boundary()` and `ceil_char_boundary()`
+        // once they get stabilized.
+
+        let mut start_char = byte_offset;
+        while !s.is_char_boundary(start_char) {
+            start_char -= 1;
+        }
+
+        let mut end_char = byte_offset;
+        while !s.is_char_boundary(end_char) {
+            end_char += 1;
+        }
+
+        let splitting_char = s[start_char..end_char].chars().next().unwrap();
+
+        panic!(
+            "byte offset {byte_offset} is not a char boundary: it is inside \
+             {splitting_char:?} (bytes {start_char}..{end_char}) of {s:?}"
+        );
+    }
+
     pub(crate) fn byte_index_out_of_bounds(
         byte_index: usize,
         byte_len: usize,

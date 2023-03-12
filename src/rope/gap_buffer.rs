@@ -102,6 +102,25 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     }
 
     #[inline]
+    fn assert_char_boundary(&self, byte_offset: usize) {
+        debug_assert!(byte_offset <= self.len());
+
+        if !self.is_char_boundary(byte_offset) {
+            if byte_offset < self.len_first_segment() {
+                byte_offset_not_char_boundary(
+                    self.first_segment(),
+                    byte_offset,
+                )
+            } else {
+                byte_offset_not_char_boundary(
+                    self.second_segment(),
+                    byte_offset - self.len_first_segment(),
+                )
+            }
+        }
+    }
+
+    #[inline]
     fn prepend(&mut self, s: &str) {
         debug_assert!(s.len() <= self.len_gap());
 
@@ -1141,8 +1160,8 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
         debug_assert!(start <= end);
         debug_assert!(end <= self.len());
 
-        assert!(self.is_char_boundary(start));
-        assert!(self.is_char_boundary(end));
+        self.assert_char_boundary(start);
+        self.assert_char_boundary(end);
 
         if replacement.len() <= (end - start) + self.len_gap() {
             if end > start {
