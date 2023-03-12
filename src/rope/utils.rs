@@ -272,6 +272,9 @@ mod panic_messages {
         );
     }
 
+    #[track_caller]
+    #[cold]
+    #[inline(never)]
     pub(crate) fn byte_index_out_of_bounds(
         byte_index: usize,
         byte_len: usize,
@@ -284,7 +287,9 @@ mod panic_messages {
         );
     }
 
-    #[inline]
+    #[track_caller]
+    #[cold]
+    #[inline(never)]
     pub(crate) fn byte_offset_out_of_bounds(
         byte_offset: usize,
         byte_len: usize,
@@ -297,7 +302,9 @@ mod panic_messages {
         );
     }
 
-    #[inline]
+    #[track_caller]
+    #[cold]
+    #[inline(never)]
     pub(crate) fn byte_start_after_end(
         byte_start: usize,
         byte_end: usize,
@@ -310,7 +317,9 @@ mod panic_messages {
         );
     }
 
-    #[inline]
+    #[track_caller]
+    #[cold]
+    #[inline(never)]
     pub(crate) fn line_index_out_of_bounds(
         line_index: usize,
         line_len: usize,
@@ -323,7 +332,9 @@ mod panic_messages {
         );
     }
 
-    #[inline]
+    #[track_caller]
+    #[cold]
+    #[inline(never)]
     pub(crate) fn line_offset_out_of_bounds(
         line_offset: usize,
         line_len: usize,
@@ -336,7 +347,9 @@ mod panic_messages {
         );
     }
 
-    #[inline]
+    #[track_caller]
+    #[cold]
+    #[inline(never)]
     pub(crate) fn line_start_after_end(
         line_start: usize,
         line_end: usize,
