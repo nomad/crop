@@ -166,22 +166,20 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     #[inline]
     fn split<'a>(
         chunk: GapSlice<'a>,
-        RawLineMetric(at): Self,
-        summary: &ChunkSummary,
+        RawLineMetric(line_offset): Self,
+        &summary: &ChunkSummary,
     ) -> (GapSlice<'a>, ChunkSummary, GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
-        let split_at = chunk.byte_of_line(at);
+        let byte_offset = chunk.byte_of_line(line_offset);
 
-        let (left, right) = chunk.split_at_offset(split_at);
+        let (left, right) = chunk.split_at_offset(byte_offset);
 
-        let left_summary = ChunkSummary { bytes: split_at, line_breaks: at };
+        let left_summary =
+            ChunkSummary { bytes: byte_offset, line_breaks: line_offset };
 
-        let right_summary = ChunkSummary {
-            bytes: chunk.len() - split_at,
-            line_breaks: summary.line_breaks - at,
-        };
+        let right_summary = summary - left_summary;
 
         (left, left_summary, right, right_summary)
     }
@@ -214,8 +212,8 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
 {
     #[inline]
     fn last_unit<'a>(
-        chunk: GapSlice<'a>,
-        summary: &ChunkSummary,
+        slice: GapSlice<'a>,
+        &summary: &ChunkSummary,
     ) -> (GapSlice<'a>, ChunkSummary, GapSlice<'a>, ChunkSummary, ChunkSummary)
     where
         'a: 'a,
@@ -223,15 +221,22 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
         let mut last_summary =
             ChunkSummary { bytes: summary.bytes, line_breaks: 0 };
 
-        let bytes = chunk
+        let bytes = slice
             .first_segment()
             .bytes()
-            .chain(chunk.second_segment().bytes());
+            .chain(slice.second_segment().bytes());
 
         for (idx, byte) in bytes.rev().enumerate() {
             if byte == b'\n' {
                 if idx == 0 {
                     last_summary.line_breaks = 1;
+
+                    // // Increase the line break count in the left chunk if the
+                    // // last byte is a newline and it belongs to the left chunk
+                    // // of the slice.
+                    // if slice.len_second_segment() == 0 {
+                    //     last_summary.line_breaks_left_chunk = 1;
+                    // }
                 } else {
                     last_summary.bytes = idx;
                     break;
@@ -240,12 +245,9 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
         }
 
         let (rest, last) =
-            chunk.split_at_offset(chunk.len() - last_summary.bytes);
+            slice.split_at_offset(slice.len() - last_summary.bytes);
 
-        let rest_summary = ChunkSummary {
-            bytes: chunk.len() - last_summary.bytes,
-            line_breaks: summary.line_breaks - last_summary.line_breaks,
-        };
+        let rest_summary = summary - last_summary;
 
         (rest, rest_summary, last, last_summary, last_summary)
     }

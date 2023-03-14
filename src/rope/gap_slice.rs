@@ -13,8 +13,9 @@ use crate::tree::Summarize;
 #[derive(Copy, Clone, Default)]
 pub(super) struct GapSlice<'a> {
     pub(super) bytes: &'a [u8],
-    pub(super) len_first_segment: u16,
-    pub(super) len_second_segment: u16,
+    pub(super) len_left: u16,
+    pub(super) line_breaks_left: u16,
+    pub(super) len_right: u16,
 }
 
 impl std::fmt::Debug for GapSlice<'_> {
@@ -27,18 +28,6 @@ impl std::fmt::Debug for GapSlice<'_> {
         f.write_str("\"")
     }
 }
-
-// impl<'a> From<&'a str> for GapSlice<'a> {
-//     #[inline]
-//     fn from(s: &str) -> Self {
-//         Self {
-//             bytes: s.as_bytes(),
-//             len_first_segment: s.len() as u16,
-//             len_gap: 0,
-//             len_second_segment: 0,
-//         }
-//     }
-// }
 
 impl<'a> GapSlice<'a> {
     /// Returns the byte at the given index.
@@ -76,21 +65,24 @@ impl<'a> GapSlice<'a> {
         ) {
             (true, true) => Self {
                 bytes: &self.bytes[start..end],
-                len_first_segment: (end - start) as u16,
-                len_second_segment: 0,
+                len_left: (end - start) as u16,
+                line_breaks_left: todo!(),
+                len_right: 0,
             },
 
             (true, false) => Self {
                 bytes: &self.bytes[start..end + self.len_gap()],
-                len_first_segment: self.len_first_segment - (start as u16),
-                len_second_segment: (end as u16) - self.len_first_segment,
+                len_left: self.len_left - (start as u16),
+                line_breaks_left: todo!(),
+                len_right: (end as u16) - self.len_left,
             },
 
             (false, false) => Self {
                 bytes: &self.bytes
                     [start + self.len_gap()..end + self.len_gap()],
-                len_first_segment: 0,
-                len_second_segment: (end - start) as u16,
+                len_left: 0,
+                line_breaks_left: todo!(),
+                len_right: (end - start) as u16,
             },
 
             (false, true) => unreachable!(),
@@ -100,20 +92,15 @@ impl<'a> GapSlice<'a> {
     /// Returns the byte offset of the start of the given line.
     #[inline]
     pub(super) fn byte_of_line(&self, line_index: usize) -> usize {
-        let mut byte_offset =
-            lines_lf::to_byte_idx(self.first_segment(), line_index);
-
-        if byte_offset == self.len_first_segment() {
-            let line_breaks_in_first_segment =
-                lines_lf::count_breaks(self.first_segment());
-
-            byte_offset += lines_lf::to_byte_idx(
-                self.second_segment(),
-                line_index - line_breaks_in_first_segment,
-            )
+        if line_index <= self.line_breaks_left as usize {
+            lines_lf::to_byte_idx(self.first_segment(), line_index)
+        } else {
+            self.len_first_segment()
+                + lines_lf::to_byte_idx(
+                    self.second_segment(),
+                    line_index - self.line_breaks_left as usize,
+                )
         }
-
-        byte_offset
     }
 
     #[inline]
@@ -167,7 +154,7 @@ impl<'a> GapSlice<'a> {
 
     #[inline]
     pub(super) fn len_first_segment(&self) -> usize {
-        self.len_first_segment as _
+        self.len_left as _
     }
 
     #[inline]
@@ -177,13 +164,8 @@ impl<'a> GapSlice<'a> {
 
     #[inline]
     pub(super) fn len_second_segment(&self) -> usize {
-        self.len_second_segment as _
+        self.len_right as _
     }
-
-    // #[inline]
-    // fn len_trailing_gap(&self) -> usize {
-    //     self.bytes.len() - self.len() - self.len_middle_gap()
-    // }
 
     #[inline]
     pub(super) fn second_segment(&self) -> &'a str {
@@ -200,18 +182,6 @@ impl<'a> GapSlice<'a> {
     pub(super) fn split_at_offset(&self, byte_offset: usize) -> (Self, Self) {
         (self.byte_slice(..byte_offset), self.byte_slice(byte_offset..))
     }
-
-    // /// Return the segment containing the given byte index.
-    // #[inline]
-    // pub(super) fn segment_at_index(&self, byte_index: usize) -> &'a str {
-    //     debug_assert!(byte_index < self.len());
-
-    //     if byte_index < self.len_first_segment() {
-    //         self.first_segment()
-    //     } else {
-    //         self.second_segment()
-    //     }
-    // }
 }
 
 impl Summarize for GapSlice<'_> {
@@ -219,11 +189,10 @@ impl Summarize for GapSlice<'_> {
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        ChunkSummary {
-            bytes: self.len(),
-            line_breaks: lines_lf::count_breaks(self.first_segment())
-                + lines_lf::count_breaks(self.second_segment()),
-        }
+        let line_breaks = self.line_breaks_left as usize
+            + lines_lf::count_breaks(self.second_segment());
+
+        ChunkSummary { bytes: self.len(), line_breaks }
     }
 }
 

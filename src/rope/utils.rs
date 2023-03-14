@@ -45,6 +45,11 @@ pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
 }
 
 #[inline]
+pub(super) fn count_line_breaks(s: &str) -> usize {
+    str_indices::lines_lf::count_breaks(s)
+}
+
+#[inline]
 pub(super) fn split_adjusted<const WITH_RIGHT_BIAS: bool>(
     s: &str,
     candidate: usize,
