@@ -1,7 +1,5 @@
 use std::ops::RangeBounds;
 
-use str_indices::lines_lf;
-
 use super::gap_buffer::ChunkSummary;
 use super::utils::*;
 use crate::range_bounds_to_start_end;
