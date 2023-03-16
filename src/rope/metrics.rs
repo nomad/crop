@@ -2,8 +2,13 @@ use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use super::gap_buffer::{ChunkSummary, GapBuffer};
 use super::gap_slice::GapSlice;
-use super::utils::*;
-use crate::tree::*;
+use crate::tree::{
+    DoubleEndedUnitMetric,
+    Metric,
+    SlicingMetric,
+    Summarize,
+    UnitMetric,
+};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(super) struct ByteMetric(pub(super) usize);
@@ -79,29 +84,31 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     #[inline]
     fn split<'a>(
         chunk: GapSlice<'a>,
-        ByteMetric(up_to): Self,
+        ByteMetric(byte_offset): Self,
         &summary: &ChunkSummary,
     ) -> (GapSlice<'a>, ChunkSummary, GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
-        if up_to == chunk.len() {
+        if byte_offset == chunk.len() {
             (chunk, summary, GapSlice::empty(), ChunkSummary::empty())
         } else {
-            let (left, right) = chunk.split_at_offset(up_to);
+            let (left, right) =
+                chunk.split_at_offset(byte_offset, summary.line_breaks);
 
             // Summarize the shorter side, then get the other summary by
             // subtracting it from the total.
 
-            let (left_summary, right_summary) = if up_to < chunk.len() / 2 {
-                let left_summary = left.summarize();
-                let right_summary = summary - left_summary;
-                (left_summary, right_summary)
-            } else {
-                let right_summary = right.summarize();
-                let left_summary = summary - right_summary;
-                (left_summary, right_summary)
-            };
+            let (left_summary, right_summary) =
+                if byte_offset < chunk.len() / 2 {
+                    let left_summary = left.summarize();
+                    let right_summary = summary - left_summary;
+                    (left_summary, right_summary)
+                } else {
+                    let right_summary = right.summarize();
+                    let left_summary = summary - right_summary;
+                    (left_summary, right_summary)
+                };
 
             (left, left_summary, right, right_summary)
         }
@@ -174,7 +181,8 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     {
         let byte_offset = chunk.byte_of_line(line_offset);
 
-        let (left, right) = chunk.split_at_offset(byte_offset);
+        let (left, right) =
+            chunk.split_at_offset(byte_offset, summary.line_breaks);
 
         let left_summary =
             ChunkSummary { bytes: byte_offset, line_breaks: line_offset };
@@ -230,13 +238,6 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
             if byte == b'\n' {
                 if idx == 0 {
                     last_summary.line_breaks = 1;
-
-                    // // Increase the line break count in the left chunk if the
-                    // // last byte is a newline and it belongs to the left chunk
-                    // // of the slice.
-                    // if slice.len_second_segment() == 0 {
-                    //     last_summary.line_breaks_left_chunk = 1;
-                    // }
                 } else {
                     last_summary.bytes = idx;
                     break;
@@ -244,8 +245,10 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
             }
         }
 
-        let (rest, last) =
-            slice.split_at_offset(slice.len() - last_summary.bytes);
+        let (rest, last) = slice.split_at_offset(
+            slice.len() - last_summary.bytes,
+            summary.line_breaks,
+        );
 
         let rest_summary = summary - last_summary;
 
@@ -340,10 +343,9 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>> for LineMetric {
         debug_assert!(first.has_trailing_newline());
         debug_assert_eq!(first_summary.line_breaks, 1);
 
-        let bytes_line_break = bytes_line_break(first.last_segment());
+        let bytes_removed = first.truncate_trailing_line_break();
 
-        first = first.byte_slice(..first.len() - bytes_line_break);
-        first_summary.bytes -= bytes_line_break;
+        first_summary.bytes -= bytes_removed;
         first_summary.line_breaks = 0;
 
         (first, first_summary, advance, rest, rest_summary)
@@ -373,10 +375,9 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
         debug_assert!(last.has_trailing_newline());
         debug_assert_eq!(last_summary.line_breaks, 1);
 
-        let bytes_line_break = bytes_line_break(last.last_segment());
+        let bytes_removed = last.truncate_trailing_line_break();
 
-        last = last.byte_slice(..last.len() - bytes_line_break);
-        last_summary.bytes -= bytes_line_break;
+        last_summary.bytes -= bytes_removed;
         last_summary.line_breaks = 0;
 
         (rest, rest_summary, last, last_summary, advance)

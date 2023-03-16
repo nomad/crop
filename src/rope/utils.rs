@@ -50,6 +50,11 @@ pub(super) fn count_line_breaks(s: &str) -> usize {
 }
 
 #[inline]
+pub(super) fn line_of_byte(s: &str, line: usize) -> usize {
+    str_indices::lines_lf::to_byte_idx(s, line)
+}
+
+#[inline]
 pub(super) fn split_adjusted<const WITH_RIGHT_BIAS: bool>(
     s: &str,
     candidate: usize,

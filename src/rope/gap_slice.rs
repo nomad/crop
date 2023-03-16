@@ -49,7 +49,19 @@ impl<'a> GapSlice<'a> {
     }
 
     #[inline]
-    pub(super) fn byte_slice<R>(&self, byte_range: R) -> GapSlice<'a>
+    pub(super) fn truncate_trailing_line_break(&mut self) -> usize {
+        if !self.has_trailing_newline() {
+            return 0;
+        }
+        let bytes_line_break = bytes_line_break(self.last_segment());
+        // let bytes_line_break = ;
+        // first = first.byte_slice(..first.len() - bytes_line_break);
+
+        todo!();
+    }
+
+    #[inline]
+    fn byte_slice<R>(&self, byte_range: R) -> GapSlice<'a>
     where
         R: RangeBounds<usize>,
     {
@@ -93,10 +105,10 @@ impl<'a> GapSlice<'a> {
     #[inline]
     pub(super) fn byte_of_line(&self, line_index: usize) -> usize {
         if line_index <= self.line_breaks_left as usize {
-            lines_lf::to_byte_idx(self.first_segment(), line_index)
+            line_of_byte(self.first_segment(), line_index)
         } else {
             self.len_first_segment()
-                + lines_lf::to_byte_idx(
+                + line_of_byte(
                     self.second_segment(),
                     line_index - self.line_breaks_left as usize,
                 )
@@ -179,7 +191,11 @@ impl<'a> GapSlice<'a> {
     }
 
     #[inline]
-    pub(super) fn split_at_offset(&self, byte_offset: usize) -> (Self, Self) {
+    pub(super) fn split_at_offset(
+        &self,
+        byte_offset: usize,
+        tot_line_breaks: usize,
+    ) -> (Self, Self) {
         (self.byte_slice(..byte_offset), self.byte_slice(byte_offset..))
     }
 }
@@ -190,7 +206,7 @@ impl Summarize for GapSlice<'_> {
     #[inline]
     fn summarize(&self) -> Self::Summary {
         let line_breaks = self.line_breaks_left as usize
-            + lines_lf::count_breaks(self.second_segment());
+            + count_line_breaks(self.second_segment());
 
         ChunkSummary { bytes: self.len(), line_breaks }
     }
