@@ -421,7 +421,7 @@ impl Rope {
 
         if tree_slice.summary().line_breaks == 1 {
             let byte_end = tree_slice.summary().bytes
-                - bytes_line_break(tree_slice.end_slice().last_segment());
+                - bytes_line_break(tree_slice.end_slice().last_chunk());
 
             tree_slice = tree_slice.slice(ByteMetric(0)..ByteMetric(byte_end));
         }

@@ -48,20 +48,20 @@ impl<'a> Iterator for Chunks<'a> {
                 return self.backward_extra_first.take();
             };
 
-            if chunk.first_segment().is_empty() {
+            if chunk.left_chunk().is_empty() {
                 #[cfg(feature = "small_chunks")]
                 if chunk.second_segment().is_empty() {
                     return self.next();
                 }
 
-                debug_assert!(!chunk.second_segment().is_empty());
+                debug_assert!(!chunk.right_chunk().is_empty());
 
-                Some(chunk.second_segment())
+                Some(chunk.right_chunk())
             } else {
-                if !chunk.second_segment().is_empty() {
-                    self.forward_extra_second = Some(chunk.second_segment());
+                if !chunk.right_chunk().is_empty() {
+                    self.forward_extra_second = Some(chunk.right_chunk());
                 }
-                Some(chunk.first_segment())
+                Some(chunk.left_chunk())
             }
         }
     }
@@ -83,20 +83,20 @@ impl DoubleEndedIterator for Chunks<'_> {
                 return self.forward_extra_second.take();
             };
 
-            if chunk.second_segment().is_empty() {
+            if chunk.right_chunk().is_empty() {
                 #[cfg(feature = "small_chunks")]
                 if chunk.first_segment().is_empty() {
                     return self.next_back();
                 }
 
-                debug_assert!(!chunk.first_segment().is_empty());
+                debug_assert!(!chunk.left_chunk().is_empty());
 
-                Some(chunk.first_segment())
+                Some(chunk.left_chunk())
             } else {
-                if !chunk.first_segment().is_empty() {
-                    self.backward_extra_first = Some(chunk.first_segment());
+                if !chunk.left_chunk().is_empty() {
+                    self.backward_extra_first = Some(chunk.left_chunk());
                 }
-                Some(chunk.second_segment())
+                Some(chunk.right_chunk())
             }
         }
     }

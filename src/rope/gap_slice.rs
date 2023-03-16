@@ -20,9 +20,9 @@ impl std::fmt::Debug for GapSlice<'_> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         f.write_str("\"")?;
-        debug_no_quotes(self.first_segment(), f)?;
+        debug_no_quotes(self.left_chunk(), f)?;
         write!(f, "{:~^1$}", "", self.len_gap())?;
-        debug_no_quotes(self.second_segment(), f)?;
+        debug_no_quotes(self.right_chunk(), f)?;
         f.write_str("\"")
     }
 }
@@ -38,11 +38,10 @@ impl<'a> GapSlice<'a> {
     pub(super) fn byte(&self, byte_index: usize) -> u8 {
         debug_assert!(byte_index < self.len());
 
-        if byte_index < self.len_first_segment() {
-            self.first_segment().as_bytes()[byte_index]
+        if byte_index < self.len_left() {
+            self.left_chunk().as_bytes()[byte_index]
         } else {
-            self.second_segment().as_bytes()
-                [byte_index - self.len_first_segment()]
+            self.right_chunk().as_bytes()[byte_index - self.len_left()]
         }
     }
 
@@ -51,7 +50,7 @@ impl<'a> GapSlice<'a> {
         if !self.has_trailing_newline() {
             return 0;
         }
-        let bytes_line_break = bytes_line_break(self.last_segment());
+        let bytes_line_break = bytes_line_break(self.last_chunk());
         // let bytes_line_break = ;
         // first = first.byte_slice(..first.len() - bytes_line_break);
 
@@ -69,10 +68,7 @@ impl<'a> GapSlice<'a> {
         debug_assert!(start <= end);
         debug_assert!(end <= self.len());
 
-        match (
-            start <= self.len_first_segment(),
-            end <= self.len_first_segment(),
-        ) {
+        match (start <= self.len_left(), end <= self.len_left()) {
             (true, true) => Self {
                 bytes: &self.bytes[start..end],
                 len_left: (end - start) as u16,
@@ -103,11 +99,11 @@ impl<'a> GapSlice<'a> {
     #[inline]
     pub(super) fn byte_of_line(&self, line_index: usize) -> usize {
         if line_index <= self.line_breaks_left as usize {
-            line_of_byte(self.first_segment(), line_index)
+            line_of_byte(self.left_chunk(), line_index)
         } else {
-            self.len_first_segment()
+            self.len_left()
                 + line_of_byte(
-                    self.second_segment(),
+                    self.right_chunk(),
                     line_index - self.line_breaks_left as usize,
                 )
         }
@@ -119,51 +115,48 @@ impl<'a> GapSlice<'a> {
     }
 
     #[inline]
-    pub(super) fn first_segment(&self) -> &'a str {
+    pub(super) fn left_chunk(&self) -> &'a str {
         // SAFETY: this `GapSlice` was obtained by slicing a `GapBuffer` whose
         // first `len_first_segment` bytes were valid UTF-8.
         unsafe {
-            std::str::from_utf8_unchecked(
-                &self.bytes[..self.len_first_segment()],
-            )
+            std::str::from_utf8_unchecked(&self.bytes[..self.len_left()])
         }
     }
 
     /// Returns `true` if it ends with a newline (either LF or CRLF).
     #[inline]
     pub(super) fn has_trailing_newline(&self) -> bool {
-        last_byte_is_newline(self.last_segment())
+        last_byte_is_newline(self.last_chunk())
     }
 
     #[inline]
     pub(super) fn is_char_boundary(&self, byte_offset: usize) -> bool {
         debug_assert!(byte_offset <= self.len());
 
-        if byte_offset <= self.len_first_segment() {
-            self.first_segment().is_char_boundary(byte_offset)
+        if byte_offset <= self.len_left() {
+            self.left_chunk().is_char_boundary(byte_offset)
         } else {
-            self.second_segment()
-                .is_char_boundary(byte_offset - self.len_first_segment())
+            self.right_chunk().is_char_boundary(byte_offset - self.len_left())
         }
     }
 
     /// The second segment if it's not empty, or the first one otherwise.
     #[inline]
-    pub(super) fn last_segment(&self) -> &'a str {
-        if !self.second_segment().is_empty() {
-            self.second_segment()
+    pub(super) fn last_chunk(&self) -> &'a str {
+        if !self.right_chunk().is_empty() {
+            self.right_chunk()
         } else {
-            self.first_segment()
+            self.left_chunk()
         }
     }
 
     #[inline]
     pub(super) fn len(&self) -> usize {
-        self.len_first_segment() + self.len_second_segment()
+        self.len_left() + self.len_right()
     }
 
     #[inline]
-    pub(super) fn len_first_segment(&self) -> usize {
+    pub(super) fn len_left(&self) -> usize {
         self.len_left as _
     }
 
@@ -173,17 +166,17 @@ impl<'a> GapSlice<'a> {
     }
 
     #[inline]
-    pub(super) fn len_second_segment(&self) -> usize {
+    pub(super) fn len_right(&self) -> usize {
         self.len_right as _
     }
 
     #[inline]
-    pub(super) fn second_segment(&self) -> &'a str {
+    pub(super) fn right_chunk(&self) -> &'a str {
         // SAFETY: this `GapSlice` was obtained by slicing a `GapBuffer` whose
         // last `len_second_segment` bytes were valid UTF-8.
         unsafe {
             std::str::from_utf8_unchecked(
-                &self.bytes[self.bytes.len() - self.len_second_segment()..],
+                &self.bytes[self.bytes.len() - self.len_right()..],
             )
         }
     }
@@ -204,7 +197,7 @@ impl Summarize for GapSlice<'_> {
     #[inline]
     fn summarize(&self) -> Self::Summary {
         let line_breaks = self.line_breaks_left as usize
-            + count_line_breaks(self.second_segment());
+            + count_line_breaks(self.right_chunk());
 
         ChunkSummary { bytes: self.len(), line_breaks }
     }

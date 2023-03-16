@@ -229,10 +229,8 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
         let mut last_summary =
             ChunkSummary { bytes: summary.bytes, line_breaks: 0 };
 
-        let bytes = slice
-            .first_segment()
-            .bytes()
-            .chain(slice.second_segment().bytes());
+        let bytes =
+            slice.left_chunk().bytes().chain(slice.right_chunk().bytes());
 
         for (idx, byte) in bytes.rev().enumerate() {
             if byte == b'\n' {
