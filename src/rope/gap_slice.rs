@@ -48,13 +48,27 @@ impl<'a> GapSlice<'a> {
     #[inline]
     pub(super) fn truncate_trailing_line_break(&mut self) -> usize {
         if !self.has_trailing_newline() {
-            return 0;
-        }
-        let bytes_line_break = bytes_line_break(self.last_chunk());
-        // let bytes_line_break = ;
-        // first = first.byte_slice(..first.len() - bytes_line_break);
+            0
+        } else if self.len_right() > 0 {
+            let bytes_line_break = bytes_line_break(self.right_chunk());
 
-        todo!();
+            self.len_right -= bytes_line_break as u16;
+
+            if bytes_line_break == 1
+                && self.len_left() > 0
+                && self.left_chunk().as_bytes()[self.len_left() - 1] == b'\r'
+            {
+                self.len_left -= 1;
+                2
+            } else {
+                bytes_line_break
+            }
+        } else {
+            let bytes_line_break = bytes_line_break(self.left_chunk());
+            self.len_left -= bytes_line_break as u16;
+            self.line_breaks_left -= 1;
+            bytes_line_break
+        }
     }
 
     #[inline]
