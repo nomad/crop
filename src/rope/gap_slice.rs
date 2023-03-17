@@ -1,15 +1,14 @@
-use std::ops::RangeBounds;
+use std::cmp::Ordering;
 
 use super::gap_buffer::ChunkSummary;
 use super::utils::*;
-use crate::range_bounds_to_start_end;
 use crate::tree::Summarize;
 
 /// A slice of a [`GapBuffer`](super::gap_buffer::GapBuffer).
 ///
 /// TODO: docs
 #[derive(Copy, Clone, Default)]
-pub(super) struct GapSlice<'a> {
+pub struct GapSlice<'a> {
     pub(super) bytes: &'a [u8],
     pub(super) len_left: u16,
     pub(super) line_breaks_left: u16,
@@ -28,6 +27,13 @@ impl std::fmt::Debug for GapSlice<'_> {
 }
 
 impl<'a> GapSlice<'a> {
+    pub(super) fn assert_invariants(&self) {
+        assert_eq!(
+            self.line_breaks_left,
+            count_line_breaks(self.left_chunk()) as u16
+        );
+    }
+
     /// Returns the byte at the given index.
     ///
     /// # Panics
@@ -52,74 +58,37 @@ impl<'a> GapSlice<'a> {
         } else if self.len_right() > 0 {
             let bytes_line_break = bytes_line_break(self.right_chunk());
 
-            self.len_right -= bytes_line_break as u16;
+            // Check if the right chunk only contained a trailing line break.
+            // This only checks for LF and CRLF.
+            if self.len_right == bytes_line_break as u16 {
+                self.len_right = 0;
 
-            if bytes_line_break == 1
-                && self.len_left() > 0
-                && self.left_chunk().as_bytes()[self.len_left() - 1] == b'\r'
-            {
-                self.len_left -= 1;
-                2
+                // Check if the right chunk only contained a '\n' and the left
+                // chunk contains a trailing CR.
+                if bytes_line_break == 1
+                    && self.len_left() > 0
+                    && self.left_chunk().as_bytes()[self.len_left() - 1]
+                        == b'\r'
+                {
+                    self.bytes = &self.bytes[..self.len_left() - 1];
+                    self.len_left -= 1;
+                    2
+                } else {
+                    self.bytes = &self.bytes[..self.len_left()];
+                    bytes_line_break
+                }
             } else {
+                self.len_right -= bytes_line_break as u16;
+                self.bytes =
+                    &self.bytes[..self.bytes.len() - bytes_line_break];
                 bytes_line_break
             }
         } else {
             let bytes_line_break = bytes_line_break(self.left_chunk());
             self.len_left -= bytes_line_break as u16;
+            self.bytes = &self.bytes[..self.bytes.len() - bytes_line_break];
             self.line_breaks_left -= 1;
             bytes_line_break
-        }
-    }
-
-    #[inline]
-    fn byte_slice<R>(&self, byte_range: R) -> GapSlice<'a>
-    where
-        R: RangeBounds<usize>,
-    {
-        let (start, end) =
-            range_bounds_to_start_end(byte_range, 0, self.len());
-
-        debug_assert!(start <= end);
-        debug_assert!(end <= self.len());
-
-        match (start <= self.len_left(), end <= self.len_left()) {
-            (true, true) => Self {
-                bytes: &self.bytes[start..end],
-                len_left: (end - start) as u16,
-                line_breaks_left: todo!(),
-                len_right: 0,
-            },
-
-            (true, false) => Self {
-                bytes: &self.bytes[start..end + self.len_gap()],
-                len_left: self.len_left - (start as u16),
-                line_breaks_left: todo!(),
-                len_right: (end as u16) - self.len_left,
-            },
-
-            (false, false) => Self {
-                bytes: &self.bytes
-                    [start + self.len_gap()..end + self.len_gap()],
-                len_left: 0,
-                line_breaks_left: todo!(),
-                len_right: (end - start) as u16,
-            },
-
-            (false, true) => unreachable!(),
-        }
-    }
-
-    /// Returns the byte offset of the start of the given line.
-    #[inline]
-    pub(super) fn byte_of_line(&self, line_index: usize) -> usize {
-        if line_index <= self.line_breaks_left as usize {
-            line_of_byte(self.left_chunk(), line_index)
-        } else {
-            self.len_left()
-                + line_of_byte(
-                    self.right_chunk(),
-                    line_index - self.line_breaks_left as usize,
-                )
         }
     }
 
@@ -195,13 +164,142 @@ impl<'a> GapSlice<'a> {
         }
     }
 
+    /// Splits the slice at the given line offset.
     #[inline]
-    pub(super) fn split_at_offset(
-        &self,
-        byte_offset: usize,
-        tot_line_breaks: usize,
-    ) -> (Self, Self) {
-        (self.byte_slice(..byte_offset), self.byte_slice(byte_offset..))
+    pub(super) fn split_at_line(&self, line_offset: usize) -> (Self, Self) {
+        debug_assert!(line_offset <= self.summarize().line_breaks);
+
+        if line_offset <= self.line_breaks_left as usize {
+            let byte_offset = byte_of_line(self.left_chunk(), line_offset);
+
+            let left = Self {
+                bytes: &self.bytes[..byte_offset],
+                len_left: byte_offset as u16,
+                line_breaks_left: line_offset as u16,
+                len_right: 0,
+            };
+
+            let right = Self {
+                bytes: &self.bytes[byte_offset..],
+                len_left: self.len_left - left.len_left,
+                line_breaks_left: self.line_breaks_left - line_offset as u16,
+                len_right: self.len_right,
+            };
+
+            (left, right)
+        } else {
+            // TODO: this is just a split_at_byte.
+
+            let byte_offset = byte_of_line(
+                self.right_chunk(),
+                line_offset - self.line_breaks_left as usize,
+            );
+
+            let split_point =
+                self.bytes.len() - self.len_right() + byte_offset;
+
+            let left = Self {
+                bytes: &self.bytes[..split_point],
+                len_left: self.len_left,
+                line_breaks_left: self.line_breaks_left,
+                len_right: byte_offset as u16,
+            };
+
+            let right = Self {
+                bytes: &self.bytes[split_point..],
+                len_left: 0,
+                line_breaks_left: 0,
+                len_right: self.len_right - left.len_right,
+            };
+
+            (left, right)
+        }
+    }
+
+    #[inline]
+    pub(super) fn split_at_byte(&self, byte_offset: usize) -> (Self, Self) {
+        debug_assert!(byte_offset <= self.len());
+        debug_assert!(self.is_char_boundary(byte_offset));
+
+        match byte_offset.cmp(&self.len_left()) {
+            Ordering::Less => {
+                let line_breaks_left_left = if byte_offset
+                    <= self.len_left() / 2
+                {
+                    count_line_breaks(&self.left_chunk()[..byte_offset]) as u16
+                } else {
+                    self.line_breaks_left
+                        - count_line_breaks(&self.left_chunk()[byte_offset..])
+                            as u16
+                };
+
+                let line_breaks_left_right =
+                    self.line_breaks_left - line_breaks_left_left;
+
+                let left = Self {
+                    bytes: &self.bytes[..byte_offset],
+                    len_left: byte_offset as u16,
+                    line_breaks_left: line_breaks_left_left,
+                    len_right: 0,
+                };
+
+                let right = Self {
+                    bytes: &self.bytes[byte_offset..],
+                    len_left: self.len_left - left.len_left,
+                    line_breaks_left: line_breaks_left_right,
+                    len_right: self.len_right,
+                };
+
+                debug_assert_eq!(byte_offset, left.len());
+                debug_assert_eq!(self.len() - byte_offset, right.len());
+
+                (left, right)
+            },
+
+            Ordering::Greater => {
+                let split_point = self.len_gap() + byte_offset;
+
+                let left = Self {
+                    bytes: &self.bytes[..split_point],
+                    len_left: self.len_left,
+                    line_breaks_left: self.line_breaks_left,
+                    len_right: (byte_offset - self.len_left()) as u16,
+                };
+
+                let right = Self {
+                    bytes: &self.bytes[split_point..],
+                    len_left: 0,
+                    line_breaks_left: 0,
+                    len_right: self.len_right - left.len_right,
+                };
+
+                debug_assert_eq!(byte_offset, left.len());
+                debug_assert_eq!(self.len() - byte_offset, right.len());
+
+                (left, right)
+            },
+
+            Ordering::Equal => {
+                let left = Self {
+                    bytes: &self.bytes[..self.len_left()],
+                    len_left: self.len_left,
+                    line_breaks_left: self.line_breaks_left,
+                    len_right: 0,
+                };
+
+                let right = Self {
+                    bytes: &self.bytes[self.bytes.len() - self.len_right()..],
+                    len_left: 0,
+                    line_breaks_left: 0,
+                    len_right: self.len_right,
+                };
+
+                debug_assert_eq!(byte_offset, left.len());
+                debug_assert_eq!(self.len() - byte_offset, right.len());
+
+                (left, right)
+            },
+        }
     }
 }
 

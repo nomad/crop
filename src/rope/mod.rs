@@ -1,5 +1,5 @@
-mod gap_buffer;
-mod gap_slice;
+pub(crate) mod gap_buffer;
+pub(crate) mod gap_slice;
 pub(crate) mod iterators;
 mod metrics;
 mod rope;

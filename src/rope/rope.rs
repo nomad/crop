@@ -55,6 +55,8 @@ impl Rope {
                 RopeChunk::chunk_min(),
                 chunk.len()
             );
+
+            chunk.assert_invariants();
         }
     }
 

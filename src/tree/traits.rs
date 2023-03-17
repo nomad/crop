@@ -44,16 +44,6 @@ pub trait BalancedLeaf: Leaf + for<'a> From<Self::Slice<'a>> {
         left: (&mut Self, &mut Self::Summary),
         right: (&mut Self, &mut Self::Summary),
     );
-
-    /// Balances two leaf slices.
-    ///
-    /// The second element of the tuple can be omitted if the two slices can be
-    /// combined into a single leaf.
-    #[allow(clippy::type_complexity)]
-    fn balance_slices(
-        left: (Self::Slice<'_>, &Self::Summary),
-        right: (Self::Slice<'_>, &Self::Summary),
-    ) -> ((Self, Self::Summary), Option<(Self, Self::Summary)>);
 }
 
 pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {

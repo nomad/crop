@@ -150,6 +150,10 @@ pub mod iter {
     pub use crate::rope::iterators::*;
 }
 
+// These are not part of the public API, we only export them to be able to run
+// doctests.
+#[doc(hidden)]
+pub use rope::{gap_buffer::GapBuffer, gap_slice::GapSlice};
 pub use rope::{Rope, RopeBuilder, RopeSlice};
 
 #[inline]

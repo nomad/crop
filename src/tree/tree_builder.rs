@@ -105,7 +105,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
     #[inline]
     pub fn build(mut self) -> Tree<FANOUT, L>
     where
-        L: BalancedLeaf + Default,
+        L: BalancedLeaf + Default + Clone,
     {
         if self.stack.is_empty() {
             if self.leaves.is_empty() {

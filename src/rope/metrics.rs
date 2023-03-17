@@ -11,7 +11,7 @@ use crate::tree::{
 };
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-pub(super) struct ByteMetric(pub(super) usize);
+pub struct ByteMetric(pub(super) usize);
 
 impl Add<Self> for ByteMetric {
     type Output = Self;
@@ -93,8 +93,7 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
         if byte_offset == chunk.len() {
             (chunk, summary, GapSlice::empty(), ChunkSummary::empty())
         } else {
-            let (left, right) =
-                chunk.split_at_offset(byte_offset, summary.line_breaks);
+            let (left, right) = chunk.split_at_byte(byte_offset);
 
             // Summarize the shorter side, then get the other summary by
             // subtracting it from the total.
@@ -179,13 +178,10 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        let byte_offset = chunk.byte_of_line(line_offset);
-
-        let (left, right) =
-            chunk.split_at_offset(byte_offset, summary.line_breaks);
+        let (left, right) = chunk.split_at_line(line_offset);
 
         let left_summary =
-            ChunkSummary { bytes: byte_offset, line_breaks: line_offset };
+            ChunkSummary { bytes: left.len(), line_breaks: line_offset };
 
         let right_summary = summary - left_summary;
 
@@ -226,27 +222,21 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        let mut last_summary =
-            ChunkSummary { bytes: summary.bytes, line_breaks: 0 };
+        let (rest, last, last_summary) = if slice.has_trailing_newline() {
+            let (rest, last) = slice.split_at_line(summary.line_breaks - 1);
 
-        let bytes =
-            slice.left_chunk().bytes().chain(slice.right_chunk().bytes());
+            let last_summary =
+                ChunkSummary { bytes: last.len(), line_breaks: 1 };
 
-        for (idx, byte) in bytes.rev().enumerate() {
-            if byte == b'\n' {
-                if idx == 0 {
-                    last_summary.line_breaks = 1;
-                } else {
-                    last_summary.bytes = idx;
-                    break;
-                }
-            }
-        }
+            (rest, last, last_summary)
+        } else {
+            let (rest, last) = slice.split_at_line(summary.line_breaks);
 
-        let (rest, last) = slice.split_at_offset(
-            slice.len() - last_summary.bytes,
-            summary.line_breaks,
-        );
+            let last_summary =
+                ChunkSummary { bytes: last.len(), line_breaks: 0 };
+
+            (rest, last, last_summary)
+        };
 
         let rest_summary = summary - last_summary;
 

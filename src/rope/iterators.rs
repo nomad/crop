@@ -50,7 +50,7 @@ impl<'a> Iterator for Chunks<'a> {
 
             if chunk.left_chunk().is_empty() {
                 #[cfg(feature = "small_chunks")]
-                if chunk.second_segment().is_empty() {
+                if chunk.right_chunk().is_empty() {
                     return self.next();
                 }
 
@@ -85,7 +85,7 @@ impl DoubleEndedIterator for Chunks<'_> {
 
             if chunk.right_chunk().is_empty() {
                 #[cfg(feature = "small_chunks")]
-                if chunk.first_segment().is_empty() {
+                if chunk.left_chunk().is_empty() {
                     return self.next_back();
                 }
 

@@ -27,8 +27,8 @@ impl<const FANOUT: usize, L: Leaf> std::fmt::Debug for Tree<FANOUT, L> {
     }
 }
 
-impl<const FANOUT: usize, L: BalancedLeaf> From<TreeSlice<'_, FANOUT, L>>
-    for Tree<FANOUT, L>
+impl<const FANOUT: usize, L: BalancedLeaf + Clone>
+    From<TreeSlice<'_, FANOUT, L>> for Tree<FANOUT, L>
 {
     #[inline]
     fn from(slice: TreeSlice<'_, FANOUT, L>) -> Tree<FANOUT, L> {
@@ -45,15 +45,16 @@ impl<const FANOUT: usize, L: BalancedLeaf> From<TreeSlice<'_, FANOUT, L>>
                 slice.summary,
             )))
         } else if slice.leaf_count() == 2 {
-            let (first, second) = L::balance_slices(
-                (slice.first_slice, &slice.first_summary),
-                (slice.last_slice, &slice.last_summary),
-            );
+            let mut first = Lnode::from(L::from(slice.first_slice));
 
-            let first = Arc::new(Node::Leaf(Lnode::from(first)));
+            let mut second = Lnode::from(L::from(slice.last_slice));
 
-            if let Some(second) = second {
-                let second = Arc::new(Node::Leaf(Lnode::from(second)));
+            first.balance(&mut second);
+
+            let first = Arc::new(Node::Leaf(first));
+
+            if !second.is_empty() {
+                let second = Arc::new(Node::Leaf(second));
                 let root = Inode::from_children([first, second]);
                 Arc::new(Node::Internal(root))
             } else {
@@ -238,7 +239,7 @@ mod from_treeslice {
     /// least 3. Leaf counts of 1 or 2 should be handled before calling this
     /// function and will cause a panic.
     #[inline]
-    pub(super) fn into_tree_root<const N: usize, L: BalancedLeaf>(
+    pub(super) fn into_tree_root<const N: usize, L: BalancedLeaf + Clone>(
         slice: TreeSlice<'_, N, L>,
     ) -> Arc<Node<N, L>> {
         debug_assert!(slice.leaf_count() >= 3);
@@ -301,7 +302,7 @@ mod from_treeslice {
     ///
     /// Panics if the slice has a leaf count less than 3.
     #[inline]
-    fn cut_tree_slice<const N: usize, L: BalancedLeaf>(
+    fn cut_tree_slice<const N: usize, L: BalancedLeaf + Clone>(
         slice: TreeSlice<'_, N, L>,
     ) -> (Inode<N, L>, usize, usize) {
         debug_assert!(slice.leaf_count() >= 3);
@@ -378,7 +379,7 @@ mod from_treeslice {
 
     /// TODO: docs
     #[inline]
-    fn cut_start_rec<const N: usize, L: BalancedLeaf>(
+    fn cut_start_rec<const N: usize, L: BalancedLeaf + Clone>(
         node: &Arc<Node<N, L>>,
         take_from: L::BaseMetric,
         start_slice: L::Slice<'_>,
@@ -445,7 +446,7 @@ mod from_treeslice {
 
     /// TODO: docs
     #[inline]
-    fn cut_end_rec<const N: usize, L: BalancedLeaf>(
+    fn cut_end_rec<const N: usize, L: BalancedLeaf + Clone>(
         node: &Arc<Node<N, L>>,
         take_up_to: L::BaseMetric,
         end_slice: L::Slice<'_>,

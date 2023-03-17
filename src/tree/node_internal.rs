@@ -2,7 +2,7 @@ use std::ops::RangeBounds;
 use std::sync::Arc;
 
 use super::traits::*;
-use super::{ExactChain, Lnode, Node};
+use super::{ExactChain, Node};
 use crate::range_bounds_to_start_end;
 
 #[derive(Clone)]
@@ -239,7 +239,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn balance_left_side(&mut self)
     where
-        L: BalancedLeaf,
+        L: BalancedLeaf + Clone,
     {
         self.balance_first_child_with_second();
 
@@ -266,7 +266,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn balance_right_side(&mut self)
     where
-        L: BalancedLeaf,
+        L: BalancedLeaf + Clone,
     {
         self.balance_last_child_with_penultimate();
 
@@ -302,7 +302,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn balance_first_child_with_second(&mut self)
     where
-        L: BalancedLeaf,
+        L: BalancedLeaf + Clone,
     {
         debug_assert!(self.len() >= 2);
 
@@ -313,7 +313,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         let (first, second) = self.two_mut(0, 1);
 
-        match (Arc::get_mut(first).unwrap(), &**second) {
+        match (Arc::get_mut(first).unwrap(), Arc::make_mut(second)) {
             (Node::Internal(first), Node::Internal(second)) => {
                 // Move all the second child's children over to the first
                 // child, then remove the second child.
@@ -353,17 +353,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             },
 
             (Node::Leaf(first), Node::Leaf(second)) => {
-                let (left, right) = L::balance_slices(
-                    (first.as_slice(), first.summary()),
-                    (second.as_slice(), second.summary()),
-                );
+                first.balance(second);
 
-                *first = Lnode::from(left);
-
-                if let Some(second) = right {
-                    let second = Arc::new(Node::Leaf(Lnode::from(second)));
-                    self.children[1] = second;
-                } else {
+                if second.is_empty() {
                     self.leaf_count -= 1;
                     self.children.remove(1);
                 }
@@ -395,7 +387,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn balance_last_child_with_penultimate(&mut self)
     where
-        L: BalancedLeaf,
+        L: BalancedLeaf + Clone,
     {
         debug_assert!(self.len() >= 2);
 
@@ -408,7 +400,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         let (penultimate, last) = self.two_mut(last_idx - 1, last_idx);
 
-        match (&**penultimate, Arc::get_mut(last).unwrap()) {
+        match (Arc::make_mut(penultimate), Arc::get_mut(last).unwrap()) {
             (Node::Internal(penultimate), Node::Internal(last)) => {
                 // Move all the penultimate child's children over to the last
                 // child, then remove the penultimate child.
@@ -450,21 +442,11 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             },
 
             (Node::Leaf(penultimate), Node::Leaf(last)) => {
-                let (left, right) = L::balance_slices(
-                    (penultimate.as_slice(), penultimate.summary()),
-                    (last.as_slice(), last.summary()),
-                );
+                penultimate.balance(last);
 
-                if let Some(right) = right {
-                    *last = Lnode::from(right);
-
-                    let penultimate = Arc::new(Node::Leaf(Lnode::from(left)));
-
-                    self.children[last_idx - 1] = penultimate;
-                } else {
-                    *last = Lnode::from(left);
+                if last.is_empty() {
                     self.leaf_count -= 1;
-                    self.children.remove(last_idx - 1);
+                    self.children.remove(last_idx);
                 }
             },
 
