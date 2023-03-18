@@ -484,7 +484,6 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         //
         // aa|bb~~~ccc => aa~~~bbccc
         if offset < self.len_left() {
-            let move_range = offset..self.len_left();
             let len_moved = self.len_left() - offset;
 
             if len_moved <= self.len_left() / 2 {
@@ -496,8 +495,11 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
             }
 
             self.len_right += len_moved as u16;
-            let start = MAX_BYTES - self.len_right();
-            self.bytes.copy_within(move_range, start);
+
+            let len_left = self.len_left();
+            let len_right = self.len_right();
+
+            self.bytes.copy_within(offset..len_left, MAX_BYTES - len_right);
             self.len_left -= len_moved as u16;
         }
         // The offset splits the second segment => move all the text before the
@@ -523,8 +525,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 start..end
             };
 
-            let start = self.len_left();
-            self.bytes.copy_within(move_range, start);
+            let len_left = self.len_left();
+            self.bytes.copy_within(move_range, len_left);
             self.len_left += len_moved as u16;
             self.len_right -= len_moved as u16;
         }
