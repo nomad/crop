@@ -24,10 +24,10 @@ use crate::tree::{
 /// [gap buffer]: https://en.wikipedia.org/wiki/Gap_buffer
 #[derive(Clone)]
 pub struct GapBuffer<const MAX_BYTES: usize> {
-    bytes: Box<[u8; MAX_BYTES]>,
-    len_left: u16,
-    line_breaks_left: u16,
-    len_right: u16,
+    pub(super) bytes: Box<[u8; MAX_BYTES]>,
+    pub(super) len_left: u16,
+    pub(super) line_breaks_left: u16,
+    pub(super) len_right: u16,
 }
 
 impl<const MAX_BYTES: usize> std::fmt::Debug for GapBuffer<MAX_BYTES> {
@@ -434,7 +434,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     }
 
     #[inline]
-    fn len_left(&self) -> usize {
+    pub(super) fn len_left(&self) -> usize {
         self.len_left as _
     }
 
@@ -444,7 +444,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     }
 
     #[inline]
-    fn len_right(&self) -> usize {
+    pub(super) fn len_right(&self) -> usize {
         self.len_right as _
     }
 
@@ -621,30 +621,6 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
         self.len_left += (a.len() + b.len()) as u16;
         self.line_breaks_left += prepended_line_breaks as u16;
-    }
-
-    /// Pushes as mush of the slice as possible into this chunk, returning the
-    /// rest (if any).
-    ///
-    /// TODO: better docs, panics, examples.
-    pub(super) fn push_with_remainder<'a>(
-        &mut self,
-        s: &'a str,
-    ) -> Option<&'a str> {
-        debug_assert_eq!(self.len_right(), 0);
-
-        let space_left = MAX_BYTES - self.len_left();
-        let (push, rest) = split_adjusted::<false>(s, space_left);
-
-        debug_assert!(push.len() <= space_left);
-
-        let start = self.len_left();
-        self.bytes[start..start + push.len()].copy_from_slice(push.as_bytes());
-
-        self.len_left += push.len() as u16;
-        self.line_breaks_left += count_line_breaks(push) as u16;
-
-        (!rest.is_empty()).then_some(rest)
     }
 
     /// TODO: docs
@@ -1074,7 +1050,10 @@ impl<const MAX_BYTES: usize> Summarize for GapBuffer<MAX_BYTES> {
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        self.as_slice().summarize()
+        let line_breaks = self.line_breaks_left as usize
+            + count_line_breaks(self.right_chunk());
+
+        ChunkSummary { bytes: self.len(), line_breaks }
     }
 }
 

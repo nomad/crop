@@ -1,4 +1,6 @@
+use super::gap_buffer::GapBuffer;
 use super::rope::RopeChunk;
+use super::utils::{count_line_breaks, split_adjusted};
 use super::Rope;
 use crate::tree::TreeBuilder;
 
@@ -10,6 +12,32 @@ pub struct RopeBuilder {
     rope_has_trailing_newline: bool,
 }
 
+/// Pushes as mush of the slice as possible into this chunk, returning the
+/// rest (if any).
+///
+/// TODO: better docs, panics, examples.
+#[inline]
+fn gap_buffer_push_with_remainder<'a, const MAX_BYTES: usize>(
+    buffer: &mut GapBuffer<MAX_BYTES>,
+    s: &'a str,
+) -> Option<&'a str> {
+    debug_assert_eq!(buffer.len_right(), 0);
+
+    let space_left = MAX_BYTES - buffer.len_left();
+    let (push, rest) = split_adjusted::<false>(s, space_left);
+
+    debug_assert!(push.len() <= space_left);
+
+    let len_left = buffer.len_left();
+
+    buffer.bytes[len_left..len_left + push.len()]
+        .copy_from_slice(push.as_bytes());
+
+    buffer.len_left += push.len() as u16;
+
+    (!rest.is_empty()).then_some(rest)
+}
+
 impl RopeBuilder {
     /// Appends `text` to the end of the `Rope` being built.
     #[inline]
@@ -19,9 +47,16 @@ impl RopeBuilder {
     {
         let mut text = text.as_ref();
 
-        while let Some(rest) = self.buffer.push_with_remainder(text) {
-            debug_assert!(!rest.is_empty());
+        while let Some(rest) =
+            gap_buffer_push_with_remainder(&mut self.buffer, text)
+        {
+            // `gap_buffer_push_with_remainder` doesn't update
+            // `line_breaks_left`, so we do it here.
+            self.buffer.line_breaks_left =
+                count_line_breaks(self.buffer.left_chunk()) as u16;
+
             self.tree_builder.append(std::mem::take(&mut self.buffer));
+
             text = rest;
         }
 
@@ -51,6 +86,9 @@ impl RopeBuilder {
         if !self.buffer.is_empty() {
             self.rope_has_trailing_newline =
                 self.buffer.has_trailing_newline();
+
+            self.buffer.line_breaks_left =
+                count_line_breaks(self.buffer.left_chunk()) as u16;
 
             self.tree_builder.append(self.buffer);
         }
