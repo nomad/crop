@@ -448,21 +448,6 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         self.len_right as _
     }
 
-    /// TODO: docs
-    #[inline]
-    fn line_breaks_left_after_offset(&self, offset: usize) -> u16 {
-        if offset <= self.len_left() {
-            if offset >= self.len_left() / 2 {
-                count_line_breaks(&self.left_chunk()[offset..]) as u16
-            } else {
-                self.line_breaks_left
-                    - count_line_breaks(&self.left_chunk()[..offset]) as u16
-            }
-        } else {
-            0
-        }
-    }
-
     /// The minimum number of bytes this buffer should have to not be
     /// considered underfilled.
     pub(super) const fn min_bytes() -> usize {
@@ -554,7 +539,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
             right.prepend(move_right, summary.line_breaks);
 
-            self.remove_from(self.len() - move_right.len(), 0);
+            self.truncate_from(self.len() - move_right.len(), 0);
 
             summary
         } else {
@@ -574,7 +559,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 summary.line_breaks,
             );
 
-            self.remove_from(
+            self.truncate_from(
                 self.len() - self.len_right() - move_right.len(),
                 move_right_summary.line_breaks as u16,
             );
@@ -621,31 +606,6 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
         self.len_left += (a.len() + b.len()) as u16;
         self.line_breaks_left += prepended_line_breaks as u16;
-    }
-
-    /// TODO: docs
-    #[inline]
-    fn remove_from(
-        &mut self,
-        byte_offset: usize,
-        removed_line_breaks_left: u16,
-    ) {
-        debug_assert!(byte_offset <= self.len());
-        debug_assert!(self.is_char_boundary(byte_offset));
-        debug_assert!(removed_line_breaks_left <= self.line_breaks_left);
-
-        if byte_offset <= self.len_left() {
-            self.len_left = byte_offset as u16;
-            self.len_right = 0;
-            self.line_breaks_left -= removed_line_breaks_left;
-        } else {
-            debug_assert_eq!(removed_line_breaks_left, 0);
-            let byte_offset = byte_offset - self.len_left();
-            let start = MAX_BYTES - self.len_right();
-            let end = start + byte_offset;
-            self.bytes.copy_within(start..end, MAX_BYTES - byte_offset);
-            self.len_right = byte_offset as u16;
-        }
     }
 
     /// TODO: docs
@@ -745,6 +705,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         &mut self,
         byte_range: Range<usize>,
         s: &str,
+        summary: ChunkSummary,
     ) -> (ChunkSummary, Vec<Self>) {
         let Range { start, end } = byte_range;
 
@@ -795,12 +756,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 ChunkResegmenter::new([right]).collect()
             };
 
-            let removed_line_breaks_left =
-                self.line_breaks_left_after_offset(truncate_from);
-
-            self.remove_from(truncate_from, removed_line_breaks_left);
-
-            let summary = self.summarize();
+            let summary =
+                self.truncate_from_with_summary(truncate_from, summary);
 
             let new_summary =
                 self.replace_non_overflowing(start..end, replacement, summary);
@@ -849,22 +806,17 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
             ])
             .collect();
 
-            let removed_line_breaks_left =
-                self.line_breaks_left_after_offset(truncate_from);
+            let new_summary =
+                self.truncate_from_with_summary(truncate_from, summary);
 
-            self.remove_from(truncate_from, removed_line_breaks_left);
-
-            (self.summarize(), extras)
+            (new_summary, extras)
         } else {
             let extras =
                 ChunkResegmenter::new([s, extra_left, extra_right]).collect();
 
-            let removed_line_breaks_left =
-                self.line_breaks_left_after_offset(start);
+            let new_summary = self.truncate_from_with_summary(start, summary);
 
-            self.remove_from(start, removed_line_breaks_left);
-
-            (self.summarize(), extras)
+            (new_summary, extras)
         }
     }
 
@@ -953,6 +905,79 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
             total
                 - summarize_range(self, 0, start)
                 - summarize_range(self, end, self.len())
+        }
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn truncate_from(
+        &mut self,
+        byte_offset: usize,
+        removed_line_breaks_left: u16,
+    ) {
+        debug_assert!(byte_offset <= self.len());
+        debug_assert!(self.is_char_boundary(byte_offset));
+        debug_assert!(removed_line_breaks_left <= self.line_breaks_left);
+
+        if byte_offset <= self.len_left() {
+            self.len_left = byte_offset as u16;
+            self.len_right = 0;
+            self.line_breaks_left -= removed_line_breaks_left;
+        } else {
+            debug_assert_eq!(removed_line_breaks_left, 0);
+            let byte_offset = byte_offset - self.len_left();
+            let start = MAX_BYTES - self.len_right();
+            let end = start + byte_offset;
+            self.bytes.copy_within(start..end, MAX_BYTES - byte_offset);
+            self.len_right = byte_offset as u16;
+        }
+    }
+
+    /// TODO: docs
+    #[inline]
+    fn truncate_from_with_summary(
+        &mut self,
+        offset: usize,
+        summary: ChunkSummary,
+    ) -> ChunkSummary {
+        debug_assert!(offset <= self.len());
+        debug_assert!(self.is_char_boundary(offset));
+        debug_assert_eq!(summary, self.summarize());
+
+        if offset <= self.len_left() {
+            let line_breaks = if offset <= self.len_left() / 2 {
+                count_line_breaks(&self.left_chunk()[..offset])
+            } else {
+                self.line_breaks_left as usize
+                    - count_line_breaks(&self.left_chunk()[offset..])
+            };
+
+            self.len_left = offset as u16;
+            self.len_right = 0;
+            self.line_breaks_left = line_breaks as u16;
+
+            ChunkSummary { bytes: offset, line_breaks }
+        } else {
+            let offset = offset - self.len_left();
+
+            let line_breaks_right = if offset <= self.len_right() / 2 {
+                count_line_breaks(&self.right_chunk()[..offset])
+            } else {
+                summary.line_breaks
+                    - self.line_breaks_left as usize
+                    - count_line_breaks(&self.right_chunk()[offset..])
+            };
+
+            let start = MAX_BYTES - self.len_right();
+            let end = start + offset;
+            self.bytes.copy_within(start..end, MAX_BYTES - offset);
+            self.len_right = offset as u16;
+
+            ChunkSummary {
+                bytes: self.len(),
+                line_breaks: self.line_breaks_left as usize
+                    + line_breaks_right,
+            }
         }
     }
 }
@@ -1195,7 +1220,7 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
             None
         } else {
             let (new_summary, extras) =
-                self.replace_overflowing(start..end, replacement);
+                self.replace_overflowing(start..end, replacement, *summary);
 
             debug_assert_eq!(new_summary, self.summarize());
 
