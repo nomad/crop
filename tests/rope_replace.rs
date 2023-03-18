@@ -166,7 +166,7 @@ fn insert_random() {
         let mut r = Rope::from(s);
         let mut s = s.to_owned();
 
-        for _ in 0..5 {
+        for _ in 0..10 {
             let insert_at = rng.gen_range(0..=r.byte_len());
 
             let insert = {
@@ -278,7 +278,7 @@ fn delete_random() {
         let mut r = Rope::from(s);
         let mut s = s.to_owned();
 
-        for _ in 0..15 {
+        for _ in 0..20 {
             let delete_range = {
                 let start = rng.gen_range(0..=r.byte_len());
                 let end = rng.gen_range(start..=r.byte_len());
@@ -329,7 +329,7 @@ fn replace_random() {
         let mut r = Rope::from(s);
         let mut s = s.to_owned();
 
-        for _ in 0..10 {
+        for _ in 0..20 {
             let replace_range = {
                 let start = rng.gen_range(0..=r.byte_len());
                 let end = rng.gen_range(start..=r.byte_len());

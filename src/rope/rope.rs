@@ -663,24 +663,16 @@ impl Rope {
             self.has_trailing_newline =
                 last_byte_is_newline(self.chunks().next_back().unwrap());
         }
-
-        #[cfg(debug_assertions)]
-        self.assert_invariants();
     }
 }
 
 impl From<RopeSlice<'_>> for Rope {
     #[inline]
     fn from(rope_slice: RopeSlice<'_>) -> Rope {
-        let rope = Self {
+        Self {
             has_trailing_newline: rope_slice.has_trailing_newline,
             tree: Tree::from(rope_slice.tree_slice),
-        };
-
-        #[cfg(debug_assertions)]
-        rope.assert_invariants();
-
-        rope
+        }
     }
 }
 

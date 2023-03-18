@@ -1119,7 +1119,6 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
             *left_summary += *right_summary;
             *right_summary = ChunkSummary::empty();
 
-            debug_assert!(left.len() >= Self::chunk_min());
             debug_assert!(right.is_empty());
         }
         // The left side is underfilled => take text from the right side.

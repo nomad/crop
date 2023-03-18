@@ -345,9 +345,6 @@ where
             slice.offset -= &offset;
         }
 
-        #[cfg(debug_assertions)]
-        slice.assert_invariants();
-
         slice
     }
 

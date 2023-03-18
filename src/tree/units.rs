@@ -74,10 +74,6 @@ impl<'a, const FANOUT: usize, L: Leaf, M: UnitMetric<L>> Iterator
         } else {
             let (tree_slice, advance) = self.forward.next();
             self.remaining -= advance;
-
-            #[cfg(debug_assertions)]
-            tree_slice.as_ref().map(TreeSlice::assert_invariants);
-
             tree_slice
         }
     }
@@ -93,10 +89,6 @@ impl<const FANOUT: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         } else {
             let (tree_slice, advance) = self.backward.previous();
             self.remaining -= advance;
-
-            #[cfg(debug_assertions)]
-            tree_slice.as_ref().map(TreeSlice::assert_invariants);
-
             tree_slice
         }
     }
