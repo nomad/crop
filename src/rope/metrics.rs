@@ -91,10 +91,7 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        // TODO: panic with nice error message if offset is not a character
-        // boundary.
-
-        // split.assert_char_boundary(byte_offset);
+        chunk.assert_char_boundary(byte_offset);
 
         if byte_offset <= chunk.len_left() {
             let line_breaks_left_left = if byte_offset <= chunk.len_left() / 2

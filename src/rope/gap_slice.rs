@@ -25,6 +25,22 @@ impl std::fmt::Debug for GapSlice<'_> {
 }
 
 impl<'a> GapSlice<'a> {
+    /// TODO: docs
+    pub(super) fn assert_char_boundary(&self, byte_offset: usize) {
+        debug_assert!(byte_offset <= self.len());
+
+        if !self.is_char_boundary(byte_offset) {
+            if byte_offset < self.len_left() {
+                byte_offset_not_char_boundary(self.left_chunk(), byte_offset)
+            } else {
+                byte_offset_not_char_boundary(
+                    self.right_chunk(),
+                    byte_offset - self.len_left(),
+                )
+            }
+        }
+    }
+
     pub(super) fn assert_invariants(&self) {
         assert_eq!(
             self.line_breaks_left,
@@ -192,8 +208,6 @@ impl<'a> GapSlice<'a> {
 
             (left, right)
         } else {
-            // TODO: this is just a split_at_byte.
-
             let byte_offset = byte_of_line(
                 self.right_chunk(),
                 line_offset - self.line_breaks_left as usize,
