@@ -11,9 +11,9 @@ pub struct GapSlice<'a> {
     pub(super) len_right: u16,
 }
 
-impl std::fmt::Debug for GapSlice<'_> {
+impl core::fmt::Debug for GapSlice<'_> {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.write_str("\"")?;
         debug_no_quotes(self.left_chunk(), f)?;
         write!(f, "{:~^1$}", "", self.len_gap())?;
@@ -159,7 +159,7 @@ impl<'a> GapSlice<'a> {
     pub(super) fn left_chunk(&self) -> &'a str {
         // SAFETY: the first `len_left` bytes are valid UTF-8.
         unsafe {
-            std::str::from_utf8_unchecked(&self.bytes[..self.len_left()])
+            core::str::from_utf8_unchecked(&self.bytes[..self.len_left()])
         }
     }
 
@@ -187,7 +187,7 @@ impl<'a> GapSlice<'a> {
     pub(super) fn right_chunk(&self) -> &'a str {
         // SAFETY: the last `len_right` bytes are valid UTF-8.
         unsafe {
-            std::str::from_utf8_unchecked(
+            core::str::from_utf8_unchecked(
                 &self.bytes[self.bytes.len() - self.len_right()..],
             )
         }

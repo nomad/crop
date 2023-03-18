@@ -102,7 +102,7 @@ impl DoubleEndedIterator for Chunks<'_> {
     }
 }
 
-impl std::iter::FusedIterator for Chunks<'_> {}
+impl core::iter::FusedIterator for Chunks<'_> {}
 
 /// An iterator over the bytes of `Rope`s and `RopeSlice`s.
 ///
@@ -227,7 +227,7 @@ impl ExactSizeIterator for Bytes<'_> {
     }
 }
 
-impl std::iter::FusedIterator for Bytes<'_> {}
+impl core::iter::FusedIterator for Bytes<'_> {}
 
 /// An iterator over the code points (i.e. [`char`]s) of `Rope`s and
 /// `RopeSlice`s.
@@ -360,7 +360,7 @@ impl DoubleEndedIterator for Chars<'_> {
     }
 }
 
-impl std::iter::FusedIterator for Chars<'_> {}
+impl core::iter::FusedIterator for Chars<'_> {}
 
 /// An iterator over the lines of `Rope`s and `RopeSlice`s, including the line
 /// terminators (`\n` or `\r\n`).
@@ -434,7 +434,7 @@ impl ExactSizeIterator for RawLines<'_> {
     }
 }
 
-impl std::iter::FusedIterator for RawLines<'_> {}
+impl core::iter::FusedIterator for RawLines<'_> {}
 
 /// An iterator over the lines of `Rope`s and `RopeSlice`s, not including the
 /// line terminators (`\n` or `\r\n`).
@@ -507,7 +507,7 @@ impl ExactSizeIterator for Lines<'_> {
     }
 }
 
-impl std::iter::FusedIterator for Lines<'_> {}
+impl core::iter::FusedIterator for Lines<'_> {}
 
 #[cfg_attr(docsrs, doc(cfg(feature = "graphemes")))]
 #[cfg(feature = "graphemes")]
@@ -515,7 +515,7 @@ pub use graphemes::Graphemes;
 
 #[cfg(feature = "graphemes")]
 mod graphemes {
-    use std::borrow::Cow;
+    use alloc::borrow::Cow;
 
     use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
@@ -880,5 +880,5 @@ mod graphemes {
         }
     }
 
-    impl std::iter::FusedIterator for Graphemes<'_> {}
+    impl core::iter::FusedIterator for Graphemes<'_> {}
 }

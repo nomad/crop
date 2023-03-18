@@ -1,4 +1,4 @@
-use std::ops::RangeBounds;
+use core::ops::RangeBounds;
 
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
@@ -536,18 +536,18 @@ impl<'a> From<TreeSlice<'a, { Rope::fanout() }, RopeChunk>> for RopeSlice<'a> {
     }
 }
 
-impl std::fmt::Debug for RopeSlice<'_> {
+impl core::fmt::Debug for RopeSlice<'_> {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.write_str("RopeSlice(\"")?;
         debug_chunks(self.chunks(), f)?;
         f.write_str("\")")
     }
 }
 
-impl std::fmt::Display for RopeSlice<'_> {
+impl core::fmt::Display for RopeSlice<'_> {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         for chunk in self.chunks() {
             f.write_str(chunk)?;
         }
@@ -555,7 +555,7 @@ impl std::fmt::Display for RopeSlice<'_> {
     }
 }
 
-impl std::cmp::PartialEq<RopeSlice<'_>> for RopeSlice<'_> {
+impl core::cmp::PartialEq<RopeSlice<'_>> for RopeSlice<'_> {
     #[inline]
     fn eq(&self, rhs: &RopeSlice<'_>) -> bool {
         (self.byte_len() == rhs.byte_len())
@@ -564,67 +564,67 @@ impl std::cmp::PartialEq<RopeSlice<'_>> for RopeSlice<'_> {
     }
 }
 
-impl std::cmp::PartialEq<Rope> for RopeSlice<'_> {
+impl core::cmp::PartialEq<Rope> for RopeSlice<'_> {
     #[inline]
     fn eq(&self, rhs: &Rope) -> bool {
         rhs == self
     }
 }
 
-impl std::cmp::PartialEq<str> for RopeSlice<'_> {
+impl core::cmp::PartialEq<str> for RopeSlice<'_> {
     #[inline]
     fn eq(&self, rhs: &str) -> bool {
         (self.byte_len() == rhs.len()) && chunks_eq_str(self.chunks(), rhs)
     }
 }
 
-impl std::cmp::PartialEq<RopeSlice<'_>> for str {
+impl core::cmp::PartialEq<RopeSlice<'_>> for str {
     #[inline]
     fn eq(&self, rhs: &RopeSlice<'_>) -> bool {
         rhs == self
     }
 }
 
-impl std::cmp::PartialEq<&str> for RopeSlice<'_> {
+impl core::cmp::PartialEq<&str> for RopeSlice<'_> {
     #[inline]
     fn eq(&self, rhs: &&str) -> bool {
         self == *rhs
     }
 }
 
-impl std::cmp::PartialEq<RopeSlice<'_>> for &str {
+impl core::cmp::PartialEq<RopeSlice<'_>> for &str {
     #[inline]
     fn eq(&self, rhs: &RopeSlice<'_>) -> bool {
         rhs == self
     }
 }
 
-impl std::cmp::PartialEq<String> for RopeSlice<'_> {
+impl core::cmp::PartialEq<String> for RopeSlice<'_> {
     #[inline]
     fn eq(&self, rhs: &String) -> bool {
         self == &**rhs
     }
 }
 
-impl std::cmp::PartialEq<RopeSlice<'_>> for String {
+impl core::cmp::PartialEq<RopeSlice<'_>> for String {
     #[inline]
     fn eq(&self, rhs: &RopeSlice<'_>) -> bool {
         rhs == self
     }
 }
 
-impl std::cmp::PartialEq<std::borrow::Cow<'_, str>> for RopeSlice<'_> {
+impl core::cmp::PartialEq<alloc::borrow::Cow<'_, str>> for RopeSlice<'_> {
     #[inline]
-    fn eq(&self, rhs: &std::borrow::Cow<'_, str>) -> bool {
+    fn eq(&self, rhs: &alloc::borrow::Cow<'_, str>) -> bool {
         self == &**rhs
     }
 }
 
-impl std::cmp::PartialEq<RopeSlice<'_>> for std::borrow::Cow<'_, str> {
+impl core::cmp::PartialEq<RopeSlice<'_>> for alloc::borrow::Cow<'_, str> {
     #[inline]
     fn eq(&self, rhs: &RopeSlice<'_>) -> bool {
         rhs == self
     }
 }
 
-impl std::cmp::Eq for RopeSlice<'_> {}
+impl core::cmp::Eq for RopeSlice<'_> {}

@@ -1,5 +1,5 @@
-use std::ops::Range;
-use std::sync::Arc;
+use alloc::sync::Arc;
+use core::ops::Range;
 
 use super::*;
 

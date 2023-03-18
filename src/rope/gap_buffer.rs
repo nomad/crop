@@ -3,7 +3,7 @@
 //! It also implements several traits exported by the [tree](crate::tree)
 //! module on it to be able to use it as the leaf of our [`Rope`](crate::Rope).
 
-use std::ops::{Add, AddAssign, Range, RangeBounds, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Range, RangeBounds, Sub, SubAssign};
 
 use super::gap_slice::GapSlice;
 use super::metrics::ByteMetric;
@@ -28,9 +28,9 @@ pub struct GapBuffer<const MAX_BYTES: usize> {
     pub(super) len_right: u16,
 }
 
-impl<const MAX_BYTES: usize> std::fmt::Debug for GapBuffer<MAX_BYTES> {
+impl<const MAX_BYTES: usize> core::fmt::Debug for GapBuffer<MAX_BYTES> {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         f.write_str("\"")?;
         debug_no_quotes(self.left_chunk(), f)?;
         write!(f, "{:~^1$}", "", self.len_gap())?;
@@ -311,7 +311,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         // SAFETY: all the methods are guaranteed to always keep the first
         // `len_left()` bytes valid UTF-8.
         unsafe {
-            std::str::from_utf8_unchecked(&self.bytes[..self.len_left()])
+            core::str::from_utf8_unchecked(&self.bytes[..self.len_left()])
         }
     }
 
@@ -1038,7 +1038,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         // SAFETY: all the methods are guaranteed to always keep the last
         // `len_right()` bytes valid UTF-8.
         unsafe {
-            std::str::from_utf8_unchecked(
+            core::str::from_utf8_unchecked(
                 &self.bytes[MAX_BYTES - self.len_right()..],
             )
         }
@@ -1436,7 +1436,7 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
 {
     type Replacement<'a> = &'a str;
 
-    type ExtraLeaves = std::vec::IntoIter<Self>;
+    type ExtraLeaves = alloc::vec::IntoIter<Self>;
 
     #[inline]
     fn replace<R>(

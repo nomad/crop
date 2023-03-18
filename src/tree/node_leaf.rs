@@ -1,4 +1,4 @@
-use std::ops::RangeBounds;
+use core::ops::RangeBounds;
 
 use super::traits::*;
 
@@ -8,9 +8,9 @@ pub(super) struct Lnode<L: Leaf> {
     summary: L::Summary,
 }
 
-impl<L: Leaf> std::fmt::Debug for Lnode<L> {
+impl<L: Leaf> core::fmt::Debug for Lnode<L> {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         if !f.alternate() {
             f.debug_struct("Lnode")
                 .field("value", &self.value)

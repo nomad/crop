@@ -1,5 +1,5 @@
-use std::ops::Range;
-use std::sync::Arc;
+use alloc::sync::Arc;
+use core::ops::Range;
 
 use super::*;
 
@@ -16,9 +16,9 @@ impl<const FANOUT: usize, L: Leaf> Clone for Tree<FANOUT, L> {
     }
 }
 
-impl<const FANOUT: usize, L: Leaf> std::fmt::Debug for Tree<FANOUT, L> {
+impl<const FANOUT: usize, L: Leaf> core::fmt::Debug for Tree<FANOUT, L> {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         if !f.alternate() {
             f.debug_struct("Tree").field("root", &self.root).finish()
         } else {
@@ -184,7 +184,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
                 .all(|n| n.depth() == self.root.depth()));
 
             self.root = Arc::new(Node::Internal(Inode::from_nodes(
-                std::iter::once(Arc::clone(self.root())).exact_chain(extras),
+                core::iter::once(Arc::clone(self.root())).exact_chain(extras),
             )));
         }
     }
@@ -945,7 +945,7 @@ mod tree_replace {
                         l.balance(leaf);
 
                         if leaf.is_empty() {
-                            std::mem::swap(leaf, l)
+                            core::mem::swap(leaf, l)
                         } else {
                             leaves.push(last)
                         }
@@ -1225,7 +1225,7 @@ mod tree_replace {
 
         let end_depth = inode.child(end_idx).depth();
 
-        use std::cmp::Ordering::*;
+        use core::cmp::Ordering::*;
 
         match (original_depth.cmp(&start_depth), start_depth.cmp(&end_depth)) {
             (Equal, Equal) => {
@@ -1606,7 +1606,7 @@ mod tree_replace {
 
 #[cfg(test)]
 mod tests {
-    use std::ops::{Add, AddAssign, Sub, SubAssign};
+    use core::ops::{Add, AddAssign, Sub, SubAssign};
 
     use super::*;
     use crate::tree::Summarize;

@@ -1,4 +1,4 @@
-use std::ops::{Add, AddAssign, Sub, SubAssign};
+use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use super::gap_buffer::{ChunkSummary, GapBuffer};
 use super::gap_slice::GapSlice;

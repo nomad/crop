@@ -1,5 +1,5 @@
-use std::ops::RangeBounds;
-use std::sync::Arc;
+use alloc::sync::Arc;
+use core::ops::RangeBounds;
 
 use super::traits::*;
 use super::{ExactChain, Node};
@@ -13,9 +13,9 @@ pub(super) struct Inode<const N: usize, L: Leaf> {
     leaf_count: usize,
 }
 
-impl<const N: usize, L: Leaf> std::fmt::Debug for Inode<N, L> {
+impl<const N: usize, L: Leaf> core::fmt::Debug for Inode<N, L> {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         if !f.alternate() {
             f.debug_struct("Inode")
                 .field("children", &self.children)
@@ -349,7 +349,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             _ => {
                 // SAFETY: the first and second children are siblings so they
                 // must be of the same kind.
-                unsafe { std::hint::unreachable_unchecked() }
+                unsafe { core::hint::unreachable_unchecked() }
             },
         }
     }
@@ -422,7 +422,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             _ => {
                 // SAFETY: the penultimate and last children are siblings so
                 // they must be of the same kind.
-                unsafe { std::hint::unreachable_unchecked() }
+                unsafe { core::hint::unreachable_unchecked() }
             },
         }
     }
@@ -453,7 +453,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     pub(super) fn drain<R>(
         &mut self,
         idx_range: R,
-    ) -> std::vec::Drain<'_, Arc<Node<N, L>>>
+    ) -> alloc::vec::Drain<'_, Arc<Node<N, L>>>
     where
         R: RangeBounds<usize>,
     {
@@ -809,7 +809,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         } else {
             let new_self =
                 Self::from_children(self.drain(Self::min_children()..));
-            let mut other = std::mem::replace(self, new_self);
+            let mut other = core::mem::replace(self, new_self);
             other.insert(0, node);
             debug_assert!(!self.is_underfilled());
             debug_assert!(!other.is_underfilled());
@@ -1020,8 +1020,8 @@ fn pretty_print_inode<const N: usize, L: Leaf>(
     shifts: &mut String,
     ident: &str,
     last_shift_byte_len: usize,
-    f: &mut std::fmt::Formatter,
-) -> std::fmt::Result {
+    f: &mut core::fmt::Formatter,
+) -> core::fmt::Result {
     writeln!(
         f,
         "{}{}{:?}",

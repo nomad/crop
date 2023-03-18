@@ -1,5 +1,5 @@
-use std::fmt::Debug;
-use std::ops::{Add, AddAssign, RangeBounds, Sub, SubAssign};
+use core::fmt::Debug;
+use core::ops::{Add, AddAssign, RangeBounds, Sub, SubAssign};
 
 pub trait Summarize: Debug {
     type Summary: Debug

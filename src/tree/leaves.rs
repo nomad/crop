@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 use crate::tree::{Inode, Leaf, Metric, Node, Tree, TreeSlice};
 
@@ -105,7 +105,7 @@ impl<const FANOUT: usize, L: Leaf> ExactSizeIterator
     }
 }
 
-impl<const FANOUT: usize, L: Leaf> std::iter::FusedIterator
+impl<const FANOUT: usize, L: Leaf> core::iter::FusedIterator
     for Leaves<'_, FANOUT, L>
 {
 }
@@ -268,7 +268,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                                 .take()
                                 .unwrap_or(leaf.as_slice());
 
-                            let n = std::cmp::min(
+                            let n = core::cmp::min(
                                 inode.len() - idx - 1,
                                 self.whole_total - self.whole_yielded,
                             );
@@ -313,7 +313,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                 },
 
                 Node::Leaf(_) => {
-                    let n = std::cmp::min(
+                    let n = core::cmp::min(
                         inode.len(),
                         self.whole_total - self.whole_yielded,
                     );
@@ -523,7 +523,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
                                 .take()
                                 .unwrap_or(leaf.as_slice());
 
-                            let n = std::cmp::min(
+                            let n = core::cmp::min(
                                 idx,
                                 self.whole_total - self.whole_yielded,
                             );
@@ -565,7 +565,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
                 },
 
                 Node::Leaf(_) => {
-                    let n = std::cmp::min(
+                    let n = core::cmp::min(
                         inode.len(),
                         self.whole_total - self.whole_yielded,
                     );

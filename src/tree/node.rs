@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 use super::traits::*;
 use super::{Inode, Lnode};
@@ -16,9 +16,9 @@ impl<const N: usize, L: Leaf + Default> Default for Node<N, L> {
     }
 }
 
-impl<const N: usize, L: Leaf> std::fmt::Debug for Node<N, L> {
+impl<const N: usize, L: Leaf> core::fmt::Debug for Node<N, L> {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         if !f.alternate() {
             match self {
                 Self::Internal(inode) => {
@@ -67,7 +67,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
 
         match self {
             Node::Internal(inode) => inode,
-            Node::Leaf(_) => std::hint::unreachable_unchecked(),
+            Node::Leaf(_) => core::hint::unreachable_unchecked(),
         }
     }
 
@@ -81,7 +81,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         );
 
         match self {
-            Node::Internal(_) => std::hint::unreachable_unchecked(),
+            Node::Internal(_) => core::hint::unreachable_unchecked(),
             Node::Leaf(leaf) => leaf,
         }
     }
@@ -99,7 +99,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
 
         match self {
             Node::Internal(inode) => inode,
-            Node::Leaf(_) => std::hint::unreachable_unchecked(),
+            Node::Leaf(_) => core::hint::unreachable_unchecked(),
         }
     }
 
@@ -113,7 +113,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         );
 
         match self {
-            Node::Internal(_) => std::hint::unreachable_unchecked(),
+            Node::Internal(_) => core::hint::unreachable_unchecked(),
             Node::Leaf(leaf) => leaf,
         }
     }

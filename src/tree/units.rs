@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use alloc::sync::Arc;
 
 use super::*;
 
@@ -94,7 +94,7 @@ impl<const FANOUT: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     }
 }
 
-impl<const FANOUT: usize, L: Leaf, M: UnitMetric<L>> std::iter::FusedIterator
+impl<const FANOUT: usize, L: Leaf, M: UnitMetric<L>> core::iter::FusedIterator
     for Units<'_, FANOUT, L, M>
 {
 }
@@ -780,7 +780,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         if self.base_total - self.base_yielded
             == L::BaseMetric::measure(&self.start_summary)
         {
-            let summary = std::mem::take(&mut self.start_summary);
+            let summary = core::mem::take(&mut self.start_summary);
 
             let advance = summary.clone();
 
@@ -800,7 +800,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         }
 
         let start_slice = self.start_slice;
-        let start_summary = std::mem::take(&mut self.start_summary);
+        let start_summary = core::mem::take(&mut self.start_summary);
 
         let (last_leaf, root, before, mut summary, leaf_count) =
             self.last_leaf();

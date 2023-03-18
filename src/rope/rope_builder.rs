@@ -57,7 +57,7 @@ impl RopeBuilder {
             self.buffer.line_breaks_left =
                 count_line_breaks(self.buffer.left_chunk()) as u16;
 
-            self.tree_builder.append(std::mem::take(&mut self.buffer));
+            self.tree_builder.append(core::mem::take(&mut self.buffer));
 
             text = rest;
         }

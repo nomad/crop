@@ -140,6 +140,8 @@
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(rustdoc::private_intra_doc_links)]
 
+extern crate alloc;
+
 mod rope;
 #[doc(hidden)]
 pub mod tree;
@@ -164,10 +166,10 @@ pub(crate) fn range_bounds_to_start_end<T, B>(
     hi: usize,
 ) -> (usize, usize)
 where
-    B: std::ops::RangeBounds<T>,
-    T: std::ops::Add<usize, Output = usize> + Into<usize> + Copy,
+    B: core::ops::RangeBounds<T>,
+    T: core::ops::Add<usize, Output = usize> + Into<usize> + Copy,
 {
-    use std::ops::Bound;
+    use core::ops::Bound;
 
     let start = match range.start_bound() {
         Bound::Included(&n) => n.into(),

@@ -1,8 +1,6 @@
 //! This module contains utility functions on strings and code to be shared
 //! between `Rope`s and `RopeSlice`s, `RopeChunk`s and `ChunkSlice`s.
 
-use std::fmt::Write;
-
 use super::iterators::Chunks;
 
 /// Adjusts the candidate byte offset to make sure it's a valid split point for
@@ -146,8 +144,10 @@ pub(super) fn chunks_eq_chunks(
 /// enclosing it in double quotes.
 pub(super) fn debug_no_quotes(
     s: &str,
-    f: &mut std::fmt::Formatter<'_>,
-) -> std::fmt::Result {
+    f: &mut core::fmt::Formatter<'_>,
+) -> core::fmt::Result {
+    use core::fmt::Write;
+
     let mut written = 0;
 
     for (idx, char) in s.char_indices() {
@@ -169,8 +169,8 @@ pub(super) fn debug_no_quotes(
 #[inline]
 pub(super) fn debug_chunks(
     chunks: Chunks<'_>,
-    f: &mut std::fmt::Formatter<'_>,
-) -> std::fmt::Result {
+    f: &mut core::fmt::Formatter<'_>,
+) -> core::fmt::Result {
     for chunk in chunks {
         debug_no_quotes(chunk, f)?;
     }

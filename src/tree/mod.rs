@@ -21,7 +21,7 @@ pub use units::Units;
 
 mod iter_chain {
     //! This module contains a `Chain` iterator similar to
-    //! [`std::iter::Chain`] except it implements `ExactSizeIterator` when
+    //! [`core::iter::Chain`] except it implements `ExactSizeIterator` when
     //! the iterators being chained are both `ExactSizeIterator`.
     //!
     //! See [1] or [2] for why this is needed.
@@ -30,7 +30,7 @@ mod iter_chain {
     //! [2]: https://github.com/rust-lang/rust/pull/66531
 
     pub(crate) struct Chain<T, U> {
-        chain: std::iter::Chain<T, U>,
+        chain: core::iter::Chain<T, U>,
         yielded: usize,
         total: usize,
     }
