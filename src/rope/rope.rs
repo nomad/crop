@@ -18,7 +18,7 @@ const FANOUT: usize = 16;
 const CHUNK_MAX_BYTES: usize = 4;
 
 #[cfg(not(any(test, feature = "small_chunks")))]
-const CHUNK_MAX_BYTES: usize = 1024;
+const CHUNK_MAX_BYTES: usize = 2048;
 
 pub(super) type RopeChunk = GapBuffer<CHUNK_MAX_BYTES>;
 
