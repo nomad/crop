@@ -1,3 +1,4 @@
+>>>>>> 2a055b2 (import from `core` and `alloc` instead of `std`)
 use alloc::sync::Arc;
 
 use super::traits::*;
