@@ -466,7 +466,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// The minimum number of bytes this buffer should have to not be
     /// considered underfilled.
     pub(super) const fn min_bytes() -> usize {
-        MAX_BYTES / 2
+        MAX_BYTES / 4
     }
 
     /// TODO: docs
@@ -1458,8 +1458,8 @@ mod tests {
         let chunks = ["aaaa", "b"];
         let mut resegmenter = ChunkResegmenter::<2, 4>::new(chunks);
 
-        assert_eq!("aaa", resegmenter.next().unwrap());
-        assert_eq!("ab", resegmenter.next().unwrap());
+        assert_eq!("aaaa", resegmenter.next().unwrap());
+        assert_eq!("b", resegmenter.next().unwrap());
         assert_eq!(None, resegmenter.next());
     }
 
@@ -1469,8 +1469,8 @@ mod tests {
         let mut resegmenter = ChunkResegmenter::<3, 4>::new(chunks);
 
         assert_eq!("aabc", resegmenter.next().unwrap());
-        assert_eq!("def", resegmenter.next().unwrap());
-        assert_eq!("gh", resegmenter.next().unwrap());
+        assert_eq!("defg", resegmenter.next().unwrap());
+        assert_eq!("h", resegmenter.next().unwrap());
         assert_eq!(None, resegmenter.next());
     }
 
