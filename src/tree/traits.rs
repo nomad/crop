@@ -47,7 +47,7 @@ pub trait BalancedLeaf: Leaf + for<'a> From<Self::Slice<'a>> {
 }
 
 pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
-    type Replacement<'a>: Default;
+    type Replacement<'a>;
     type ExtraLeaves: ExactSizeIterator<Item = Self>;
 
     /// Replace the contents of the leaf in the given range with `slice`. If
@@ -63,6 +63,8 @@ pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
     ) -> Option<Self::ExtraLeaves>
     where
         R: RangeBounds<M>;
+
+    fn remove_up_to(&mut self, summary: &mut Self::Summary, up_to: M);
 }
 
 pub trait Metric<L: Summarize + ?Sized>:

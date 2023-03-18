@@ -91,11 +91,7 @@ impl<L: Leaf> Lnode<L> {
         M: Metric<L>,
         L: ReplaceableLeaf<M>,
     {
-        self.value.replace(
-            &mut self.summary,
-            ..up_to,
-            L::Replacement::default(),
-        );
+        self.value.remove_up_to(&mut self.summary, up_to);
     }
 
     #[inline]

@@ -1214,6 +1214,11 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
             }
         }
     }
+
+    #[inline]
+    fn remove_up_to(&mut self, summary: &mut ChunkSummary, up_to: ByteMetric) {
+        self.replace(summary, ..up_to, "");
+    }
 }
 
 /// An iterator over the valid split points of a `ChunkSlice`.
