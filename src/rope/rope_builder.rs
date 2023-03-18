@@ -12,10 +12,12 @@ pub struct RopeBuilder {
     rope_has_trailing_newline: bool,
 }
 
-/// Pushes as mush of the slice as possible into this chunk, returning the
-/// rest (if any).
+/// Pushes as mush of the slice as possible onto the left chunk of the gap
+/// buffer, returning the rest (if any).
 ///
-/// TODO: better docs, panics, examples.
+/// Note that this doesn't update the `line_breaks_left` field of the gap
+/// buffer because it's faster to do it only once before passing the buffer to
+/// the `TreeBuilder`.
 #[inline]
 fn gap_buffer_push_with_remainder<'a, const MAX_BYTES: usize>(
     buffer: &mut GapBuffer<MAX_BYTES>,

@@ -3,8 +3,6 @@ use super::utils::*;
 use crate::tree::Summarize;
 
 /// A slice of a [`GapBuffer`](super::gap_buffer::GapBuffer).
-///
-/// TODO: docs
 #[derive(Copy, Clone, Default)]
 pub struct GapSlice<'a> {
     pub(super) bytes: &'a [u8],
@@ -24,8 +22,18 @@ impl std::fmt::Debug for GapSlice<'_> {
     }
 }
 
+impl PartialEq<GapSlice<'_>> for &str {
+    fn eq(&self, rhs: &GapSlice<'_>) -> bool {
+        self.len() == rhs.len()
+            && rhs.left_chunk() == &self[..rhs.len_left()]
+            && rhs.right_chunk() == &self[rhs.len_left()..]
+    }
+}
+
 impl<'a> GapSlice<'a> {
-    /// TODO: docs
+    /// Panics with a nicely formatted error message if the given byte offset
+    /// is not a character boundary.
+    #[inline]
     pub(super) fn assert_char_boundary(&self, byte_offset: usize) {
         debug_assert!(byte_offset <= self.len());
 
@@ -71,6 +79,9 @@ impl<'a> GapSlice<'a> {
         }
     }
 
+    /// Removes the trailing line break (if it has one), returning the number
+    /// of bytes that were removed: 0 if there was no trailing line break, 1
+    /// if it was a LF, or 2 if it was a CRLF.
     #[inline]
     pub(super) fn truncate_trailing_line_break(&mut self) -> usize {
         if !self.has_trailing_newline() {
@@ -117,15 +128,6 @@ impl<'a> GapSlice<'a> {
         Self::default()
     }
 
-    #[inline]
-    pub(super) fn left_chunk(&self) -> &'a str {
-        // SAFETY: this `GapSlice` was obtained by slicing a `GapBuffer` whose
-        // first `len_first_segment` bytes were valid UTF-8.
-        unsafe {
-            std::str::from_utf8_unchecked(&self.bytes[..self.len_left()])
-        }
-    }
-
     /// Returns `true` if it ends with a newline (either LF or CRLF).
     #[inline]
     pub(super) fn has_trailing_newline(&self) -> bool {
@@ -154,18 +156,26 @@ impl<'a> GapSlice<'a> {
     }
 
     #[inline]
+    pub(super) fn left_chunk(&self) -> &'a str {
+        // SAFETY: the first `len_left` bytes are valid UTF-8.
+        unsafe {
+            std::str::from_utf8_unchecked(&self.bytes[..self.len_left()])
+        }
+    }
+
+    #[inline]
     pub(super) fn len(&self) -> usize {
         self.len_left() + self.len_right()
     }
 
     #[inline]
-    pub(super) fn len_left(&self) -> usize {
-        self.len_left as _
+    pub(super) fn len_gap(&self) -> usize {
+        self.bytes.len() - self.len()
     }
 
     #[inline]
-    pub(super) fn len_gap(&self) -> usize {
-        self.bytes.len() - self.len()
+    pub(super) fn len_left(&self) -> usize {
+        self.len_left as _
     }
 
     #[inline]
@@ -175,8 +185,7 @@ impl<'a> GapSlice<'a> {
 
     #[inline]
     pub(super) fn right_chunk(&self) -> &'a str {
-        // SAFETY: this `GapSlice` was obtained by slicing a `GapBuffer` whose
-        // last `len_second_segment` bytes were valid UTF-8.
+        // SAFETY: the last `len_right` bytes are valid UTF-8.
         unsafe {
             std::str::from_utf8_unchecked(
                 &self.bytes[self.bytes.len() - self.len_right()..],
@@ -184,9 +193,27 @@ impl<'a> GapSlice<'a> {
         }
     }
 
-    /// Splits the slice at the given line offset.
+    /// Splits the slice at the given line offset, returning the left and right
+    /// slices.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the line offset is greater than the number of line breaks in
+    /// the slice.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// # use crop::tree::AsSlice;
+    /// let gap_buffer = GapBuffer::<20>::from("foo\nbar\r\nbaz");
+    ///
+    /// let (left, right) = gap_buffer.as_slice().split_at_line(1);
+    /// assert_eq!("foo\n", left);
+    /// assert_eq!("bar\r\nbaz", right);
+    /// ```
     #[inline]
-    pub(super) fn split_at_line(&self, line_offset: usize) -> (Self, Self) {
+    pub fn split_at_line(&self, line_offset: usize) -> (Self, Self) {
         debug_assert!(line_offset <= self.summarize().line_breaks);
 
         if line_offset <= self.line_breaks_left as usize {

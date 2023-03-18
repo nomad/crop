@@ -141,7 +141,8 @@
 #![deny(rustdoc::private_intra_doc_links)]
 
 mod rope;
-mod tree;
+#[doc(hidden)]
+pub mod tree;
 
 pub mod iter {
     //! Iterators over [`Rope`](crate::Rope)s and

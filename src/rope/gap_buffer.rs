@@ -19,8 +19,6 @@ use crate::tree::{
 
 /// A [gap buffer] with a max capacity of `2^16 - 1` bytes.
 ///
-/// TODO: docs
-///
 /// [gap buffer]: https://en.wikipedia.org/wiki/Gap_buffer
 #[derive(Clone)]
 pub struct GapBuffer<const MAX_BYTES: usize> {
@@ -53,6 +51,25 @@ impl<const MAX_BYTES: usize> Default for GapBuffer<MAX_BYTES> {
     }
 }
 
+impl<const N: usize> PartialEq<GapBuffer<N>> for &str {
+    fn eq(&self, rhs: &GapBuffer<N>) -> bool {
+        *self == rhs.as_slice()
+    }
+}
+
+impl<const N: usize> PartialEq<&str> for GapBuffer<N> {
+    fn eq(&self, rhs: &&str) -> bool {
+        rhs == self
+    }
+}
+
+// We only need this to compare `Option<GapBuffer>` with `None` in tests.
+impl<const N: usize> PartialEq<GapBuffer<N>> for GapBuffer<N> {
+    fn eq(&self, _rhs: &GapBuffer<N>) -> bool {
+        unimplemented!();
+    }
+}
+
 impl<const MAX_BYTES: usize> From<&str> for GapBuffer<MAX_BYTES> {
     /// # Panics
     ///
@@ -69,9 +86,30 @@ impl<const MAX_BYTES: usize> From<&str> for GapBuffer<MAX_BYTES> {
 }
 
 impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
-    /// TODO: docs
+    /// Moves the first `bytes_to_add` bytes from the right buffer to the end
+    /// of this buffer.
+    ///
+    /// Note that it can move less than `bytes_to_add` bytes if that offset is
+    /// not a char boundary of the right buffer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `bytes_to_add` is out of bounds in the right buffer or if the
+    /// resulting left buffer would have a length greater than `MAX_BYTES`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// let mut left = GapBuffer::<10>::from("Hello");
+    /// let mut right = GapBuffer::<10>::from(", World!");
+    ///
+    /// left.add_text_from_right(2, &mut right);
+    /// assert_eq!(left, "Hello, ");
+    /// assert_eq!(right, "World!");
+    /// ```
     #[inline]
-    fn add_text_from_right(
+    pub fn add_text_from_right(
         &mut self,
         bytes_to_add: usize,
         right: &mut Self,
@@ -117,9 +155,27 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         }
     }
 
-    /// TODO: docs
+    /// Moves all the bytes from the right buffer to the end of this buffer,
+    /// leaving the right buffer empty.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the resulting left buffer would have a length greater than
+    /// `MAX_BYTES`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// let mut left = GapBuffer::<15>::from("Hello");
+    /// let mut right = GapBuffer::<15>::from(", World!");
+    ///
+    /// left.append_other(0, &mut right);
+    /// assert_eq!(left, "Hello, World!");
+    /// assert_eq!(right, "");
+    /// ```
     #[inline]
-    fn append_other(&mut self, tot_line_breaks: usize, other: &mut Self) {
+    pub fn append_other(&mut self, tot_line_breaks: usize, other: &mut Self) {
         debug_assert_eq!(self.summarize().line_breaks, tot_line_breaks);
 
         let len_left = self.len_left();
@@ -182,7 +238,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         self.len_right += s.len() as u16;
     }
 
-    /// Exactly the same as [append_str()](Self::append_str()), except it
+    /// Exactly the same as [`append_str()`](Self::append_str()), except it
     /// appends two strings instead of one.
     ///
     /// # Panics
@@ -194,7 +250,6 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     ///
     /// ```
     /// # use crop::GapBuffer;
-    ///
     /// let mut buffer = GapBuffer::<10>::from("aabb");
     ///
     /// buffer.append_two("cc", "dd");
@@ -220,7 +275,9 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         self.len_right += (a.len() + b.len()) as u16;
     }
 
-    /// TODO: docs
+    /// Panics with a nicely formatted error message if the given byte offset
+    /// is not a character boundary.
+    #[inline]
     fn assert_char_boundary(&self, byte_offset: usize) {
         debug_assert!(byte_offset <= self.len());
 
@@ -238,36 +295,43 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
     /// The number of bytes `RopeChunk`s must always stay over.
     pub(super) const fn chunk_min() -> usize {
-        // TODO: explain why the wiggle room is 3 bytes.
+        // The buffer can be underfilled by 3 bytes at most, which can happen
+        // when a chunk boundary lands inside of a 4 byte codepoint.
         Self::min_bytes().saturating_sub(3)
     }
 
-    /// TODO: docs
     #[inline]
-    pub(super) fn chunk_segmenter(s: &str) -> ChunkSegmenter<'_, MAX_BYTES> {
-        ChunkSegmenter { s, yielded: 0 }
+    pub(super) fn segmenter(s: &str) -> Segmenter<'_, MAX_BYTES> {
+        Segmenter { s, yielded: 0 }
     }
 
-    /// TODO: docs
+    /// Returns the left chunk of this buffer as a string slice.
     #[inline]
     pub fn left_chunk(&self) -> &str {
-        // SAFETY: all the methods are guaranteed to always keep the bytes in
-        // the first segment as valid UTF-8.
+        // SAFETY: all the methods are guaranteed to always keep the first
+        // `len_left()` bytes valid UTF-8.
         unsafe {
             std::str::from_utf8_unchecked(&self.bytes[..self.len_left()])
         }
     }
 
-    /// TODO: docs
+    /// Creates a new `GapBuffer` from a slice of `&str`s.
     ///
     /// # Panics
     ///
-    /// Panics if the combined byte length of all the segments is zero or if
-    /// it's greater than `MAX_BYTES`.
+    /// Panics if the combined byte length of all the chunks is zero or if it's
+    /// greater than `MAX_BYTES`.
     ///
-    /// TODO: examples
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// let buffer = GapBuffer::<10>::from_chunks(&["a", "abb", "cc", "dd"]);
+    /// assert_eq!(buffer.left_chunk(), "aabb");
+    /// assert_eq!(buffer.right_chunk(), "ccdd");
+    /// ```
     #[inline]
-    fn from_chunks(chunks: &[&str]) -> Self {
+    pub fn from_chunks(chunks: &[&str]) -> Self {
         let total_len = chunks.iter().map(|s| s.len() as u16).sum::<u16>();
 
         debug_assert!(total_len > 0);
@@ -412,24 +476,25 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         }
     }
 
+    /// Returns `true` if the buffer is empty.
     #[inline]
-    pub(super) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    /// The second segment if it's not empty, or the first one otherwise.
+    /// The right chunk if it's not empty, or the left one otherwise.
     #[inline]
     pub(super) fn last_chunk(&self) -> &str {
-        if !self.right_chunk().is_empty() {
-            self.right_chunk()
-        } else {
+        if self.right_chunk().is_empty() {
             self.left_chunk()
+        } else {
+            self.right_chunk()
         }
     }
 
     /// Returns the combined byte length of the buffer's left and right chunks.
     #[inline]
-    fn len(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.len_left() + self.len_right()
     }
 
@@ -454,9 +519,30 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         MAX_BYTES / 4
     }
 
-    /// TODO: docs
+    /// Moves the gap to the given byte offset.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the byte offset is out of bounds, if it's not a char boundary
+    /// or if the number of line breaks in the buffer is not equal to
+    /// `tot_line_breaks`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// let mut buffer = GapBuffer::<10>::from("aaaabbbb");
+    ///
+    /// buffer.move_gap(2, 0);
+    /// assert_eq!(buffer.left_chunk(), "aa");
+    /// assert_eq!(buffer.right_chunk(), "aabbbb");
+    ///
+    /// buffer.move_gap(6, 0);
+    /// assert_eq!(buffer.left_chunk(), "aaaabb");
+    /// assert_eq!(buffer.right_chunk(), "bb");
+    /// ```
     #[inline]
-    fn move_gap(&mut self, byte_offset: usize, tot_line_breaks: usize) {
+    pub fn move_gap(&mut self, byte_offset: usize, tot_line_breaks: usize) {
         debug_assert!(byte_offset <= self.len());
         debug_assert!(self.is_char_boundary(byte_offset));
         debug_assert_eq!(self.summarize().line_breaks, tot_line_breaks);
@@ -519,9 +605,30 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         debug_assert_eq!(offset, self.len_left());
     }
 
-    /// TODO: docs
+    /// Moves the last `bytes_to_move` bytes of this buffer to the right
+    /// buffer.
+    ///
+    /// Note that it can move less than `bytes_to_move` bytes if that offset is
+    /// not a char boundary of this buffer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `bytes_to_move` is out of bounds or if the resulting right
+    /// buffer would have a length greater than `MAX_BYTES`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// let mut left = GapBuffer::<10>::from("Hello, ");
+    /// let mut right = GapBuffer::<10>::from("World!");
+    ///
+    /// left.move_text_to_right(2, &mut right);
+    /// assert_eq!(left, "Hello");
+    /// assert_eq!(right, ", World!");
+    /// ```
     #[inline]
-    fn move_text_to_right(
+    pub fn move_text_to_right(
         &mut self,
         bytes_to_move: usize,
         right: &mut Self,
@@ -568,9 +675,24 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         }
     }
 
-    /// TODO: docs
+    /// Prepends a string to this buffer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the resulting buffer would have a length greater than
+    /// `MAX_BYTES`, or if the number of line breaks in `s` is not equal to
+    /// `prepended_line_breaks`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// let mut buf = GapBuffer::<15>::from("World!");
+    /// buf.prepend("Hello, ", 0);
+    /// assert_eq!(buf, "Hello, World!");
+    /// ```
     #[inline]
-    fn prepend(&mut self, s: &str, prepended_line_breaks: usize) {
+    pub fn prepend(&mut self, s: &str, prepended_line_breaks: usize) {
         debug_assert!(s.len() <= self.len_gap());
         debug_assert_eq!(count_line_breaks(s), prepended_line_breaks);
 
@@ -585,9 +707,29 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         self.line_breaks_left += prepended_line_breaks as u16;
     }
 
-    /// TODO: docs
+    /// Exactly the same as [`prepend`](Self::prepend()), except it
+    /// prepends two strings instead of one.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the combined byte length of the two strings is greater that
+    /// the length of the gap.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// let mut buf = GapBuffer::<15>::from("!");
+    /// buf.prepend_two("Hello, ", "World", 0);
+    /// assert_eq!(buf, "Hello, World!");
+    /// ```
     #[inline]
-    fn prepend_two(&mut self, a: &str, b: &str, prepended_line_breaks: usize) {
+    pub fn prepend_two(
+        &mut self,
+        a: &str,
+        b: &str,
+        prepended_line_breaks: usize,
+    ) {
         debug_assert!(a.len() + b.len() <= self.len_gap());
         debug_assert_eq!(
             count_line_breaks(a) + count_line_breaks(b),
@@ -608,15 +750,30 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         self.line_breaks_left += prepended_line_breaks as u16;
     }
 
-    /// TODO: docs
+    /// Removes the first `byte_offset` bytes from this buffer.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `byte_offset` is out of bounds, if it's not a char boundary
+    /// or if the number of line breaks in the range `0..byte_offset` is not
+    /// equal to `removed_line_breaks`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// let mut buffer = GapBuffer::<10>::from("foo\nbar");
+    /// buffer.remove_up_to(4, 1);
+    /// assert_eq!(buffer, "bar");
+    /// ```
     #[inline]
-    fn remove_up_to(
+    pub fn remove_up_to(
         &mut self,
         byte_offset: usize,
         removed_line_breaks: usize,
     ) {
+        debug_assert!(byte_offset <= self.len());
         debug_assert!(self.is_char_boundary(byte_offset));
-
         debug_assert_eq!(
             self.summarize_range(0..byte_offset, self.summarize()).line_breaks,
             removed_line_breaks
@@ -639,9 +796,29 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
             self.line_breaks_left.saturating_sub(removed_line_breaks as u16);
     }
 
-    /// TODO: docs
+    /// Replaces the text in `byte_range` with the string `s`, where the
+    /// replaced range is big enough (and the replacement string is small
+    /// enough) such that the buffer doesn't go over `MAX_BYTES`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the end of the byte range is out of bounds, if either the
+    /// start or the end of the byte range is not a char boundary, if the
+    /// length of the buffer after the replacement would be greater than
+    /// `MAX_BYTES` or if `summary` is not equal to this buffer's summary.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// # use crop::tree::Summarize;
+    /// let mut buffer = GapBuffer::<10>::from("foo\nbar");
+    /// let summary = buffer.summarize();
+    /// buffer.replace_non_overflowing(4..7, "baz\r\n", summary);
+    /// assert_eq!(buffer, "foo\nbaz\r\n");
+    /// ```
     #[inline]
-    fn replace_non_overflowing(
+    pub fn replace_non_overflowing(
         &mut self,
         byte_range: Range<usize>,
         s: &str,
@@ -699,9 +876,45 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         summary - removed_summary + added_summary
     }
 
-    /// TODO: docs
+    /// Replaces the text in `byte_range` with the string `s`, where the
+    /// replaced range is small enough (and the replacement string is big
+    /// enough) such that the buffer goes over `MAX_BYTES`.
+    ///
+    /// It returns the new summary
+    /// for the buffer and a vector of overflowed chunks that come after this
+    /// buffer, all of which
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics if the end of the byte range is out of bounds, if either the
+    /// start or the end of the byte range is not a char boundary, if the
+    /// length of the buffer after the replacement would be less than or equal
+    /// to `MAX_BYTES` or if `summary` is not equal to this buffer's summary.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// # use crop::tree::Summarize;
+    /// let mut buffer = GapBuffer::<10>::from("foo\nbar");
+    /// let summary = buffer.summarize();
+    ///
+    /// // Replace the newline with a string that's too long to fit in the
+    /// // buffer.
+    /// let (new_summary, extras) =
+    ///     buffer.replace_overflowing(3..4, "foo\nbar\r\nbaz", summary);
+    ///
+    /// assert_eq!(buffer, "foo");
+    /// assert_eq!(new_summary, buffer.summarize());
+    ///
+    /// let mut extras = extras.into_iter();
+    /// assert_eq!("foo\nbar\r\nb", extras.next().unwrap());
+    /// assert_eq!("azbar", extras.next().unwrap());
+    /// assert_eq!(None, extras.next());
+    /// ```
     #[inline]
-    fn replace_overflowing(
+    pub fn replace_overflowing(
         &mut self,
         byte_range: Range<usize>,
         s: &str,
@@ -734,8 +947,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
                 replacement = left;
 
-                ChunkResegmenter::new([right, extra_left, extra_right])
-                    .collect()
+                Resegmenter::new([right, extra_left, extra_right]).collect()
             } else if s.len() + extra_left.len() >= missing {
                 let missing = missing - s.len();
 
@@ -744,7 +956,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
                 truncate_from += left.len();
 
-                ChunkResegmenter::new([right, extra_right]).collect()
+                Resegmenter::new([right, extra_right]).collect()
             } else {
                 let missing = missing - s.len() - extra_left.len();
 
@@ -753,7 +965,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
                 truncate_from += extra_left.len() + left.len();
 
-                ChunkResegmenter::new([right]).collect()
+                Resegmenter::new([right]).collect()
             };
 
             let summary =
@@ -797,7 +1009,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 (add_to_extras, new_right)
             };
 
-            let extras = ChunkResegmenter::new([
+            let extras = Resegmenter::new([
                 add_to_extras_1,
                 add_to_extras_2,
                 s,
@@ -812,7 +1024,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
             (new_summary, extras)
         } else {
             let extras =
-                ChunkResegmenter::new([s, extra_left, extra_right]).collect();
+                Resegmenter::new([s, extra_left, extra_right]).collect();
 
             let new_summary = self.truncate_from_with_summary(start, summary);
 
@@ -820,11 +1032,11 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         }
     }
 
-    /// TODO: docs
+    /// Returns the right chunk of this buffer as a string slice.
     #[inline]
     pub fn right_chunk(&self) -> &str {
-        // SAFETY: all the methods are guaranteed to always keep the bytes in
-        // the second segment as valid UTF-8.
+        // SAFETY: all the methods are guaranteed to always keep the last
+        // `len_right()` bytes valid UTF-8.
         unsafe {
             std::str::from_utf8_unchecked(
                 &self.bytes[MAX_BYTES - self.len_right()..],
@@ -841,9 +1053,25 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// if either the start or the end of the byte range don't lie on a char
     /// boundary.
     ///
-    /// TODO: examples
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// # use crop::tree::Summarize;
+    /// let mut buffer = GapBuffer::<10>::from("foo\nbar\r\n");
+    /// let summary = buffer.summarize();
+    /// assert_eq!(buffer.summarize_range(0..buffer.len(), summary), summary);
+    ///
+    /// let s = buffer.summarize_range(0..4, summary);
+    /// assert_eq!(s.bytes, 4);
+    /// assert_eq!(s.line_breaks, 1);
+    ///
+    /// let s = buffer.summarize_range(2..buffer.len(), summary);
+    /// assert_eq!(s.bytes, 7);
+    /// assert_eq!(s.line_breaks, 2);
+    /// ```
     #[inline]
-    fn summarize_range(
+    pub fn summarize_range(
         &self,
         byte_range: Range<usize>,
         total: ChunkSummary,
@@ -908,9 +1136,28 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         }
     }
 
-    /// TODO: docs
+    /// Truncates this buffer to the given byte offset, removing all the text
+    /// after it. The number of line breaks removed from the left chunk is
+    /// given by the caller.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `byte_offset` is greater than the length of this buffer, if
+    /// it doesn't lie on a char boundary or if `removed_line_breaks_left` is
+    /// greater than the number of line breaks in the left chunk.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::GapBuffer;
+    /// let mut buffer = GapBuffer::<15>::from("Hello\nWorld!");
+    /// assert_eq!(buffer.left_chunk(), "Hello\n");
+    ///
+    /// buffer.truncate_from(5, 1);
+    /// assert_eq!(buffer, "Hello");
+    /// ```
     #[inline]
-    fn truncate_from(
+    pub fn truncate_from(
         &mut self,
         byte_offset: usize,
         removed_line_breaks_left: u16,
@@ -933,9 +1180,17 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         }
     }
 
-    /// TODO: docs
+    /// Just like [`truncate_from`](), but it takes a the current summary of
+    /// the buffer as an argument and returns the new summary after the
+    /// truncation.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `byte_offset` is greater than the length of this buffer, if
+    /// it doesn't lie on a char boundary or if `summary` is different from the
+    /// summary of this buffer.
     #[inline]
-    fn truncate_from_with_summary(
+    pub fn truncate_from_with_summary(
         &mut self,
         offset: usize,
         summary: ChunkSummary,
@@ -984,8 +1239,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
 pub struct ChunkSummary {
-    pub(super) bytes: usize,
-    pub(super) line_breaks: usize,
+    pub bytes: usize,
+    pub line_breaks: usize,
 }
 
 impl ChunkSummary {
@@ -1245,20 +1500,18 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
     }
 }
 
-/// An iterator over the valid split points of a `ChunkSlice`.
+/// Segments a string into [`GapBuffer`]s with at least
+/// [`GapBuffer::chunk_min()`] bytes.
 ///
-/// All the `ChunkSlice`s yielded by this iterator are guaranteed to never
-/// split char boundaries and CRLF pairs and to be within the chunk bounds of
-/// [`RopeChunk`]s.
-///
-/// The only exception is if the slice fed to [`Self::new()`] is shorter than
-/// [`RopeChunk::chunk_min()`], in which case this will only yield that slice.
-pub(super) struct ChunkSegmenter<'a, const MAX_BYTES: usize> {
+/// The only exception is if the string is shorter than
+/// [`GapBuffer::chunk_min()`], in which case this will only yield a single gap
+/// buffer with the entire string.
+pub(super) struct Segmenter<'a, const MAX_BYTES: usize> {
     s: &'a str,
     yielded: usize,
 }
 
-impl<'a, const MAX_BYTES: usize> Iterator for ChunkSegmenter<'a, MAX_BYTES> {
+impl<'a, const MAX_BYTES: usize> Iterator for Segmenter<'a, MAX_BYTES> {
     type Item = &'a str;
 
     #[inline]
@@ -1305,36 +1558,32 @@ impl<'a, const MAX_BYTES: usize> Iterator for ChunkSegmenter<'a, MAX_BYTES> {
     }
 }
 
-impl<const MAX_BYTES: usize> std::iter::FusedIterator
-    for ChunkSegmenter<'_, MAX_BYTES>
+/// Resegments a bunch of strings.
+///
+/// The yielded [`GapBuffer`]s should be equal to the ones yielded by the
+/// [`Segmenter`] iterator initialized with a string that is the concatenation
+/// of the strings passed to this iterator.
+pub(super) struct Resegmenter<'a, const CHUNKS: usize, const MAX_BYTES: usize>
 {
-}
-
-/// TODO: docs
-pub(super) struct ChunkResegmenter<
-    'a,
-    const CHUNKS: usize,
-    const MAX_BYTES: usize,
-> {
-    chunks: [&'a str; CHUNKS],
+    segments: [&'a str; CHUNKS],
     start: usize,
     yielded: usize,
     total: usize,
 }
 
 impl<'a, const CHUNKS: usize, const MAX_BYTES: usize>
-    ChunkResegmenter<'a, CHUNKS, MAX_BYTES>
+    Resegmenter<'a, CHUNKS, MAX_BYTES>
 {
     #[inline]
     fn new(segments: [&'a str; CHUNKS]) -> Self {
         let total = segments.iter().map(|s| s.len()).sum::<usize>();
         debug_assert!(total >= GapBuffer::<MAX_BYTES>::chunk_min());
-        Self { total, chunks: segments, yielded: 0, start: 0 }
+        Self { total, segments, yielded: 0, start: 0 }
     }
 }
 
 impl<'a, const CHUNKS: usize, const MAX_BYTES: usize> Iterator
-    for ChunkResegmenter<'a, CHUNKS, MAX_BYTES>
+    for Resegmenter<'a, CHUNKS, MAX_BYTES>
 {
     type Item = GapBuffer<MAX_BYTES>;
 
@@ -1351,8 +1600,10 @@ impl<'a, const CHUNKS: usize, const MAX_BYTES: usize> Iterator
 
             let min_bytes = GapBuffer::<MAX_BYTES>::min_bytes();
 
-            for (idx, &chunk) in self.chunks[self.start..].iter().enumerate() {
-                let new_bytes_in_next = bytes_in_next + chunk.len();
+            for (idx, &segment) in
+                self.segments[self.start..].iter().enumerate()
+            {
+                let new_bytes_in_next = bytes_in_next + segment.len();
 
                 let next_too_big = new_bytes_in_next > MAX_BYTES;
 
@@ -1366,18 +1617,20 @@ impl<'a, const CHUNKS: usize, const MAX_BYTES: usize> Iterator
                 }
             }
 
-            let mut last_chunk_len = MAX_BYTES - bytes_in_next;
+            let mut last_segment_len = MAX_BYTES - bytes_in_next;
 
             // new remaining = remaining - bytes_in_next - last_chunk_len
-            if remaining - bytes_in_next < last_chunk_len + min_bytes {
-                last_chunk_len = remaining - bytes_in_next - min_bytes
+            if remaining - bytes_in_next < last_segment_len + min_bytes {
+                last_segment_len = remaining - bytes_in_next - min_bytes
             }
 
-            let (mut left, mut right) =
-                split_adjusted::<false>(self.chunks[idx_last], last_chunk_len);
+            let (mut left, mut right) = split_adjusted::<false>(
+                self.segments[idx_last],
+                last_segment_len,
+            );
 
             // This can happen with e.g. ["🌎", "!"] and MAX_BYTES = 4.
-            if (self.chunks[self.start..idx_last]
+            if (self.segments[self.start..idx_last]
                 .iter()
                 .map(|s| s.len())
                 .sum::<usize>()
@@ -1385,27 +1638,27 @@ impl<'a, const CHUNKS: usize, const MAX_BYTES: usize> Iterator
                 == 0
             {
                 (left, right) = split_adjusted::<true>(
-                    self.chunks[idx_last],
-                    last_chunk_len,
+                    self.segments[idx_last],
+                    last_segment_len,
                 );
 
-                self.chunks[idx_last] = left;
+                self.segments[idx_last] = left;
             } else {
-                self.chunks[idx_last] = left;
+                self.segments[idx_last] = left;
             }
 
             let next = GapBuffer::<MAX_BYTES>::from_chunks(
-                &self.chunks[self.start..=idx_last],
+                &self.segments[self.start..=idx_last],
             );
 
-            self.chunks[idx_last] = right;
+            self.segments[idx_last] = right;
 
             self.start = idx_last;
 
             next
         } else {
             debug_assert!(remaining >= GapBuffer::<MAX_BYTES>::chunk_min());
-            GapBuffer::<MAX_BYTES>::from_chunks(&self.chunks[self.start..])
+            GapBuffer::<MAX_BYTES>::from_chunks(&self.segments[self.start..])
         };
 
         debug_assert!(next.len() >= GapBuffer::<MAX_BYTES>::chunk_min());
@@ -1416,29 +1669,9 @@ impl<'a, const CHUNKS: usize, const MAX_BYTES: usize> Iterator
     }
 }
 
-impl<const CHUNKS: usize, const MAX_BYTES: usize> std::iter::FusedIterator
-    for ChunkResegmenter<'_, CHUNKS, MAX_BYTES>
-{
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    impl<const N: usize> PartialEq<GapBuffer<N>> for &str {
-        fn eq(&self, rhs: &GapBuffer<N>) -> bool {
-            self.len() == rhs.len()
-                && rhs.left_chunk() == &self[..rhs.len_left()]
-                && rhs.right_chunk() == &self[rhs.len_left()..]
-        }
-    }
-
-    // We only need this to compare `Option<GapBuffer>` with `None`.
-    impl<const N: usize> PartialEq<GapBuffer<N>> for GapBuffer<N> {
-        fn eq(&self, _rhs: &GapBuffer<N>) -> bool {
-            unimplemented!();
-        }
-    }
 
     #[test]
     fn remove_up_to_0() {
@@ -1449,9 +1682,9 @@ mod tests {
     }
 
     #[test]
-    fn chunk_segmenter_0() {
+    fn segmenter_0() {
         let chunk = "Hello Earth 🌎!";
-        let mut segmenter = GapBuffer::<4>::chunk_segmenter(chunk);
+        let mut segmenter = GapBuffer::<4>::segmenter(chunk);
 
         assert_eq!("Hell", segmenter.next().unwrap());
         assert_eq!("o Ea", segmenter.next().unwrap());
@@ -1462,9 +1695,9 @@ mod tests {
     }
 
     #[test]
-    fn chunk_resegmenter_0() {
-        let chunks = ["aaaa", "b"];
-        let mut resegmenter = ChunkResegmenter::<2, 4>::new(chunks);
+    fn resegmenter_0() {
+        let segments = ["aaaa", "b"];
+        let mut resegmenter = Resegmenter::<2, 4>::new(segments);
 
         assert_eq!("aaaa", resegmenter.next().unwrap());
         assert_eq!("b", resegmenter.next().unwrap());
@@ -1472,9 +1705,9 @@ mod tests {
     }
 
     #[test]
-    fn chunk_resegmenter_1() {
-        let chunks = ["a", "a", "bcdefgh"];
-        let mut resegmenter = ChunkResegmenter::<3, 4>::new(chunks);
+    fn resegmenter_1() {
+        let segments = ["a", "a", "bcdefgh"];
+        let mut resegmenter = Resegmenter::<3, 4>::new(segments);
 
         assert_eq!("aabc", resegmenter.next().unwrap());
         assert_eq!("defg", resegmenter.next().unwrap());
@@ -1483,9 +1716,9 @@ mod tests {
     }
 
     #[test]
-    fn chunk_resegmenter_2() {
-        let chunks = ["a", "abcdefgh", "b"];
-        let mut resegmenter = ChunkResegmenter::<3, 4>::new(chunks);
+    fn resegmenter_2() {
+        let segments = ["a", "abcdefgh", "b"];
+        let mut resegmenter = Resegmenter::<3, 4>::new(segments);
 
         assert_eq!("aabc", resegmenter.next().unwrap());
         assert_eq!("defg", resegmenter.next().unwrap());
@@ -1494,27 +1727,27 @@ mod tests {
     }
 
     #[test]
-    fn chunk_resegmenter_3() {
-        let chunks = ["a", "b"];
-        let mut resegmenter = ChunkResegmenter::<2, 4>::new(chunks);
+    fn resegmenter_3() {
+        let segments = ["a", "b"];
+        let mut resegmenter = Resegmenter::<2, 4>::new(segments);
 
         assert_eq!("ab", resegmenter.next().unwrap());
         assert_eq!(None, resegmenter.next());
     }
 
     #[test]
-    fn chunk_resegmenter_4() {
-        let chunks = ["a", "b", ""];
-        let mut resegmenter = ChunkResegmenter::<3, 4>::new(chunks);
+    fn resegmenter_4() {
+        let segments = ["a", "b", ""];
+        let mut resegmenter = Resegmenter::<3, 4>::new(segments);
 
         assert_eq!("ab", resegmenter.next().unwrap());
         assert_eq!(None, resegmenter.next());
     }
 
     #[test]
-    fn chunk_resegmenter_5() {
-        let chunks = ["こんい"];
-        let mut resegmenter = ChunkResegmenter::<1, 4>::new(chunks);
+    fn resegmenter_5() {
+        let segments = ["こんい"];
+        let mut resegmenter = Resegmenter::<1, 4>::new(segments);
 
         assert_eq!("こ", resegmenter.next().unwrap());
         assert_eq!("ん", resegmenter.next().unwrap());
@@ -1523,9 +1756,9 @@ mod tests {
     }
 
     #[test]
-    fn chunk_resegmenter_6() {
-        let chunks = [" 🌎", "!"];
-        let mut resegmenter = ChunkResegmenter::<2, 4>::new(chunks);
+    fn resegmenter_6() {
+        let segments = [" 🌎", "!"];
+        let mut resegmenter = Resegmenter::<2, 4>::new(segments);
 
         assert_eq!(" ", resegmenter.next().unwrap());
         assert_eq!("🌎", resegmenter.next().unwrap());

@@ -701,7 +701,7 @@ impl From<&str> for Rope {
         Rope {
             has_trailing_newline: last_byte_is_newline(s),
             tree: Tree::from_leaves(
-                RopeChunk::chunk_segmenter(s).map(RopeChunk::from),
+                RopeChunk::segmenter(s).map(RopeChunk::from),
             ),
         }
     }
