@@ -315,40 +315,25 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         match (Arc::get_mut(first).unwrap(), Arc::make_mut(second)) {
             (Node::Internal(first), Node::Internal(second)) => {
-                // Move all the second child's children over to the first
-                // child, then remove the second child.
+                // Move the second child's children to the first child, then
+                // remove the second child.
                 if first.len() + second.len() <= Self::max_children() {
-                    first
-                        .children
-                        .extend(second.children.iter().map(Arc::clone));
-
+                    first.children.append(&mut second.children);
                     first.leaf_count += second.leaf_count;
-
                     first.summary += second.summary();
-
                     self.children.remove(1);
                 }
                 // Move the minimum number of children from the second child
-                // over to the first child, keeping both.
+                // to the first child, keeping both.
                 else {
-                    let to_first = Self::min_children() - first.len();
+                    let missing = Self::min_children() - first.len();
 
-                    let (to_first, keep_second) =
-                        second.children().split_at(to_first);
-
-                    for child in to_first {
-                        first.push(Arc::clone(child));
+                    for _ in 0..missing {
+                        first.push(second.remove(0));
                     }
 
-                    let second =
-                        Arc::new(Node::Internal(Self::from_children(
-                            keep_second.iter().map(Arc::clone),
-                        )));
-
-                    self.children[1] = second;
-
-                    debug_assert!(!self.first().is_underfilled());
-                    debug_assert!(!self.child(1).is_underfilled());
+                    debug_assert!(!first.is_underfilled());
+                    debug_assert!(!second.is_underfilled());
                 }
             },
 
@@ -402,42 +387,26 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         match (Arc::make_mut(penultimate), Arc::get_mut(last).unwrap()) {
             (Node::Internal(penultimate), Node::Internal(last)) => {
-                // Move all the penultimate child's children over to the last
-                // child, then remove the penultimate child.
+                // Move the last child's children to the penultimate child,
+                // then remove the last child.
                 if penultimate.len() + last.len() <= Self::max_children() {
-                    for (idx, child) in penultimate.children.iter().enumerate()
-                    {
-                        last.children.insert(idx, Arc::clone(child));
-                    }
-
-                    last.leaf_count += penultimate.leaf_count;
-
-                    last.summary += penultimate.summary();
-
-                    self.children.remove(last_idx - 1);
+                    penultimate.children.append(&mut last.children);
+                    penultimate.leaf_count += last.leaf_count;
+                    penultimate.summary += last.summary();
+                    self.children.remove(last_idx);
                 }
-                // Move the minimum number of children from the second child
-                // over to the first child, keeping both.
+                // Move the minimum number of children from the penultimate
+                // child to the last child, keeping both.
                 else {
-                    let to_last = Self::min_children() - last.len();
+                    let missing = Self::min_children() - last.len();
 
-                    let (keep_penultimate, to_last) = penultimate
-                        .children()
-                        .split_at(penultimate.len() - to_last);
-
-                    for (idx, child) in to_last.iter().enumerate() {
-                        last.insert(idx, Arc::clone(child));
+                    for _ in 0..missing {
+                        let last_idx = penultimate.len() - 1;
+                        last.insert(0, penultimate.remove(last_idx));
                     }
 
-                    let penultimate =
-                        Arc::new(Node::Internal(Self::from_children(
-                            keep_penultimate.iter().map(Arc::clone),
-                        )));
-
-                    self.children[last_idx - 1] = penultimate;
-
-                    debug_assert!(!self.child(last_idx - 1).is_underfilled());
-                    debug_assert!(!self.last().is_underfilled());
+                    debug_assert!(!penultimate.is_underfilled());
+                    debug_assert!(!last.is_underfilled());
                 }
             },
 
