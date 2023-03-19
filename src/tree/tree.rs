@@ -164,6 +164,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     }
 
     /// Replaces a range of the `Tree` with the given replacement.
+    #[track_caller]
     #[inline]
     pub fn replace<M>(
         &mut self,
@@ -194,6 +195,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     }
 
     /// Returns a slice of the `Tree` in the range of the given metric.
+    #[track_caller]
     #[inline]
     pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
     where
@@ -531,6 +533,7 @@ mod tree_replace {
     ///
     /// Note that when no extra nodes are returned, `node` could be underfilled
     /// or even at a lower depth than it was before calling this function.
+    #[track_caller]
     #[inline]
     pub(super) fn replace_range_with_slice<const N: usize, M, L>(
         node: &mut Arc<Node<N, L>>,
@@ -626,6 +629,7 @@ mod tree_replace {
     }
 
     /// TODO: docs
+    #[track_caller]
     #[inline]
     fn replace_range_in_deepest<const N: usize, M, L>(
         node: &mut Arc<Node<N, L>>,
@@ -760,6 +764,7 @@ mod tree_replace {
 
     /// TODO: docs
     #[allow(clippy::type_complexity)]
+    #[track_caller]
     #[inline]
     fn inode_replace_nodes_in_start_and_end_subtrees<const N: usize, M, L>(
         inode: &mut Inode<N, L>,
@@ -839,6 +844,7 @@ mod tree_replace {
     }
 
     /// TODO: docs
+    #[track_caller]
     #[inline]
     fn replace_nodes_in_start_subtree<const N: usize, M, L>(
         node: &mut Node<N, L>,
@@ -913,6 +919,7 @@ mod tree_replace {
     }
 
     /// TODO: docs
+    #[track_caller]
     #[inline]
     fn replace_nodes_in_end_subtree<const N: usize, M, L>(
         node: &mut Node<N, L>,

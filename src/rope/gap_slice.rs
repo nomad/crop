@@ -33,6 +33,7 @@ impl PartialEq<GapSlice<'_>> for &str {
 impl<'a> GapSlice<'a> {
     /// Panics with a nicely formatted error message if the given byte offset
     /// is not a character boundary.
+    #[track_caller]
     #[inline]
     pub(super) fn assert_char_boundary(&self, byte_offset: usize) {
         debug_assert!(byte_offset <= self.len());

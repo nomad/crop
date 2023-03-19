@@ -218,6 +218,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L>
 where
     for<'d> L::Slice<'d>: Default,
 {
+    #[track_caller]
     #[inline]
     pub(super) fn from_range_in_root<M>(
         root: &'a Arc<Node<FANOUT, L>>,
@@ -240,6 +241,7 @@ where
         }
     }
 
+    #[track_caller]
     #[inline]
     pub fn slice<M>(self, mut range: Range<M>) -> Self
     where
@@ -292,6 +294,7 @@ where
     /// It's the caller's responsibility to guarantee this, and this function
     /// can panic or return an incorrect or invalid `TreeSlice` if this
     /// condition is not met.
+    #[track_caller]
     #[inline]
     fn slice_impl<S, E>(
         root: &'a Arc<Node<FANOUT, L>>,
@@ -485,6 +488,7 @@ where
 /// When this happens the `recompute_root` bit will be set to `true` to
 /// indicate that the slice's root (and its offset) needs to be recomputed. All
 /// the other fields of the slice are valid.
+#[track_caller]
 #[inline]
 fn build_slice<'a, const N: usize, L, S, E>(
     slice: &mut TreeSlice<'a, N, L>,

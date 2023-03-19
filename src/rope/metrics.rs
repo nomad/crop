@@ -82,6 +82,7 @@ impl<const MAX_BYTES: usize> Metric<GapBuffer<MAX_BYTES>> for ByteMetric {
 impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     for ByteMetric
 {
+    #[track_caller]
     #[inline]
     fn split<'a>(
         chunk: GapSlice<'a>,

@@ -94,6 +94,7 @@ impl<L: Leaf> Lnode<L> {
         self.value.remove_up_to(&mut self.summary, up_to);
     }
 
+    #[track_caller]
     #[inline]
     pub(super) fn replace<M, R>(
         &mut self,

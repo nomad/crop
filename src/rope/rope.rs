@@ -78,6 +78,7 @@ impl Rope {
     /// assert_eq!(r.byte(1), b'a');
     /// assert_eq!(r.byte(2), b'r');
     /// ```
+    #[track_caller]
     #[inline]
     pub fn byte(&self, byte_index: usize) -> u8 {
         if byte_index >= self.byte_len() {
@@ -124,6 +125,7 @@ impl Rope {
     /// assert_eq!(r.byte_of_line(1), "ƒoo\n".len());
     /// assert_eq!(r.byte_of_line(2), "ƒoo\nbär\r\n".len());
     /// ```
+    #[track_caller]
     #[inline]
     pub fn byte_of_line(&self, line_index: usize) -> usize {
         if line_index >= self.line_len() {
@@ -156,6 +158,7 @@ impl Rope {
     /// assert_eq!(r.byte_slice(4..7), "∈");
     /// assert_eq!(r.byte_slice(7..), "🌏");
     /// ```
+    #[track_caller]
     #[inline]
     pub fn byte_slice<R>(&self, byte_range: R) -> RopeSlice<'_>
     where
@@ -243,6 +246,7 @@ impl Rope {
     /// r.delete(5..16);
     /// assert_eq!(r, "Hello!");
     /// ```
+    #[track_caller]
     #[inline]
     pub fn delete<R>(&mut self, byte_range: R)
     where
@@ -300,6 +304,7 @@ impl Rope {
     /// r.insert(11, " 🌎");
     /// assert_eq!(r, "Hello Earth 🌎!");
     /// ```
+    #[track_caller]
     #[inline]
     pub fn insert<T>(&mut self, byte_offset: usize, text: T)
     where
@@ -327,6 +332,7 @@ impl Rope {
     /// assert!(r.is_char_boundary(6)); // between ' ' and '老'
     /// assert!(!r.is_char_boundary(2)); // between the 1st and 2nd byte of 'ö'
     /// ```
+    #[track_caller]
     #[inline]
     pub fn is_char_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
@@ -380,6 +386,7 @@ impl Rope {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "graphemes")))]
     #[cfg(feature = "graphemes")]
+    #[track_caller]
     #[inline]
     pub fn is_grapheme_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
@@ -411,6 +418,7 @@ impl Rope {
     /// assert_eq!(r.line(1), "bar");
     /// assert_eq!(r.line(2), "baz");
     /// ```
+    #[track_caller]
     #[inline]
     pub fn line(&self, line_index: usize) -> RopeSlice<'_> {
         if line_index >= self.line_len() {
@@ -485,6 +493,7 @@ impl Rope {
     /// assert_eq!(r.line_of_byte(4), 1); // line of 'b'
     /// assert_eq!(r.line_of_byte(r.byte_len() - 1), 2); // line of 'z'
     /// ```
+    #[track_caller]
     #[inline]
     pub fn line_of_byte(&self, byte_index: usize) -> usize {
         if byte_index >= self.byte_len() {
@@ -516,6 +525,7 @@ impl Rope {
     /// assert_eq!(r.line_slice(1..3), "bar\r\nbaz\n");
     /// assert_eq!(r.line_slice(3..), "foobar\n");
     /// ```
+    #[track_caller]
     #[inline]
     pub fn line_slice<R>(&self, line_range: R) -> RopeSlice<'_>
     where
@@ -626,6 +636,7 @@ impl Rope {
     /// r.replace(6..16, "Saturn 🪐");
     /// assert_eq!(r, "Hello Saturn 🪐!");
     /// ```
+    #[track_caller]
     #[inline]
     pub fn replace<R, T>(&mut self, byte_range: R, text: T)
     where

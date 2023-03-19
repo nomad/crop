@@ -277,6 +277,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
     /// Panics with a nicely formatted error message if the given byte offset
     /// is not a character boundary.
+    #[track_caller]
     #[inline]
     fn assert_char_boundary(&self, byte_offset: usize) {
         debug_assert!(byte_offset <= self.len());
@@ -1438,6 +1439,7 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
 
     type ExtraLeaves = alloc::vec::IntoIter<Self>;
 
+    #[track_caller]
     #[inline]
     fn replace<R>(
         &mut self,
@@ -1494,6 +1496,7 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
         }
     }
 
+    #[track_caller]
     #[inline]
     fn remove_up_to(&mut self, summary: &mut ChunkSummary, up_to: ByteMetric) {
         self.replace(summary, ..up_to, "");

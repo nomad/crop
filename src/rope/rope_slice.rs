@@ -44,6 +44,7 @@ impl<'a> RopeSlice<'a> {
     /// assert_eq!(s.byte(1), b'a');
     /// assert_eq!(s.byte(2), b'r');
     /// ```
+    #[track_caller]
     #[inline]
     pub fn byte(&self, byte_index: usize) -> u8 {
         if byte_index >= self.byte_len() {
@@ -97,6 +98,7 @@ impl<'a> RopeSlice<'a> {
     /// let s = r.byte_slice("ƒoo\n".len()..);
     /// assert_eq!(s.byte_of_line(1), "bär\r\n".len());
     /// ```
+    #[track_caller]
     #[inline]
     pub fn byte_of_line(&self, line_index: usize) -> usize {
         if line_index >= self.line_len() {
@@ -129,6 +131,7 @@ impl<'a> RopeSlice<'a> {
     /// assert_eq!(s.byte_slice(..3), "∈");
     /// assert_eq!(s.byte_slice(3..), "🌏");
     /// ```
+    #[track_caller]
     #[inline]
     pub fn byte_slice<R>(self, byte_range: R) -> RopeSlice<'a>
     where
@@ -244,6 +247,7 @@ impl<'a> RopeSlice<'a> {
     /// assert!(s.is_char_boundary(6)); // between '老' and '虎'
     /// assert!(!s.is_char_boundary(12)); // between the 1st and 2nd byte of 'é'
     /// ```
+    #[track_caller]
     #[inline]
     pub fn is_char_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
@@ -296,6 +300,7 @@ impl<'a> RopeSlice<'a> {
     /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "graphemes")))]
     #[cfg(feature = "graphemes")]
+    #[track_caller]
     #[inline]
     pub fn is_grapheme_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
@@ -327,6 +332,7 @@ impl<'a> RopeSlice<'a> {
     /// assert_eq!(s.line(0), "foo");
     /// assert_eq!(s.line(1), "bar");
     /// ```
+    #[track_caller]
     #[inline]
     pub fn line(self, line_index: usize) -> RopeSlice<'a> {
         if line_index >= self.line_len() {
@@ -405,6 +411,7 @@ impl<'a> RopeSlice<'a> {
     /// assert_eq!(s.line_of_byte(0), 0); // line of 'b'
     /// assert_eq!(s.line_of_byte(s.byte_len() - 1), 1); // line of 'z'
     /// ```
+    #[track_caller]
     #[inline]
     pub fn line_of_byte(&self, byte_index: usize) -> usize {
         if byte_index >= self.byte_len() {
@@ -437,6 +444,7 @@ impl<'a> RopeSlice<'a> {
     /// assert_eq!(s.line_slice(1..3), "bar\r\nbaz\n");
     /// assert_eq!(s.line_slice(3..), "foob");
     /// ```
+    #[track_caller]
     #[inline]
     pub fn line_slice<R>(self, line_range: R) -> RopeSlice<'a>
     where
