@@ -89,8 +89,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// Moves the first `bytes_to_add` bytes from the right buffer to the end
     /// of this buffer.
     ///
-    /// Note that it can move less than `bytes_to_add` bytes if that offset is
-    /// not a char boundary of the right buffer.
+    /// Note that it can move less bytes if that offset is not a char boundary
+    /// of the right buffer.
     ///
     /// # Panics
     ///
@@ -104,12 +104,12 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// let mut left = GapBuffer::<10>::from("Hello");
     /// let mut right = GapBuffer::<10>::from(", World!");
     ///
-    /// left.add_text_from_right(2, &mut right);
+    /// left.add_from_right(2, &mut right);
     /// assert_eq!(left, "Hello, ");
     /// assert_eq!(right, "World!");
     /// ```
     #[inline]
-    pub fn add_text_from_right(
+    pub fn add_from_right(
         &mut self,
         bytes_to_add: usize,
         right: &mut Self,
@@ -623,12 +623,12 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// let mut left = GapBuffer::<10>::from("Hello, ");
     /// let mut right = GapBuffer::<10>::from("World!");
     ///
-    /// left.move_text_to_right(2, &mut right);
+    /// left.move_to_right(2, &mut right);
     /// assert_eq!(left, "Hello");
     /// assert_eq!(right, ", World!");
     /// ```
     #[inline]
-    pub fn move_text_to_right(
+    pub fn move_to_right(
         &mut self,
         bytes_to_move: usize,
         right: &mut Self,
@@ -1406,7 +1406,7 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
             debug_assert!(right.len() > Self::min_bytes());
 
             let missing_left = Self::min_bytes() - left.len();
-            let moved_left = left.add_text_from_right(missing_left, right);
+            let moved_left = left.add_from_right(missing_left, right);
             *left_summary += moved_left;
             *right_summary -= moved_left;
 
@@ -1418,7 +1418,7 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
             debug_assert!(left.len() > Self::min_bytes());
 
             let missing_right = Self::min_bytes() - right.len();
-            let moved_right = left.move_text_to_right(missing_right, right);
+            let moved_right = left.move_to_right(missing_right, right);
             *left_summary -= moved_right;
             *right_summary += moved_right;
 
