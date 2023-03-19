@@ -1,6 +1,4 @@
-use alloc::sync::Arc;
-
-use crate::tree::{Inode, Leaf, Metric, Node, Tree, TreeSlice};
+use super::{Arc, Inode, Leaf, Metric, Node, Tree, TreeSlice};
 
 /// An iterator over the leaves of `Tree`s and `TreeSlice`s.
 pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {

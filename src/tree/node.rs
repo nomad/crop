@@ -1,7 +1,5 @@
-use alloc::sync::Arc;
-
-use super::traits::*;
-use super::{Inode, Lnode};
+use super::traits::{BalancedLeaf, Leaf, Metric, SlicingMetric};
+use super::{Arc, Inode, Lnode};
 
 #[derive(Clone)]
 pub(super) enum Node<const N: usize, L: Leaf> {

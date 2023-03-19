@@ -1,6 +1,6 @@
-use alloc::sync::Arc;
-
-use super::*;
+use super::traits::{DoubleEndedUnitMetric, Leaf, Metric, UnitMetric};
+use super::tree_slice;
+use super::{Arc, Lnode, Node, Tree, TreeSlice};
 
 /// An iterator over the units of a metric.
 #[derive(Clone)]

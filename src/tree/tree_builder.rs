@@ -1,8 +1,5 @@
->>>>>> 2a055b2 (import from `core` and `alloc` instead of `std`)
-use alloc::sync::Arc;
-
-use super::traits::*;
-use super::{Inode, Lnode, Node, Tree};
+use super::traits::{BalancedLeaf, Leaf};
+use super::{Arc, Inode, Lnode, Node, Tree};
 
 /// An incremental [`Tree`] builder.
 #[derive(Clone)]
@@ -106,7 +103,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
     #[inline]
     pub fn build(mut self) -> Tree<FANOUT, L>
     where
-        L: BalancedLeaf + Default + Clone,
+        L: Default + BalancedLeaf + Clone,
     {
         if self.stack.is_empty() {
             if self.leaves.is_empty() {

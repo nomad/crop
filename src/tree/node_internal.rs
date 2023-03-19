@@ -1,8 +1,7 @@
-use alloc::sync::Arc;
 use core::ops::RangeBounds;
 
 use super::traits::*;
-use super::{ExactChain, Node};
+use super::{Arc, ExactChain, Node};
 use crate::range_bounds_to_start_end;
 
 #[derive(Clone)]

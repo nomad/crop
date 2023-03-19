@@ -1,6 +1,6 @@
 use core::ops::RangeBounds;
 
-use super::traits::*;
+use super::traits::{BalancedLeaf, Leaf, Metric, ReplaceableLeaf};
 
 #[derive(Clone, Default)]
 pub(super) struct Lnode<L: Leaf> {
