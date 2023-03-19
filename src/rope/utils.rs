@@ -54,9 +54,34 @@ pub(super) fn bytes_line_break(s: &str) -> usize {
     1 + (s.len() > 1 && s.as_bytes()[s.len() - 2] == b'\r') as usize
 }
 
+#[cfg(not(miri))]
 #[inline]
 pub(super) fn byte_of_line(s: &str, line: usize) -> usize {
     str_indices::lines_lf::to_byte_idx(s, line)
+}
+
+#[cfg(miri)]
+pub(super) fn byte_of_line(s: &str, line: usize) -> usize {
+    if line == 0 {
+        return 0;
+    }
+
+    let mut seen = 0;
+    let mut stop = false;
+
+    s.bytes()
+        .take_while(|&b| {
+            !stop && {
+                if b == b'\n' {
+                    seen += 1;
+                    if seen == line {
+                        stop = true;
+                    }
+                }
+                true
+            }
+        })
+        .count()
 }
 
 /// Checks equality between the chunks yielded by iterating over a [`Chunks`]
@@ -128,9 +153,15 @@ pub(super) fn chunks_eq_chunks(
     }
 }
 
+#[cfg(not(miri))]
 #[inline]
 pub(super) fn count_line_breaks(s: &str) -> usize {
     str_indices::lines_lf::count_breaks(s)
+}
+
+#[cfg(miri)]
+pub(super) fn count_line_breaks(s: &str) -> usize {
+    s.bytes().filter(|&b| b == b'\n').count()
 }
 
 /// Writes the `Debug` output of the given string to the formatter without

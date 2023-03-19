@@ -4,6 +4,7 @@ mod common;
 
 use common::{CURSED_LIPSUM, LARGE, MEDIUM, SMALL, TINY};
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn rope_byte_0() {
     for s in
@@ -18,6 +19,7 @@ fn rope_byte_0() {
     }
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn rope_is_char_boundary() {
     for s in

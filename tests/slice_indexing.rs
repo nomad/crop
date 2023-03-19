@@ -7,6 +7,7 @@ use common::{CURSED_LIPSUM, LARGE, MEDIUM, SMALL, TINY};
 
 /// Tests `RopeSlice::byte()` on a bunch of random RopeSlices over different
 /// texts.
+#[cfg_attr(miri, ignore)]
 #[test]
 fn byte_random() {
     let mut rng = rand::thread_rng();
@@ -36,6 +37,7 @@ fn byte_random() {
 
 /// Tests `RopeSlice::is_char_boundary()` on a bunch of random RopeSlices over
 /// different texts.
+#[cfg_attr(miri, ignore)]
 #[test]
 fn is_char_boundary_random() {
     let mut rng = rand::thread_rng();
@@ -71,6 +73,7 @@ fn is_char_boundary_random() {
 
 /// Tests `crop::RopeSlice::line_of_byte()` against Ropey's
 /// `ropey::RopeSlice::byte_to_line()`.
+#[cfg_attr(miri, ignore)]
 #[test]
 fn line_of_byte_random() {
     let mut rng = rand::thread_rng();
@@ -104,6 +107,7 @@ fn line_of_byte_random() {
 
 /// Tests `crop::RopeSlice::byte_of_line()` against Ropey's
 /// `ropey::RopeSlice::line_to_byte()`.
+#[cfg_attr(miri, ignore)]
 #[test]
 fn byte_of_line_random() {
     let mut rng = rand::thread_rng();

@@ -14,9 +14,10 @@ fn iter_bytes_empty() {
 
 #[test]
 fn iter_bytes_forward() {
-    let r = Rope::from(LARGE);
+    let s = if cfg!(miri) { "Hello, world!" } else { LARGE };
+    let r = Rope::from(s);
     let mut i = 0;
-    for (b_rope, b_str) in r.bytes().zip(LARGE.bytes()) {
+    for (b_rope, b_str) in r.bytes().zip(s.bytes()) {
         assert_eq!(b_rope, b_str);
         i += 1;
     }
@@ -25,9 +26,10 @@ fn iter_bytes_forward() {
 
 #[test]
 fn iter_bytes_backward() {
-    let r = Rope::from(LARGE);
+    let s = if cfg!(miri) { "Hello, world!" } else { LARGE };
+    let r = Rope::from(s);
     let mut i = 0;
-    for (b_rope, b_str) in r.bytes().rev().zip(LARGE.bytes().rev()) {
+    for (b_rope, b_str) in r.bytes().rev().zip(s.bytes().rev()) {
         assert_eq!(b_rope, b_str);
         i += 1;
     }
@@ -36,15 +38,16 @@ fn iter_bytes_backward() {
 
 #[test]
 fn iter_bytes_both_ways() {
-    let rope = Rope::from(LARGE);
+    let s = if cfg!(miri) { "Hello, world!" } else { LARGE };
+    let rope = Rope::from(s);
 
-    let i = thread_rng().gen_range(0..=LARGE.len());
+    let i = thread_rng().gen_range(0..=s.len());
 
     println!("i: {i}");
 
     // Go forward for the first `i` bytes, then backward.
 
-    let mut slice_bytes = LARGE.bytes();
+    let mut slice_bytes = s.bytes();
     let mut rope_bytes = rope.bytes();
 
     for _ in 0..i {
@@ -53,7 +56,7 @@ fn iter_bytes_both_ways() {
         assert_eq!(rope_b, slice_b);
     }
 
-    for _ in i..LARGE.len() {
+    for _ in i..s.len() {
         let rope_b = rope_bytes.next_back().unwrap();
         let slice_b = slice_bytes.next_back().unwrap();
         assert_eq!(rope_b, slice_b);
@@ -64,7 +67,7 @@ fn iter_bytes_both_ways() {
 
     // Now the opposite, go backward for the first `i` bytes, then forward.
 
-    let mut slice_bytes = LARGE.bytes();
+    let mut slice_bytes = s.bytes();
     let mut rope_bytes = rope.bytes();
 
     for _ in 0..i {
@@ -73,7 +76,7 @@ fn iter_bytes_both_ways() {
         assert_eq!(rope_b, slice_b);
     }
 
-    for _ in i..LARGE.len() {
+    for _ in i..s.len() {
         let rope_b = rope_bytes.next().unwrap();
         let slice_b = slice_bytes.next().unwrap();
         assert_eq!(rope_b, slice_b);
@@ -104,7 +107,13 @@ fn iter_bytes_cursed() {
 fn iter_bytes_over_slice_forward() {
     let mut rng = rand::thread_rng();
 
-    for s in [TINY, SMALL, MEDIUM, LARGE] {
+    let slices = if cfg!(miri) {
+        ["foo", "bar", "baz", "Hello, world!"]
+    } else {
+        [TINY, SMALL, MEDIUM, LARGE]
+    };
+
+    for s in slices {
         let r = Rope::from(s);
 
         for _ in 0..1 {
@@ -131,7 +140,13 @@ fn iter_bytes_over_slice_forward() {
 fn iter_bytes_over_slice_backward() {
     let mut rng = rand::thread_rng();
 
-    for s in [TINY, SMALL, MEDIUM, LARGE] {
+    let slices = if cfg!(miri) {
+        ["foo", "bar", "baz", "Hello, world!"]
+    } else {
+        [TINY, SMALL, MEDIUM, LARGE]
+    };
+
+    for s in slices {
         let r = Rope::from(s);
 
         for _ in 0..1 {
@@ -164,6 +179,7 @@ fn iter_chars_empty() {
     assert_eq!(0, r.byte_slice(..).chars().count());
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn iter_chars_forward() {
     let r = Rope::from(LARGE);
@@ -175,6 +191,7 @@ fn iter_chars_forward() {
     assert_eq!(i, LARGE.chars().count());
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn iter_chars_backward() {
     let r = Rope::from(LARGE);
@@ -186,6 +203,7 @@ fn iter_chars_backward() {
     assert_eq!(i, LARGE.chars().count());
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn iter_chars_both_ways() {
     let rope = Rope::from(LARGE);
@@ -368,6 +386,7 @@ fn iter_lines_4() {
     assert_eq!(None, lines.next());
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn iter_lines_over_test_vectors() {
     for s in [TINY, SMALL, MEDIUM, LARGE, CURSED_LIPSUM] {
@@ -405,6 +424,7 @@ fn iter_lines_forward_backward() {
     assert_eq!(None, backward.next());
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn iter_lines_over_random_slices() {
     let mut rng = rand::thread_rng();
@@ -499,6 +519,7 @@ fn iter_raw_lines_backward_0() {
     assert_eq!(None, lines.next());
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn iter_raw_lines_over_test_vectors() {
     for s in [TINY, SMALL, MEDIUM, LARGE] {
@@ -518,6 +539,7 @@ fn iter_raw_lines_over_test_vectors() {
     }
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn iter_raw_lines_over_random_slices() {
     let mut rng = rand::thread_rng();

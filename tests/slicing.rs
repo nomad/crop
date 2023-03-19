@@ -51,6 +51,7 @@ fn byte_slice_0() {
 
 /// Tests that repeatedly byte-slicing a RopeSlice always matches the
 /// equivalent str slice.
+#[cfg_attr(miri, ignore)]
 #[test]
 fn byte_slice_random() {
     let mut rng = rand::thread_rng();
@@ -134,6 +135,7 @@ fn byte_slice_then_line() {
     assert_eq!(s.line_slice(3..), "foob");
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn line_slices_random() {
     let mut rng = rand::thread_rng();
@@ -186,7 +188,13 @@ fn line_slices_random() {
 fn rope_from_slice() {
     let mut rng = rand::thread_rng();
 
-    for s in [TINY, SMALL, MEDIUM, LARGE, CURSED_LIPSUM] {
+    let slices = if cfg!(miri) {
+        ["Hello world", "ƒoo", "bär", "baz", "🗻∈🌏"]
+    } else {
+        [TINY, SMALL, MEDIUM, LARGE, CURSED_LIPSUM]
+    };
+
+    for s in slices {
         let r = Rope::from(s);
 
         for _ in 0..100 {

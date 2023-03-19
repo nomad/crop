@@ -613,9 +613,11 @@ mod tests {
 
     use super::*;
 
+    const MAX: usize = if cfg!(miri) { 8 } else { 256 };
+
     #[test]
     fn leaves_forward() {
-        for n in 1..256 {
+        for n in 1..MAX {
             let tree = Tree::<4, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
             let mut i = 0;
@@ -632,7 +634,7 @@ mod tests {
 
     #[test]
     fn leaves_backward() {
-        for n in 1..256 {
+        for n in 1..MAX {
             let tree = Tree::<4, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
             let mut i = n;
@@ -651,7 +653,7 @@ mod tests {
     fn leaves_both_ways() {
         let mut rng = thread_rng();
 
-        for n in 1..256 {
+        for n in 1..MAX {
             let tree = Tree::<4, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
             let i = rng.gen_range(0..=n);
