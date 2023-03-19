@@ -122,6 +122,7 @@ fn insert_8() {
     assert_eq!(r, "Hello Earth 🌎!");
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn insert_small_random() {
     let mut rng = rand::thread_rng();
@@ -158,6 +159,7 @@ fn insert_small_random() {
     assert_eq!(string, rope);
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn insert_random() {
     let mut rng = rand::thread_rng();
@@ -270,6 +272,7 @@ fn delete_9() {
     r.delete(128..129); // Removing past the end
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn delete_random() {
     let mut rng = rand::thread_rng();
@@ -321,6 +324,7 @@ fn replace_1() {
     assert_eq!("aaggggggggggggccddddeeeeffff", r);
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn replace_random() {
     let mut rng = rand::thread_rng();

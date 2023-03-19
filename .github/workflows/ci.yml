@@ -44,7 +44,7 @@ jobs:
       - run: cargo bench --no-run
 
   clippy:
-    name: clippy
+    name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -59,7 +59,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo doc --features graphemes
+      - run: RUSTDOCFLAGS="--cfg docsrs" cargo doc --all-features
 
   format:
     name: format
@@ -70,3 +70,13 @@ jobs:
         with:
           components: rustfmt
       - run: cargo fmt --check
+
+  bench:
+    name: Miri
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: miri
+      - run: cargo miri test

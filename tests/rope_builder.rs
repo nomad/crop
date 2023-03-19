@@ -20,6 +20,7 @@ fn builder_empty() {
     assert_eq!(Rope::new(), r);
 }
 
+#[cfg_attr(miri, ignore)]
 #[test]
 fn builder_0() {
     let mut b = RopeBuilder::new();
