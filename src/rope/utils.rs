@@ -8,57 +8,40 @@ use super::iterators::Chunks;
 /// split a CRLF pair. Offsets past the end of the string will be clipped to
 /// the length of the string.
 ///
-/// If the initial candidate is not a valid split position we can either go
-/// left or right until is it. The direction is chosen based on the value of
-/// `WITH_RIGHT_BIAS`: true -> go right, false -> go left.
+/// If the initial candidate is not a valid split offset we can either go left
+/// or right until it is. The direction is chosen based on the value of
+/// `WITH_RIGHT_BIAS`: true => go right, false => go left.
 ///
 /// In every case the adjusted split point will be within ± 3 bytes from the
-/// input candidate.
+/// initial candidate.
 #[inline]
 pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
     s: &str,
-    mut candidate: usize,
+    candidate: usize,
 ) -> usize {
     if candidate >= s.len() {
         return s.len();
     }
 
+    let mut offset = candidate;
+
     if WITH_RIGHT_BIAS {
-        while !s.is_char_boundary(candidate) {
-            candidate += 1;
+        while !s.is_char_boundary(offset) {
+            offset += 1;
         }
-        if is_splitting_crlf_pair(s, candidate) {
-            candidate += 1;
+        if is_splitting_crlf_pair(s, offset) {
+            offset += 1;
         }
     } else {
-        while !s.is_char_boundary(candidate) {
-            candidate -= 1;
+        while !s.is_char_boundary(offset) {
+            offset -= 1;
         }
-        if is_splitting_crlf_pair(s, candidate) {
-            candidate -= 1;
+        if is_splitting_crlf_pair(s, offset) {
+            offset -= 1;
         }
     }
 
-    candidate
-}
-
-#[inline]
-pub(super) fn count_line_breaks(s: &str) -> usize {
-    str_indices::lines_lf::count_breaks(s)
-}
-
-#[inline]
-pub(super) fn byte_of_line(s: &str, line: usize) -> usize {
-    str_indices::lines_lf::to_byte_idx(s, line)
-}
-
-#[inline]
-pub(super) fn split_adjusted<const WITH_RIGHT_BIAS: bool>(
-    s: &str,
-    candidate: usize,
-) -> (&str, &str) {
-    let split_point = adjust_split_point::<WITH_RIGHT_BIAS>(s, candidate);
-    (&s[..split_point], &s[split_point..])
+    offset
 }
 
 /// Returns the number of bytes that `s`'s trailing line break takes up.
@@ -69,6 +52,11 @@ pub(super) fn split_adjusted<const WITH_RIGHT_BIAS: bool>(
 pub(super) fn bytes_line_break(s: &str) -> usize {
     debug_assert!(!s.is_empty() && *s.as_bytes().last().unwrap() == b'\n');
     1 + (s.len() > 1 && s.as_bytes()[s.len() - 2] == b'\r') as usize
+}
+
+#[inline]
+pub(super) fn byte_of_line(s: &str, line: usize) -> usize {
+    str_indices::lines_lf::to_byte_idx(s, line)
 }
 
 /// Checks equality between the chunks yielded by iterating over a [`Chunks`]
@@ -138,6 +126,11 @@ pub(super) fn chunks_eq_chunks(
             }
         }
     }
+}
+
+#[inline]
+pub(super) fn count_line_breaks(s: &str) -> usize {
+    str_indices::lines_lf::count_breaks(s)
 }
 
 /// Writes the `Debug` output of the given string to the formatter without
@@ -248,6 +241,15 @@ pub(super) fn last_byte_is_newline(s: &str) -> bool {
     !s.is_empty() && s.as_bytes()[s.len() - 1] == b'\n'
 }
 
+#[inline]
+pub(super) fn split_adjusted<const WITH_RIGHT_BIAS: bool>(
+    s: &str,
+    candidate: usize,
+) -> (&str, &str) {
+    let split_point = adjust_split_point::<WITH_RIGHT_BIAS>(s, candidate);
+    (&s[..split_point], &s[split_point..])
+}
+
 pub(super) use panic_messages::*;
 
 mod panic_messages {
@@ -264,21 +266,21 @@ mod panic_messages {
         // TODO: use `floor_char_boundary()` and `ceil_char_boundary()`
         // once they get stabilized.
 
-        let mut start_char = byte_offset;
-        while !s.is_char_boundary(start_char) {
-            start_char -= 1;
+        let mut start = byte_offset;
+        while !s.is_char_boundary(start) {
+            start -= 1;
         }
 
-        let mut end_char = byte_offset;
-        while !s.is_char_boundary(end_char) {
-            end_char += 1;
+        let mut end = byte_offset;
+        while !s.is_char_boundary(end) {
+            end += 1;
         }
 
-        let splitting_char = s[start_char..end_char].chars().next().unwrap();
+        let splitting_char = s[start..end].chars().next().unwrap();
 
         panic!(
             "byte offset {byte_offset} is not a char boundary: it is inside \
-             {splitting_char:?} (bytes {start_char}..{end_char}) of {s:?}"
+             {splitting_char:?} (bytes {start}..{end}) of {s:?}"
         );
     }
 
@@ -292,7 +294,7 @@ mod panic_messages {
         debug_assert!(byte_index >= byte_len);
 
         panic!(
-            "Byte index out of bounds: the index is {byte_index} but the \
+            "byte index out of bounds: the index is {byte_index} but the \
              length is {byte_len}"
         );
     }
@@ -307,7 +309,7 @@ mod panic_messages {
         debug_assert!(byte_offset > byte_len);
 
         panic!(
-            "Byte offset out of bounds: the offset is {byte_offset} but the \
+            "byte offset out of bounds: the offset is {byte_offset} but the \
              length is {byte_len}"
         );
     }
@@ -322,7 +324,7 @@ mod panic_messages {
         debug_assert!(byte_start > byte_end);
 
         panic!(
-            "Byte start after end: the start is {byte_start} but the end is \
+            "byte start after end: the start is {byte_start} but the end is \
              {byte_end}"
         );
     }
@@ -337,7 +339,7 @@ mod panic_messages {
         debug_assert!(line_index >= line_len);
 
         panic!(
-            "Line index out of bounds: the index is {line_index} but the \
+            "line index out of bounds: the index is {line_index} but the \
              length is {line_len}"
         );
     }
@@ -352,7 +354,7 @@ mod panic_messages {
         debug_assert!(line_offset > line_len);
 
         panic!(
-            "Line offset out of bounds: the offset is {line_offset} but the \
+            "line offset out of bounds: the offset is {line_offset} but the \
              length is {line_len}"
         );
     }
@@ -367,7 +369,7 @@ mod panic_messages {
         debug_assert!(line_start > line_end);
 
         panic!(
-            "Line start after end: the start is {line_start} but the end is \
+            "line start after end: the start is {line_start} but the end is \
              {line_end}"
         );
     }
