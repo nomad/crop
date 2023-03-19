@@ -33,8 +33,7 @@ impl<T: Summarize + BaseMeasured + AsSlice> Leaf for T {}
 pub trait BalancedLeaf: Leaf + for<'a> From<Self::Slice<'a>> {
     /// Returns whether the leaf node is too small to be on its own and should
     /// be rebalanced with another leaf.
-    fn is_underfilled(slice: Self::Slice<'_>, summary: &Self::Summary)
-        -> bool;
+    fn is_underfilled(&self, summary: &Self::Summary) -> bool;
 
     /// Balance two leaves.
     ///
@@ -50,8 +49,10 @@ pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
     type Replacement<'a>;
     type ExtraLeaves: ExactSizeIterator<Item = Self>;
 
-    /// Replace the contents of the leaf in the given range with `slice`. If
-    /// that would cause the leaf to be too big the function can return an
+    /// Replace the contents of the leaf in the range with the given
+    /// replacement.
+    ///
+    /// If that would cause the leaf to be too big the function can return an
     /// iterator over the leaves to insert right after this leaf. Note that in
     /// this case both this leaf and all the leaves yielded by the iterator are
     /// assumed to not be underfilled.
