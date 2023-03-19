@@ -155,12 +155,10 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
         }
 
         {
-            // SAFETY: the only way the root can be a leaf node is if
-            // the stack is empty and `self.leaves` contains a single leaf,
-            // and that case was handled at the start of this function.
-            let root = unsafe {
-                Arc::get_mut(&mut root).unwrap().as_mut_internal_unchecked()
-            };
+            // The only way the root can be a leaf node is if the stack is
+            // empty and `self.leaves` contains a single leaf, and that case
+            // was handled at the start of this function.
+            let root = Arc::get_mut(&mut root).unwrap().get_internal_mut();
 
             root.balance_right_side();
         }

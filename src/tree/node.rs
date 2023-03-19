@@ -54,68 +54,6 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
-    #[inline]
-    pub(super) unsafe fn as_internal_unchecked(&self) -> &Inode<N, L> {
-        debug_assert!(
-            self.is_internal(),
-            "A node was expected to be an internal node but it's a leaf. This \
-            is a logic bug in crop. Please file an issue at \
-            https://github.com/noib3/crop."
-        );
-
-        match self {
-            Node::Internal(inode) => inode,
-            Node::Leaf(_) => core::hint::unreachable_unchecked(),
-        }
-    }
-
-    #[inline]
-    pub(super) unsafe fn as_leaf_unchecked(&self) -> &Lnode<L> {
-        debug_assert!(
-            self.is_leaf(),
-            "A node was expected to be a leaf but it's an internal node. This \
-            is a logic bug in crop. Please file an issue at \
-            https://github.com/noib3/crop."
-        );
-
-        match self {
-            Node::Internal(_) => core::hint::unreachable_unchecked(),
-            Node::Leaf(leaf) => leaf,
-        }
-    }
-
-    #[inline]
-    pub(super) unsafe fn as_mut_internal_unchecked(
-        &mut self,
-    ) -> &mut Inode<N, L> {
-        debug_assert!(
-            self.is_internal(),
-            "A node was expected to be an internal node but it's a leaf. This \
-            is a logic bug in crop. Please file an issue at \
-            https://github.com/noib3/crop."
-        );
-
-        match self {
-            Node::Internal(inode) => inode,
-            Node::Leaf(_) => core::hint::unreachable_unchecked(),
-        }
-    }
-
-    #[inline]
-    pub(super) unsafe fn as_mut_leaf_unchecked(&mut self) -> &mut Lnode<L> {
-        debug_assert!(
-            self.is_leaf(),
-            "A node was expected to be a leaf but it's an internal node. This \
-            is a logic bug in crop. Please file an issue at \
-            https://github.com/noib3/crop."
-        );
-
-        match self {
-            Node::Internal(_) => core::hint::unreachable_unchecked(),
-            Node::Leaf(leaf) => leaf,
-        }
-    }
-
     /// # Panics
     ///
     /// Panics if `other` is at a different depth.
@@ -192,6 +130,38 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
+    pub(super) fn get_leaf(&self) -> &Lnode<L> {
+        match self {
+            Node::Internal(_) => panic!(""),
+            Node::Leaf(leaf) => leaf,
+        }
+    }
+
+    #[inline]
+    pub(super) fn get_leaf_mut(&mut self) -> &mut Lnode<L> {
+        match self {
+            Node::Internal(_) => panic!(""),
+            Node::Leaf(leaf) => leaf,
+        }
+    }
+
+    #[inline]
+    pub(super) fn get_internal(&self) -> &Inode<N, L> {
+        match self {
+            Node::Internal(inode) => inode,
+            Node::Leaf(_) => panic!(""),
+        }
+    }
+
+    #[inline]
+    pub(super) fn get_internal_mut(&mut self) -> &mut Inode<N, L> {
+        match self {
+            Node::Internal(inode) => inode,
+            Node::Leaf(_) => panic!(""),
+        }
+    }
+
+    #[inline]
     pub(super) fn is_empty(&self) -> bool {
         match self {
             Node::Internal(inode) => inode.is_empty(),
@@ -199,6 +169,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    #[allow(dead_code)]
     #[inline]
     pub(super) fn is_internal(&self) -> bool {
         matches!(self, Node::Internal(_))

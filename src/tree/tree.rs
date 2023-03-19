@@ -251,13 +251,8 @@ mod from_treeslice {
 
         if invalid_in_first > 0 {
             {
-                // SAFETY : `root` was just enclosed in a `Node::Internal`
-                // variant.
-                let inode = unsafe {
-                    Arc::get_mut(&mut root)
-                        .unwrap()
-                        .as_mut_internal_unchecked()
-                };
+                let inode =
+                    Arc::get_mut(&mut root).unwrap().get_internal_mut();
 
                 inode.balance_left_side();
             }
@@ -267,15 +262,12 @@ mod from_treeslice {
 
         if invalid_in_last > 0 {
             {
-                // SAFETY: for the root to become a leaf node after the
-                // previous call to `pull_up_singular` the TreeSlice would've
-                // had to span 2 leaves, and that case case should have already
-                // been handled before calling this function.
-                let inode = unsafe {
-                    Arc::get_mut(&mut root)
-                        .unwrap()
-                        .as_mut_internal_unchecked()
-                };
+                // For the root to become a leaf node after the previous call
+                // to `pull_up_singular` the TreeSlice would've had to span 2
+                // leaves, and that case case should have already been handled
+                // before calling this function.
+                let inode =
+                    Arc::get_mut(&mut root).unwrap().get_internal_mut();
 
                 inode.balance_right_side();
             }
@@ -314,12 +306,9 @@ mod from_treeslice {
 
         let mut offset = L::BaseMetric::zero();
 
-        let mut children = {
-            // SAFETY: the slice's leaf count is > 1 so its root has to be an
-            // internal node.
-            let root = unsafe { slice.root().as_internal_unchecked() };
-            root.children().iter()
-        };
+        // The slice's leaf count is > 1 so its root has to be an internal
+        // node.
+        let mut children = slice.root().get_internal().children().iter();
 
         let start = L::BaseMetric::measure(&slice.offset);
 
@@ -640,9 +629,7 @@ mod tree_replace {
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
-        let inode = unsafe {
-            Arc::get_mut(node).unwrap_unchecked().as_mut_internal_unchecked()
-        };
+        let inode = Arc::get_mut(node).unwrap().get_internal_mut();
 
         let (
             start_idx,
@@ -721,22 +708,15 @@ mod tree_replace {
                 inode.with_child_mut(start_idx, |start| {
                     let previous_node = {
                         let n = extras.last_mut().unwrap_or(start);
-                        let n = Arc::make_mut(n);
-                        // SAFETY: the inode's depth is >= 2 so all its
-                        // children are internal nodes.
-                        unsafe { n.as_mut_internal_unchecked() }
+                        // The inode's depth is >= 2 so all its children are
+                        // internal nodes.
+                        Arc::make_mut(n).get_internal_mut()
                     };
 
                     if last.depth() == previous_node.depth() {
                         debug_assert!(last.is_underfilled());
 
-                        let l = {
-                            let n = Arc::make_mut(&mut last);
-                            // SAFETY: last is at the same depth as
-                            // previous_node so it must be an internal node as
-                            // well.
-                            unsafe { n.as_mut_internal_unchecked() }
-                        };
+                        let l = Arc::make_mut(&mut last).get_internal_mut();
 
                         previous_node.balance(l);
 
@@ -939,14 +919,9 @@ mod tree_replace {
                 if leaf.is_underfilled() {
                     if let Some(leaves) = extra_leaves {
                         let mut last = leaves.pop().unwrap();
-                        debug_assert!(last.is_leaf());
 
-                        let l = {
-                            let l = Arc::get_mut(&mut last).unwrap();
-                            // SAFETY: all the nodes in `leaves` are guaranteed
-                            // to be leaf nodes.
-                            unsafe { l.as_mut_leaf_unchecked() }
-                        };
+                        let l =
+                            Arc::get_mut(&mut last).unwrap().get_leaf_mut();
 
                         l.balance(leaf);
 
@@ -1052,20 +1027,14 @@ mod tree_replace {
 
                         let last =
                             inode.with_child_mut(child_idx - 1, |previous| {
-                                let previous_child = {
-                                    let n = Arc::make_mut(previous);
-                                    unsafe { n.as_mut_internal_unchecked() }
-                                };
+                                let previous_child =
+                                    Arc::make_mut(previous).get_internal_mut();
 
                                 if last.depth() == previous_child.depth() {
                                     debug_assert!(last.is_underfilled());
 
-                                    let l = {
-                                        let n = Arc::make_mut(&mut last);
-                                        unsafe {
-                                            n.as_mut_internal_unchecked()
-                                        }
-                                    };
+                                    let l = Arc::make_mut(&mut last)
+                                        .get_internal_mut();
 
                                     previous_child.balance(l);
 
@@ -1138,20 +1107,14 @@ mod tree_replace {
 
                         let last =
                             inode.with_child_mut(child_idx + 1, |next| {
-                                let next_child = {
-                                    let n = Arc::make_mut(next);
-                                    unsafe { n.as_mut_internal_unchecked() }
-                                };
+                                let next_child =
+                                    Arc::make_mut(next).get_internal_mut();
 
                                 if last.depth() == next_child.depth() {
                                     debug_assert!(last.is_underfilled());
 
-                                    let l = {
-                                        let n = Arc::make_mut(&mut last);
-                                        unsafe {
-                                            n.as_mut_internal_unchecked()
-                                        }
-                                    };
+                                    let l = Arc::make_mut(&mut last)
+                                        .get_internal_mut();
 
                                     l.balance(next_child);
 
@@ -1251,8 +1214,7 @@ mod tree_replace {
                 let end = inode.remove(end_idx);
 
                 let end = inode.with_child_mut(start_idx, |start| {
-                    let start = Arc::make_mut(start);
-                    let start = unsafe { start.as_mut_internal_unchecked() };
+                    let start = Arc::make_mut(start).get_internal_mut();
                     start.append_at_depth(end)
                 });
 
@@ -1298,8 +1260,7 @@ mod tree_replace {
                 let mut start = inode.remove(start_idx);
 
                 let end = {
-                    let s = Arc::make_mut(&mut start);
-                    let s = unsafe { s.as_mut_internal_unchecked() };
+                    let s = Arc::make_mut(&mut start).get_internal_mut();
                     s.append_at_depth(end)
                 };
 
@@ -1334,8 +1295,7 @@ mod tree_replace {
                 let start = inode.remove(start_idx);
 
                 let start = inode.with_child_mut(start_idx, |end| {
-                    let end = Arc::make_mut(end);
-                    let end = unsafe { end.as_mut_internal_unchecked() };
+                    let end = Arc::make_mut(end).get_internal_mut();
                     end.prepend_at_depth(start)
                 });
 
@@ -1354,8 +1314,7 @@ mod tree_replace {
                 let start = inode.remove(start_idx);
 
                 let start = {
-                    let e = Arc::make_mut(&mut end);
-                    let e = unsafe { e.as_mut_internal_unchecked() };
+                    let e = Arc::make_mut(&mut end).get_internal_mut();
                     e.prepend_at_depth(start)
                 };
 

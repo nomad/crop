@@ -49,10 +49,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
             let extra = self.with_child_mut(self.len() - 1, |last| {
                 let last = Arc::make_mut(last);
-                // SAFETY: this inode's depth is >= 2 so its children are
-                // also inodes.
-                let last = unsafe { last.as_mut_internal_unchecked() };
-                last.append_at_depth(node)
+                // This inode's depth is >= 2 so its children are also inodes.
+                last.get_internal_mut().append_at_depth(node)
             })?;
 
             node = Arc::new(Node::Internal(extra));
@@ -345,11 +343,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 }
             },
 
-            _ => {
-                // SAFETY: the first and second children are siblings so they
-                // must be of the same kind.
-                unsafe { core::hint::unreachable_unchecked() }
-            },
+            // The first and second children are siblings so they must be of
+            // the same kind.
+            _ => unreachable!(),
         }
     }
 
@@ -418,11 +414,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 }
             },
 
-            _ => {
-                // SAFETY: the penultimate and last children are siblings so
-                // they must be of the same kind.
-                unsafe { core::hint::unreachable_unchecked() }
-            },
+            // The penultimate and last children are siblings so they must be
+            // of the same kind.
+            _ => unreachable!(),
         }
     }
 
@@ -604,12 +598,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         if child_offset > 0 {
             let extra = self.with_child_mut(child_offset - 1, |previous| {
-                let previous = {
-                    let n = Arc::make_mut(previous);
-                    // SAFETY: this inode's depth is >= 2 so its children are
-                    // also inodes.
-                    unsafe { n.as_mut_internal_unchecked() }
-                };
+                // This inode's depth is >= 2 so its children are also
+                // inodes.
+                let previous = Arc::make_mut(previous).get_internal_mut();
                 previous.append_at_depth(node)
             });
 
@@ -618,13 +609,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             }
         } else {
             let extra = self.with_child_mut(0, |first| {
-                let first = {
-                    let n = Arc::make_mut(first);
-                    // SAFETY: this inode's depth is >= 2 so its children are
-                    // also inodes.
-                    unsafe { n.as_mut_internal_unchecked() }
-                };
-
+                // This inode's depth is >= 2 so its children are also
+                // inodes.
+                let first = Arc::make_mut(first).get_internal_mut();
                 first.prepend_at_depth(node)
             });
 
@@ -779,10 +766,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             debug_assert!(self.depth() >= 2);
 
             let extra = self.with_child_mut(0, |first| {
-                let first = Arc::make_mut(first);
-                // SAFETY: this inode's depth is >= 2 so its children are
-                // also inodes.
-                let first = unsafe { first.as_mut_internal_unchecked() };
+                // This inode's depth is >= 2 so its children are also inodes.
+                let first = Arc::make_mut(first).get_internal_mut();
                 first.prepend_at_depth(node)
             })?;
 

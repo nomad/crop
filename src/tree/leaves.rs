@@ -227,9 +227,9 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                         .children()
                         .iter()
                         .map(|n| {
-                            // SAFETY: the first child is an internal node, so
-                            // all its siblings are internal nodes as well.
-                            unsafe { n.as_internal_unchecked() }
+                            // The first child is an internal node, so all its
+                            // siblings are internal nodes as well.
+                            n.get_internal()
                         })
                         .enumerate()
                     {
@@ -252,9 +252,9 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                         .children()
                         .iter()
                         .map(|n| {
-                            // SAFETY: the first child is a leaf node, so all
-                            // its siblings are leaf nodes as well.
-                            unsafe { n.as_leaf_unchecked() }
+                            // The first child is a leaf node, so all its
+                            // siblings are leaf nodes as well.
+                            n.get_leaf()
                         })
                         .enumerate()
                     {
@@ -296,10 +296,10 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
             } else {
                 let inode = inode.child(*visited);
 
-                // SAFETY: the last internal node in `path` is always *2*
-                // levels above a leaf, so all its children are internal
-                // nodes 1 level above a leaf.
-                break unsafe { inode.as_internal_unchecked() };
+                // The last internal node in `path` is always *2* levels above
+                // a leaf, so all its children are internal nodes 1 level above
+                // a leaf.
+                break inode.get_internal();
             }
         };
 
@@ -331,18 +331,15 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
         }
 
         if self.next_leaf_idx < self.leaves.len() {
-            let lnode = &self.leaves[self.next_leaf_idx];
-            // SAFETY: all the nodes in `leaves` are guaranteed to be leaf
-            // nodes.
-            let lnode = unsafe { lnode.as_leaf_unchecked() };
+            // All the nodes in `leaves` are guaranteed to be leaf nodes.
+            let lnode = &self.leaves[self.next_leaf_idx].get_leaf();
             self.next_leaf_idx += 1;
             self.whole_yielded += 1;
             Some(lnode.as_slice())
         } else if self.whole_yielded < self.whole_total {
             self.leaves = self.next_bunch();
-            let lnode = &self.leaves[0];
-            // SAFETY: same as above.
-            let lnode = unsafe { lnode.as_leaf_unchecked() };
+            // Same as above.
+            let lnode = &self.leaves[0].get_leaf();
             self.next_leaf_idx = 1;
             self.whole_yielded += 1;
             Some(lnode.as_slice())
@@ -480,9 +477,9 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
                         .children()
                         .iter()
                         .map(|n| {
-                            // SAFETY: the last child is an internal node, so
-                            // all its siblings are internal nodes as well.
-                            unsafe { n.as_internal_unchecked() }
+                            // The last child is an internal node, so all its
+                            // siblings are internal nodes as well.
+                            n.get_internal()
                         })
                         .enumerate()
                         .rev()
@@ -506,9 +503,9 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
                         .children()
                         .iter()
                         .map(|n| {
-                            // SAFETY: the last child is a leaf node, so all
-                            // its siblings are leaf nodes as well.
-                            unsafe { n.as_leaf_unchecked() }
+                            // The last child is a leaf node, so all its
+                            // siblings are leaf nodes as well.
+                            n.get_leaf()
                         })
                         .enumerate()
                         .rev()
@@ -548,10 +545,10 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
 
                 let inode = inode.child(*visited);
 
-                // SAFETY: the last internal node in `path` is always *2*
-                // levels above a leaf, so all its children are internal
-                // nodes 1 level above a leaf.
-                break unsafe { inode.as_internal_unchecked() };
+                // The last internal node in `path` is always *2* levels above
+                // a leaf, so all its children are internal nodes 1 level above
+                // a leaf.
+                break inode.get_internal();
             }
         };
 
@@ -585,18 +582,15 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
 
         if self.last_leaf_idx > 0 {
             self.last_leaf_idx -= 1;
-            let lnode = &self.leaves[self.last_leaf_idx];
-            // SAFETY: all the nodes in `leaves` are guaranteed to be leaf
-            // nodes.
-            let lnode = unsafe { lnode.as_leaf_unchecked() };
+            // All the nodes in `leaves` are guaranteed to be leaf nodes.
+            let lnode = &self.leaves[self.last_leaf_idx].get_leaf();
             self.whole_yielded += 1;
             Some(lnode.as_slice())
         } else if self.whole_yielded < self.whole_total {
             self.leaves = self.previous_bunch();
             self.last_leaf_idx = self.leaves.len() - 1;
-            let lnode = &self.leaves[self.last_leaf_idx];
-            // SAFETY: same as above.
-            let lnode = unsafe { lnode.as_leaf_unchecked() };
+            // Same as above.
+            let lnode = &self.leaves[self.last_leaf_idx].get_leaf();
             self.whole_yielded += 1;
             Some(lnode.as_slice())
         } else if self.first_slice.is_some() {

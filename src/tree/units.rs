@@ -293,8 +293,8 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         let mut node = loop {
             let &mut (node, ref mut child_idx) = self.path.last_mut().unwrap();
 
-            // SAFETY: every node in the path is an internal node.
-            let inode = unsafe { node.as_internal_unchecked() };
+            // Every node in the path is an internal node.
+            let inode = node.get_internal();
 
             *child_idx += 1;
 
@@ -410,8 +410,8 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         'outer: loop {
             let (node, child_idx) = self.path.pop().unwrap();
 
-            // SAFETY: every node in the path is an internal node.
-            let inode = unsafe { node.as_internal_unchecked() };
+            // Every node in the path is an internal node.
+            let inode = node.get_internal();
 
             for child in &inode.children()[..child_idx] {
                 before += child.summary();
@@ -435,9 +435,8 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         // Step 2: push nodes on the path until we get to the first leaf node
         // with a positive `M`-measure. Once we get there we're done.
 
-        // SAFETY: every node in the path is an internal node.
-        let mut node =
-            unsafe { inode.as_internal_unchecked().child(child_idx) };
+        // Every node in the path is an internal node.
+        let mut node = inode.get_internal().child(child_idx);
 
         'outer: loop {
             match &**node {
@@ -477,8 +476,8 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         let mut node = loop {
             let (node, child_idx) = self.path[path_idx];
 
-            // SAFETY: every node in the path is an internal node.
-            let inode = unsafe { node.as_internal_unchecked() };
+            // Every node in the path is an internal node.
+            let inode = node.get_internal();
 
             if child_idx > 0 {
                 break inode.child(child_idx - 1);
@@ -588,10 +587,9 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
                 offset -= &remove_offset;
 
-                // SAFETY: `previous_leaf` is guaranteed to be a leaf node by
+                // `previous_leaf` is guaranteed to be a leaf node by
                 // `Self::previous_leaf()`.
-                let previous_leaf =
-                    unsafe { previous_leaf.as_leaf_unchecked() };
+                let previous_leaf = previous_leaf.get_leaf();
 
                 end_slice = previous_leaf.as_slice();
 
@@ -643,8 +641,8 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             'outer: for (path_idx, &(node, child_idx)) in
                 self.path.iter().enumerate()
             {
-                // SAFETY: every node in the path is an internal node.
-                let inode = unsafe { node.as_internal_unchecked() };
+                // Every node in the path is an internal node.
+                let inode = node.get_internal();
 
                 let mut measured = L::BaseMetric::zero();
 
@@ -684,8 +682,8 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         let mut leaf_count = 0;
 
         for &(node, child_idx) in &self.path[root_idx + 1..] {
-            // SAFETY: every node in the path is an internal node.
-            let inode = unsafe { node.as_internal_unchecked() };
+            // Every node in the path is an internal node.
+            let inode = node.get_internal();
 
             for child in &inode.children()[..child_idx] {
                 before += child.summary();
@@ -699,8 +697,8 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
         let (root, child_idx) = self.path[root_idx];
 
-        // SAFETY: every node in the path is an internal node.
-        let inode = unsafe { root.as_internal_unchecked() };
+        // Every node in the path is an internal node.
+        let inode = root.get_internal();
 
         let mut offset = L::BaseMetric::zero();
 
@@ -1082,8 +1080,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         let mut node = loop {
             let &mut (node, ref mut child_idx) = self.path.last_mut().unwrap();
 
-            // SAFETY: every node in the path is an internal node.
-            let inode = unsafe { node.as_internal_unchecked() };
+            // Every node in the path is an internal node.
+            let inode = node.get_internal();
 
             if *child_idx > 0 {
                 *child_idx -= 1;
@@ -1139,8 +1137,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             'outer: for (path_idx, &(node, child_idx)) in
                 self.path.iter().enumerate()
             {
-                // SAFETY: every node in the path is an internal node.
-                let inode = unsafe { node.as_internal_unchecked() };
+                // Every node in the path is an internal node.
+                let inode = node.get_internal();
 
                 let mut offset = L::BaseMetric::zero();
 
@@ -1176,8 +1174,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         let mut leaf_count = 0;
 
         for &(node, child_idx) in &self.path[root_idx + 1..] {
-            // SAFETY: every node in the path is an internal node.
-            let inode = unsafe { node.as_internal_unchecked() };
+            // Every node in the path is an internal node.
+            let inode = node.get_internal();
 
             for child in &inode.children()[..child_idx] {
                 summary += child.summary();
@@ -1191,8 +1189,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
         let (root, child_idx) = self.path[root_idx];
 
-        // SAFETY: every node in the path is an internal node.
-        let inode = unsafe { root.as_internal_unchecked() };
+        // Every node in the path is an internal node.
+        let inode = root.get_internal();
 
         for child in &inode.children()[child_idx + 1..] {
             after += child.summary();
@@ -1434,8 +1432,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         'outer: loop {
             let (node, child_idx) = self.path.pop().unwrap();
 
-            // SAFETY: every node in the path is an internal node.
-            let inode = unsafe { node.as_internal_unchecked() };
+            // Every node in the path is an internal node.
+            let inode = node.get_internal();
 
             for child in &inode.children()[child_idx + 1..] {
                 after += child.summary();
@@ -1459,9 +1457,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         // Step 2: push nodes on the path until we get to the first leaf node
         // with a positive `M`-measure. Once we get there we're done.
 
-        // SAFETY: every node in the path is an internal node.
-        let mut node =
-            unsafe { &inode.as_internal_unchecked().children()[child_idx] };
+        // Every node in the path is an internal node.
+        let mut node = &inode.get_internal().children()[child_idx];
 
         'outer: loop {
             match &**node {
@@ -1503,8 +1500,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         let mut node = loop {
             let (node, mut child_idx) = self.path[path_idx];
 
-            // SAFETY: every node in the path is an internal node.
-            let inode = unsafe { node.as_internal_unchecked() };
+            // Every node in the path is an internal node.
+            let inode = node.get_internal();
 
             child_idx += 1;
 
@@ -1671,9 +1668,9 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
                 offset -= &remove_offset;
 
-                // SAFETY: `next_leaf` is guaranteed to be a leaf node by
+                // `next_leaf` is guaranteed to be a leaf node by
                 // `Self::next_leaf()`.
-                let next_leaf = unsafe { next_leaf.as_leaf_unchecked() };
+                let next_leaf = next_leaf.get_leaf();
 
                 start_slice = next_leaf.as_slice();
 

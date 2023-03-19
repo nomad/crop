@@ -10,8 +10,8 @@ use crate::tree::{Leaves, Units};
 #[derive(Clone)]
 pub struct Chunks<'a> {
     leaves: Leaves<'a, { Rope::fanout() }, RopeChunk>,
-    forward_extra_second: Option<&'a str>,
-    backward_extra_first: Option<&'a str>,
+    forward_extra_right: Option<&'a str>,
+    backward_extra_left: Option<&'a str>,
 }
 
 impl<'a> From<&'a Rope> for Chunks<'a> {
@@ -21,7 +21,7 @@ impl<'a> From<&'a Rope> for Chunks<'a> {
         if rope.is_empty() {
             let _ = leaves.next();
         }
-        Self { leaves, forward_extra_second: None, backward_extra_first: None }
+        Self { leaves, forward_extra_right: None, backward_extra_left: None }
     }
 }
 
@@ -32,7 +32,7 @@ impl<'a> From<&RopeSlice<'a>> for Chunks<'a> {
         if slice.is_empty() {
             let _ = leaves.next();
         }
-        Self { leaves, forward_extra_second: None, backward_extra_first: None }
+        Self { leaves, forward_extra_right: None, backward_extra_left: None }
     }
 }
 
@@ -41,11 +41,11 @@ impl<'a> Iterator for Chunks<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(extra) = self.forward_extra_second.take() {
+        if let Some(extra) = self.forward_extra_right.take() {
             Some(extra)
         } else {
             let Some(chunk) = self.leaves.next() else {
-                return self.backward_extra_first.take();
+                return self.backward_extra_left.take();
             };
 
             if chunk.left_chunk().is_empty() {
@@ -59,7 +59,7 @@ impl<'a> Iterator for Chunks<'a> {
                 Some(chunk.right_chunk())
             } else {
                 if !chunk.right_chunk().is_empty() {
-                    self.forward_extra_second = Some(chunk.right_chunk());
+                    self.forward_extra_right = Some(chunk.right_chunk());
                 }
                 Some(chunk.left_chunk())
             }
@@ -76,11 +76,11 @@ impl<'a> Iterator for Chunks<'a> {
 impl DoubleEndedIterator for Chunks<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if let Some(extra) = self.backward_extra_first.take() {
+        if let Some(extra) = self.backward_extra_left.take() {
             Some(extra)
         } else {
             let Some(chunk) = self.leaves.next_back() else {
-                return self.forward_extra_second.take();
+                return self.forward_extra_right.take();
             };
 
             if chunk.right_chunk().is_empty() {
@@ -94,7 +94,7 @@ impl DoubleEndedIterator for Chunks<'_> {
                 Some(chunk.left_chunk())
             } else {
                 if !chunk.left_chunk().is_empty() {
-                    self.backward_extra_first = Some(chunk.left_chunk());
+                    self.backward_extra_left = Some(chunk.left_chunk());
                 }
                 Some(chunk.right_chunk())
             }
@@ -290,13 +290,14 @@ impl<'a> Iterator for Chars<'a> {
             } else if self.backward_byte_idx == 0 {
                 return None;
             } else {
-                let ch = self.backward_chunk.chars().next();
-
-                debug_assert!(ch.is_some());
-
-                // SAFETY: `backward_byte_idx` is greater than zero so there
-                // are still chars to yield in that chunk.
-                let ch = unsafe { ch.unwrap_unchecked() };
+                let ch = unsafe {
+                    self.backward_chunk
+                        .chars()
+                        .next()
+                        // SAFETY: `backward_byte_idx` is greater than zero so
+                        // there are still chars to yield in that chunk.
+                        .unwrap_unchecked()
+                };
 
                 let len = ch.len_utf8();
                 self.backward_chunk = &self.backward_chunk[len..];
@@ -305,13 +306,15 @@ impl<'a> Iterator for Chars<'a> {
             }
         }
 
-        let ch = self.forward_chunk[self.forward_byte_idx..].chars().next();
-
-        debug_assert!(ch.is_some());
-
-        // SAFETY: `forward_byte_idx` is less than the byte length of
-        // `chunk_front`, so there are still chars to yield in this chunk.
-        let ch = unsafe { ch.unwrap_unchecked() };
+        let ch = unsafe {
+            self.forward_chunk[self.forward_byte_idx..]
+                .chars()
+                .next()
+                // SAFETY: `forward_byte_idx` is less than the byte length of
+                // `chunk_front`, so there are still chars to yield in this
+                // chunk.
+                .unwrap_unchecked()
+        };
 
         self.forward_byte_idx += ch.len_utf8();
 
@@ -329,14 +332,15 @@ impl DoubleEndedIterator for Chars<'_> {
             } else if self.forward_byte_idx == self.forward_chunk.len() {
                 return None;
             } else {
-                let ch = self.forward_chunk.chars().next_back();
-
-                debug_assert!(ch.is_some());
-
-                // SAFETY: `forward_byte_idx` is less than the byte length
-                // of `chunk_front`, so there are still chars to yield in
-                // that chunk.
-                let ch = unsafe { ch.unwrap_unchecked() };
+                let ch = unsafe {
+                    self.forward_chunk
+                        .chars()
+                        .next_back()
+                        // SAFETY: `forward_byte_idx` is less than the byte
+                        // length of `chunk_front`, so there are still chars to
+                        // yield in that chunk.
+                        .unwrap_unchecked()
+                };
 
                 self.forward_chunk = &self.forward_chunk
                     [..self.forward_chunk.len() - ch.len_utf8()];
@@ -345,14 +349,14 @@ impl DoubleEndedIterator for Chars<'_> {
             }
         }
 
-        let ch =
-            self.backward_chunk[..self.backward_byte_idx].chars().next_back();
-
-        debug_assert!(ch.is_some());
-
-        // SAFETY: `backward_byte_idx` is greater than zero so there
-        // are still chars to yield in this chunk.
-        let ch = unsafe { ch.unwrap_unchecked() };
+        let ch = unsafe {
+            self.backward_chunk[..self.backward_byte_idx]
+                .chars()
+                .next_back()
+                // SAFETY: `backward_byte_idx` is greater than zero so there
+                // are still chars to yield in this chunk.
+                .unwrap_unchecked()
+        };
 
         self.backward_byte_idx -= ch.len_utf8();
 
