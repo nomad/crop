@@ -20,7 +20,11 @@ impl<'a> RopeSlice<'a> {
     pub fn assert_invariants(&self) {
         self.tree_slice.assert_invariants();
 
+        let first = self.tree_slice.start_slice();
+        first.assert_invariants();
+
         let last = self.tree_slice.end_slice();
+        last.assert_invariants();
 
         assert_eq!(self.has_trailing_newline, last.has_trailing_newline())
     }

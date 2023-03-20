@@ -22,6 +22,7 @@ impl core::fmt::Debug for GapSlice<'_> {
     }
 }
 
+// We only need this to compare `GapSlice`s with `&str`s in (doc)tests.
 impl PartialEq<GapSlice<'_>> for &str {
     fn eq(&self, rhs: &GapSlice<'_>) -> bool {
         self.len() == rhs.len()

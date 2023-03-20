@@ -19,6 +19,19 @@ use crate::tree::{
 
 /// A [gap buffer] with a max capacity of `2^16 - 1` bytes.
 ///
+/// Unlike a regular `String` where the extra capacity is stored at the end of
+/// the string, a `GapBuffer` stores the extra capacity in the middle of the
+/// heap-allocated buffer.
+///
+/// This allows us to efficiently perform consecutive insertions and deletions
+/// at the same cursor position in O(1) time in the size of the buffer, unlike
+/// a regular `String` where we would have to shift the contents to the right
+/// or left, respectively, resulting in O(n) time.
+///
+/// Only the first `len_left` and the last `len_right` bytes of the buffer are
+/// valid. The gap is located between the two chunks and has a length of
+/// `len_gap() = MAX_BYTES - len_left - len_right`.
+///
 /// [gap buffer]: https://en.wikipedia.org/wiki/Gap_buffer
 #[derive(Clone)]
 pub struct GapBuffer<const MAX_BYTES: usize> {
@@ -51,6 +64,7 @@ impl<const MAX_BYTES: usize> Default for GapBuffer<MAX_BYTES> {
     }
 }
 
+// We only need this to compare `GapBuffer`s with `&str`s in (doc)tests.
 impl<const N: usize> PartialEq<GapBuffer<N>> for &str {
     fn eq(&self, rhs: &GapBuffer<N>) -> bool {
         *self == rhs.as_slice()
@@ -63,7 +77,7 @@ impl<const N: usize> PartialEq<&str> for GapBuffer<N> {
     }
 }
 
-// We only need this to compare `Option<GapBuffer>` with `None` in tests.
+// We only need this to compare `Option<GapBuffer>` with `None` in (doc)tests.
 impl<const N: usize> PartialEq<GapBuffer<N>> for GapBuffer<N> {
     fn eq(&self, _rhs: &GapBuffer<N>) -> bool {
         unimplemented!();
@@ -77,11 +91,7 @@ impl<const MAX_BYTES: usize> From<&str> for GapBuffer<MAX_BYTES> {
     #[inline]
     fn from(s: &str) -> Self {
         debug_assert!(s.len() <= MAX_BYTES);
-        if s.is_empty() {
-            Self::default()
-        } else {
-            Self::from_chunks(&[s])
-        }
+        Self::from_chunks(&[s])
     }
 }
 
@@ -297,7 +307,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// The number of bytes `RopeChunk`s must always stay over.
     pub(super) const fn chunk_min() -> usize {
         // The buffer can be underfilled by 3 bytes at most, which can happen
-        // when a chunk boundary lands inside of a 4 byte codepoint.
+        // when a byte offset lands inside a 4 byte codepoint.
         Self::min_bytes().saturating_sub(3)
     }
 
@@ -320,8 +330,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     ///
     /// # Panics
     ///
-    /// Panics if the combined byte length of all the chunks is zero or if it's
-    /// greater than `MAX_BYTES`.
+    /// Panics if the combined byte length of all the chunks is greater than
+    /// `MAX_BYTES`.
     ///
     /// # Examples
     ///
@@ -335,54 +345,56 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     pub fn from_chunks(chunks: &[&str]) -> Self {
         let total_len = chunks.iter().map(|s| s.len() as u16).sum::<u16>();
 
-        debug_assert!(total_len > 0);
+        if total_len == 0 {
+            return Self::default();
+        }
 
         debug_assert!(total_len <= MAX_BYTES as u16);
 
-        let add_to_first = total_len / 2;
+        let to_left = total_len / 2;
 
         let mut bytes = Box::new([0u8; MAX_BYTES]);
 
-        let mut len_left_chunk = 0;
+        let mut len_left = 0;
 
-        let mut line_breaks_left_chunk = 0;
+        let mut line_breaks_left = 0;
 
         let mut chunks = chunks.iter();
 
         for &chunk in chunks.by_ref() {
-            if len_left_chunk + chunk.len() as u16 <= add_to_first {
+            if len_left + chunk.len() as u16 <= to_left {
                 let range = {
-                    let start = len_left_chunk as usize;
+                    let start = len_left as usize;
                     let end = start + chunk.len();
                     start..end
                 };
 
                 bytes[range].copy_from_slice(chunk.as_bytes());
 
-                len_left_chunk += chunk.len() as u16;
+                len_left += chunk.len() as u16;
 
-                line_breaks_left_chunk += count_line_breaks(chunk) as u16;
+                line_breaks_left += count_line_breaks(chunk) as u16;
             } else {
                 let (to_first, to_second) = split_adjusted::<true>(
                     chunk,
-                    (add_to_first - len_left_chunk) as usize,
+                    (to_left - len_left) as usize,
                 );
 
                 let range = {
-                    let start = len_left_chunk as usize;
+                    let start = len_left as usize;
                     let end = start + to_first.len();
                     start..end
                 };
 
                 bytes[range].copy_from_slice(to_first.as_bytes());
 
-                len_left_chunk += to_first.len() as u16;
+                len_left += to_first.len() as u16;
 
-                line_breaks_left_chunk += count_line_breaks(to_first) as u16;
+                line_breaks_left += count_line_breaks(to_first) as u16;
 
-                let len_right_chunk = total_len - len_left_chunk;
+                let len_right = total_len - len_left;
 
-                let mut start = MAX_BYTES as u16 - len_right_chunk;
+                let mut start = MAX_BYTES as u16 - len_right;
 
                 let range = {
                     let start = start as usize;
@@ -406,12 +418,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                     start += segment.len() as u16;
                 }
 
-                return Self {
-                    bytes,
-                    len_left: len_left_chunk,
-                    line_breaks_left: line_breaks_left_chunk,
-                    len_right: len_right_chunk,
-                };
+                return Self { bytes, len_left, line_breaks_left, len_right };
             }
         }
 
@@ -486,7 +493,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// The right chunk if it's not empty, or the left one otherwise.
     #[inline]
     pub(super) fn last_chunk(&self) -> &str {
-        if self.right_chunk().is_empty() {
+        if self.len_right() == 0 {
             self.left_chunk()
         } else {
             self.right_chunk()
@@ -881,10 +888,9 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// replaced range is small enough (and the replacement string is big
     /// enough) such that the buffer goes over `MAX_BYTES`.
     ///
-    /// It returns the new summary
-    /// for the buffer and a vector of overflowed chunks that come after this
-    /// buffer, all of which
-    ///
+    /// It returns the new summary of this buffer and a vector of buffers
+    /// containing the overflowed contents, all of which are guaranteed to not
+    /// be underfilled.
     ///
     /// # Panics
     ///
@@ -1181,9 +1187,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         }
     }
 
-    /// Just like [`truncate_from`](), but it takes a the current summary of
-    /// the buffer as an argument and returns the new summary after the
-    /// truncation.
+    /// Just like [`truncate_from`](), but it takes the current summary of the
+    /// buffer as an argument and returns the new summary after the truncation.
     ///
     /// # Panics
     ///
@@ -1632,7 +1637,8 @@ impl<'a, const CHUNKS: usize, const MAX_BYTES: usize> Iterator
                 last_segment_len,
             );
 
-            // This can happen with e.g. ["🌎", "!"] and MAX_BYTES = 4.
+            // This can happen with e.g. ["🌎", "!"], MAX_BYTES = 4 and
+            // `min = max / 2`.
             if (self.segments[self.start..idx_last]
                 .iter()
                 .map(|s| s.len())

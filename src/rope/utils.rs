@@ -44,10 +44,11 @@ pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
     offset
 }
 
-/// Returns the number of bytes that `s`'s trailing line break takes up.
+/// Returns the number of bytes in `s`'s trailing line break: 1 for LF, 2 for
+/// CRLF.
 ///
-/// NOTE: this function assumes that `s` ends with a newline, if it doesn't
-/// it will return a wrong result.
+/// NOTE: this function just assumes that `s` ends with a newline, if it
+/// doesn't it will return a wrong result.
 #[inline]
 pub(super) fn bytes_line_break(s: &str) -> usize {
     debug_assert!(!s.is_empty() && *s.as_bytes().last().unwrap() == b'\n');
@@ -82,24 +83,6 @@ pub(super) fn byte_of_line(s: &str, line: usize) -> usize {
             }
         })
         .count()
-}
-
-/// Checks equality between the chunks yielded by iterating over a [`Chunks`]
-/// and a string slice.
-///
-/// This is used in the `PartialEq` implementation between `Rope`/`RopeSlice`s
-/// and strings. It's assumed that if we get this far `chunks` and `s` have the
-/// same number of bytes.
-#[inline]
-pub(super) fn chunks_eq_str(chunks: Chunks<'_>, s: &str) -> bool {
-    let mut checked = 0;
-    for chunk in chunks {
-        if chunk != &s[checked..(checked + chunk.len())] {
-            return false;
-        }
-        checked += chunk.len();
-    }
-    true
 }
 
 /// Checks equality between the chunks yielded by iterating over two
@@ -153,6 +136,25 @@ pub(super) fn chunks_eq_chunks(
     }
 }
 
+/// Checks equality between the chunks yielded by iterating over a [`Chunks`]
+/// and a string slice.
+///
+/// This is used in the `PartialEq` implementation between `Rope`/`RopeSlice`s
+/// and strings. It's assumed that if we get this far `chunks` and `s` have the
+/// same number of bytes.
+#[inline]
+pub(super) fn chunks_eq_str(chunks: Chunks<'_>, s: &str) -> bool {
+    let s = s.as_bytes();
+    let mut checked = 0;
+    for chunk in chunks {
+        if chunk.as_bytes() != &s[checked..(checked + chunk.len())] {
+            return false;
+        }
+        checked += chunk.len();
+    }
+    true
+}
+
 #[cfg(not(miri))]
 #[inline]
 pub(super) fn count_line_breaks(s: &str) -> usize {
@@ -162,6 +164,20 @@ pub(super) fn count_line_breaks(s: &str) -> usize {
 #[cfg(miri)]
 pub(super) fn count_line_breaks(s: &str) -> usize {
     s.bytes().filter(|&b| b == b'\n').count()
+}
+
+/// Iterates over the string slices yielded by [`Chunks`], writing the debug
+/// output of each chunk to a formatter.
+#[inline]
+pub(super) fn debug_chunks(
+    chunks: Chunks<'_>,
+    f: &mut core::fmt::Formatter<'_>,
+) -> core::fmt::Result {
+    for chunk in chunks {
+        debug_no_quotes(chunk, f)?;
+    }
+
+    Ok(())
 }
 
 /// Writes the `Debug` output of the given string to the formatter without
@@ -188,20 +204,6 @@ pub(super) fn debug_no_quotes(
     f.write_str(&s[written..])
 }
 
-/// Iterates over the string slices yielded by [`Chunks`], writing the debug
-/// output of each chunk to a formatter.
-#[inline]
-pub(super) fn debug_chunks(
-    chunks: Chunks<'_>,
-    f: &mut core::fmt::Formatter<'_>,
-) -> core::fmt::Result {
-    for chunk in chunks {
-        debug_no_quotes(chunk, f)?;
-    }
-
-    Ok(())
-}
-
 /// Returns whether `byte_offset` is a grapheme boundary in the string
 /// constructed by concatenating the chunks yielded by `chunks`.
 #[cfg(feature = "graphemes")]
@@ -220,11 +222,11 @@ pub(super) fn is_grapheme_boundary(
 
     let mut bytes_left = byte_len;
 
-    // TODO: we need something like `Rope{Slice}::chunks_in_range` to make this
-    // fast.
-    //
     // Iterate from the back until we reach the chunk containing the given byte
     // index.
+    //
+    // TODO: we need something like `Rope{Slice}::chunks_{from,up_to}_byte()`
+    // if we want to make this fast.
     let chunk = loop {
         let chunk = chunks.next_back().unwrap();
         bytes_left -= chunk.len();
@@ -287,6 +289,21 @@ mod panic_messages {
     #[track_caller]
     #[cold]
     #[inline(never)]
+    pub(crate) fn byte_index_out_of_bounds(
+        byte_index: usize,
+        byte_len: usize,
+    ) -> ! {
+        debug_assert!(byte_index >= byte_len);
+
+        panic!(
+            "byte index out of bounds: the index is {byte_index} but the \
+             length is {byte_len}"
+        );
+    }
+
+    #[track_caller]
+    #[cold]
+    #[inline(never)]
     pub(crate) fn byte_offset_not_char_boundary(
         s: &str,
         byte_offset: usize,
@@ -312,21 +329,6 @@ mod panic_messages {
         panic!(
             "byte offset {byte_offset} is not a char boundary: it is inside \
              {splitting_char:?} (bytes {start}..{end}) of {s:?}"
-        );
-    }
-
-    #[track_caller]
-    #[cold]
-    #[inline(never)]
-    pub(crate) fn byte_index_out_of_bounds(
-        byte_index: usize,
-        byte_len: usize,
-    ) -> ! {
-        debug_assert!(byte_index >= byte_len);
-
-        panic!(
-            "byte index out of bounds: the index is {byte_index} but the \
-             length is {byte_len}"
         );
     }
 

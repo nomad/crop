@@ -1,6 +1,6 @@
 //! This module contains an implementation of a tiny `Arc` without weak
-//! references, largely taken from the `Arc` implementation in [rclite] (of
-//! course, all bugs are mine).
+//! references, inspired by the `Arc` implementation in [rclite] (of course,
+//! all bugs are mine).
 //!
 //! [rclite]: https://github.com/fereidani/rclite
 
@@ -57,8 +57,8 @@ impl<T> Arc<T> {
     pub(super) fn new(data: T) -> Self {
         let inner = ArcInner { counter: atomic::AtomicUsize::new(1), data };
 
-        // SAFETY: the pointer returned by `Box::into_raw` is guaranteed to be
-        // non-null.
+        // SAFETY: the pointer returned by `Box::into_raw()` is guaranteed to
+        // be non-null.
         let ptr =
             unsafe { NonNull::new_unchecked(Box::into_raw(Box::new(inner))) };
 
@@ -78,7 +78,7 @@ impl<T: Clone> Arc<T> {
             *this = this.optimized_clone();
         }
 
-        // SAFETY: the reference was either unique or we just cloned it.
+        // SAFETY: either the reference was unique or we just cloned the T.
         unsafe { Self::get_mut_unchecked(this) }
     }
 
@@ -91,7 +91,7 @@ impl<T: Clone> Arc<T> {
 
         let ptr = unsafe {
             let ptr = buffer.as_mut_ptr();
-            // Here we use `write` instead of assignment via `=` to avoid
+            // Here we use `write()` instead of assignment via `=` to avoid
             // dropping the old, uninitialized value.
             addr_of_mut!((*ptr).data).write(T::clone(self));
             (*ptr).counter = atomic::AtomicUsize::new(1);
@@ -149,8 +149,8 @@ impl<T> Drop for Arc<T> {
         if old == 1 {
             atomic::fence(atomic::Ordering::Acquire);
 
-            // SAFETY: the is the last owner of the `Arc` so the memory has not
-            // yet been reclaimed by a previous call to `Box::from_raw`.
+            // SAFETY: this is the last owner of the `Arc` so the memory has
+            // not yet been reclaimed by a previous call to `Box::from_raw()`.
             unsafe { Box::from_raw(self.ptr.as_ptr()) };
         }
     }

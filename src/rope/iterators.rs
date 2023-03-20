@@ -630,11 +630,10 @@ mod graphemes {
             let mut grapheme = Cow::Borrowed("");
 
             loop {
-                // NOTE: the chunk passed to `GraphemeCursor::next_boundary()`
-                // can't be empty or it'll panic.
-
                 match self
                     .forward_cursor
+                    // The chunk passed to `next_boundary` can't be empty or
+                    // it'll panic.
                     .next_boundary(self.forward_chunk, self.forward_offset)
                 {
                     Ok(Some(byte_end)) => {
@@ -763,14 +762,15 @@ mod graphemes {
             let mut grapheme = Cow::Borrowed("");
 
             loop {
-                // NOTE: the chunk passed to `GraphemeCursor::prev_boundary()`
-                // can't be empty or it'll panic.
-
-                match self.backward_cursor.prev_boundary(
-                    self.backward_chunk,
-                    self.backward_cursor.cur_cursor()
-                        - self.backward_chunk.len(),
-                ) {
+                match self
+                    .backward_cursor
+                    // The chunk passed to `prev_boundary` can't be empty or
+                    // it'll panic.
+                    .prev_boundary(
+                        self.backward_chunk,
+                        self.backward_cursor.cur_cursor()
+                            - self.backward_chunk.len(),
+                    ) {
                     Ok(Some(byte_start)) => {
                         if byte_start == self.backward_offset {
                             debug_assert!(!grapheme.is_empty());
