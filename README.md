@@ -17,7 +17,7 @@ ensuring that the time complexity of inserting, deleting or replacing a piece
 of text is always logarithmic in the size of the `Rope`.
 
 crop places an extreme focus on performance: check out [the
-benchmarks](https://github.com/noib3/crop/blob/master/BENCHMARKS.md) to see
+benchmarks](https://github.com/noib3/crop/blob/main/BENCHMARKS.md) to see
 how it stacks up against similar projects.
 
 ## Built with parallelism in mind
