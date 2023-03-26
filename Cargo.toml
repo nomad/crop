@@ -1,6 +1,6 @@
 [package]
 name = "crop"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 rust-version = "1.65"
 authors = ["Riccardo Mazzarini <me@noib3.dev>"]
@@ -19,7 +19,6 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["simd"]
-
 graphemes = ["unicode-segmentation"]
 simd = ["str_indices/simd"]
 
