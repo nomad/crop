@@ -112,8 +112,11 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                 },
 
                 Node::Leaf(leaf) => {
-                    let (_, left_summary, _, _) =
-                        M1::split(leaf.as_slice(), up_to - m1, leaf.summary());
+                    let (_, left_summary) = M1::slice_up_to(
+                        leaf.as_slice(),
+                        up_to - m1,
+                        leaf.summary(),
+                    );
 
                     return m2 + M2::measure(&left_summary);
                 },

@@ -93,18 +93,17 @@ pub trait Metric<L: Summarize + ?Sized>:
 
 /// Metrics that can be used to slice `Tree`s and `TreeSlice`s.
 pub trait SlicingMetric<L: Leaf>: Metric<L> {
-    /// Splits the given slice at `at`, returning a
-    /// `(left_slice, left_summary, right_slice, right_summary)` tuple.
-    ///
-    /// The original slice must always be split without omitting any contents.
-    /// In other words, it should always hold
-    /// `left_summary + right_summary = summary`.
-    #[allow(clippy::type_complexity)]
-    fn split<'a>(
+    fn slice_up_to<'a>(
         slice: L::Slice<'a>,
-        at: Self,
+        up_to: Self,
         summary: &L::Summary,
-    ) -> (L::Slice<'a>, L::Summary, L::Slice<'a>, L::Summary);
+    ) -> (L::Slice<'a>, L::Summary);
+
+    fn slice_from<'a>(
+        slice: L::Slice<'a>,
+        from: Self,
+        summary: &L::Summary,
+    ) -> (L::Slice<'a>, L::Summary);
 }
 
 /// Allows iterating forward over the units of this metric.

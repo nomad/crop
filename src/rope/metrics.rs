@@ -3,13 +3,7 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 use super::gap_buffer::{ChunkSummary, GapBuffer};
 use super::gap_slice::GapSlice;
 use super::utils::*;
-use crate::tree::{
-    DoubleEndedUnitMetric,
-    Metric,
-    SlicingMetric,
-    Summarize,
-    UnitMetric,
-};
+use crate::tree::{DoubleEndedUnitMetric, Metric, SlicingMetric, UnitMetric};
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ByteMetric(pub(super) usize);
@@ -84,92 +78,129 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
 {
     #[track_caller]
     #[inline]
-    fn split<'a>(
+    fn slice_up_to<'a>(
         chunk: GapSlice<'a>,
-        ByteMetric(byte_offset): Self,
+        ByteMetric(offset): Self,
         &summary: &ChunkSummary,
-    ) -> (GapSlice<'a>, ChunkSummary, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
-        chunk.assert_char_boundary(byte_offset);
+        chunk.assert_char_boundary(offset);
 
-        if byte_offset <= chunk.len_left() {
-            let line_breaks_left_left = if byte_offset <= chunk.len_left() / 2
-            {
-                count_line_breaks(&chunk.left_chunk()[..byte_offset]) as u16
+        if offset <= chunk.len_left() {
+            let line_breaks_left = if offset <= chunk.len_left() / 2 {
+                count_line_breaks(&chunk.left_chunk()[..offset]) as u16
             } else {
                 chunk.line_breaks_left
-                    - count_line_breaks(&chunk.left_chunk()[byte_offset..])
-                        as u16
+                    - count_line_breaks(&chunk.left_chunk()[offset..]) as u16
             };
 
-            let line_breaks_left_right =
-                chunk.line_breaks_left - line_breaks_left_left;
-
-            let left = GapSlice {
-                bytes: &chunk.bytes[..byte_offset],
-                len_left: byte_offset as u16,
-                line_breaks_left: line_breaks_left_left,
+            let slice = GapSlice {
+                bytes: &chunk.bytes[..offset],
+                len_left: offset as u16,
+                line_breaks_left,
                 len_right: 0,
             };
 
-            let bytes = if byte_offset == chunk.len_left() {
-                &chunk.bytes[chunk.bytes.len() - chunk.len_right()..]
-            } else {
-                &chunk.bytes[byte_offset..]
+            let summary = ChunkSummary {
+                bytes: slice.len(),
+                line_breaks: line_breaks_left as usize,
             };
 
-            let right = GapSlice {
+            (slice, summary)
+        } else {
+            let slice = GapSlice {
+                bytes: &chunk.bytes[..offset + chunk.len_gap()],
+                len_left: chunk.len_left,
+                line_breaks_left: chunk.line_breaks_left,
+                len_right: offset as u16 - chunk.len_left,
+            };
+
+            let offset = offset - chunk.len_left();
+
+            let line_breaks_right = if offset <= chunk.len_right() / 2 {
+                count_line_breaks(&chunk.right_chunk()[..offset])
+            } else {
+                summary.line_breaks
+                    - slice.line_breaks_left as usize
+                    - count_line_breaks(&chunk.right_chunk()[offset..])
+            };
+
+            let summary = ChunkSummary {
+                bytes: slice.len(),
+                line_breaks: slice.line_breaks_left as usize
+                    + line_breaks_right,
+            };
+
+            (slice, summary)
+        }
+    }
+
+    #[inline]
+    fn slice_from<'a>(
+        chunk: GapSlice<'a>,
+        ByteMetric(offset): Self,
+        &summary: &ChunkSummary,
+    ) -> (GapSlice<'a>, ChunkSummary)
+    where
+        'a: 'a,
+    {
+        if offset <= chunk.len_left() {
+            let line_breaks_left = if offset <= chunk.len_left() / 2 {
+                chunk.line_breaks_left
+                    - count_line_breaks(&chunk.left_chunk()[..offset]) as u16
+            } else {
+                count_line_breaks(&chunk.left_chunk()[offset..]) as u16
+            };
+
+            let bytes = if offset == chunk.len_left() {
+                &chunk.bytes[chunk.bytes.len() - chunk.len_right()..]
+            } else {
+                &chunk.bytes[offset..]
+            };
+
+            let slice = GapSlice {
                 bytes,
-                len_left: chunk.len_left - left.len_left,
-                line_breaks_left: line_breaks_left_right,
+                len_left: chunk.len_left - offset as u16,
+                line_breaks_left,
                 len_right: chunk.len_right,
             };
 
-            let left_summary = ChunkSummary {
-                bytes: left.len(),
-                line_breaks: line_breaks_left_left as usize,
+            let summary = ChunkSummary {
+                bytes: slice.len(),
+                line_breaks: summary.line_breaks
+                    - chunk.line_breaks_left as usize
+                    + slice.line_breaks_left as usize,
             };
 
-            let right_summary = ChunkSummary {
-                bytes: right.len(),
-                line_breaks: summary.line_breaks - left_summary.line_breaks,
-            };
-
-            (left, left_summary, right, right_summary)
+            (slice, summary)
         } else {
-            let split_point = chunk.len_gap() + byte_offset;
+            let bytes = &chunk.bytes[offset + chunk.len_gap()..];
 
-            let left = GapSlice {
-                bytes: &chunk.bytes[..split_point],
-                len_left: chunk.len_left,
-                line_breaks_left: chunk.line_breaks_left,
-                len_right: byte_offset as u16 - chunk.len_left,
-            };
-
-            let right = GapSlice {
-                bytes: &chunk.bytes[split_point..],
+            let slice = GapSlice {
+                bytes,
                 len_left: 0,
                 line_breaks_left: 0,
-                len_right: chunk.len_right - left.len_right,
+                len_right: bytes.len() as u16,
             };
 
-            // Summarize the shorter side, then get the other summary by
-            // subtracting it from the total.
+            let offset = offset - chunk.len_left();
 
-            let (left_summary, right_summary) =
-                if byte_offset < chunk.len() / 2 {
-                    let left_summary = left.summarize();
-                    let right_summary = summary - left_summary;
-                    (left_summary, right_summary)
-                } else {
-                    let right_summary = right.summarize();
-                    let left_summary = summary - right_summary;
-                    (left_summary, right_summary)
-                };
+            let line_breaks_right = if offset <= chunk.len_right() / 2 {
+                summary.line_breaks
+                    - chunk.line_breaks_left as usize
+                    - count_line_breaks(&chunk.right_chunk()[..offset])
+            } else {
+                count_line_breaks(&chunk.right_chunk()[offset..])
+            };
 
-            (left, left_summary, right, right_summary)
+            let summary = ChunkSummary {
+                bytes: slice.len(),
+                line_breaks: line_breaks_right,
+            };
+
+            (slice, summary)
         }
     }
 }
@@ -230,22 +261,39 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     for RawLineMetric
 {
     #[inline]
-    fn split<'a>(
+    fn slice_up_to<'a>(
         chunk: GapSlice<'a>,
         RawLineMetric(line_offset): Self,
-        &summary: &ChunkSummary,
-    ) -> (GapSlice<'a>, ChunkSummary, GapSlice<'a>, ChunkSummary)
+        _: &ChunkSummary,
+    ) -> (GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
-        let (left, right) = chunk.split_at_line(line_offset);
+        let (slice, _) = chunk.split_at_line(line_offset);
 
-        let left_summary =
-            ChunkSummary { bytes: left.len(), line_breaks: line_offset };
+        let summary =
+            ChunkSummary { bytes: slice.len(), line_breaks: line_offset };
 
-        let right_summary = summary - left_summary;
+        (slice, summary)
+    }
 
-        (left, left_summary, right, right_summary)
+    #[inline]
+    fn slice_from<'a>(
+        chunk: GapSlice<'a>,
+        RawLineMetric(line_offset): Self,
+        &summary: &ChunkSummary,
+    ) -> (GapSlice<'a>, ChunkSummary)
+    where
+        'a: 'a,
+    {
+        let (_, slice) = chunk.split_at_line(line_offset);
+
+        let summary = ChunkSummary {
+            bytes: slice.len(),
+            line_breaks: summary.line_breaks - line_offset,
+        };
+
+        (slice, summary)
     }
 }
 
@@ -255,19 +303,17 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>>
     #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
-        summary: &ChunkSummary,
+        &summary: &ChunkSummary,
     ) -> (GapSlice<'a>, ChunkSummary, ChunkSummary, GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
-        let (first, first_summary, rest, rest_summary) =
-            <Self as SlicingMetric<GapBuffer<MAX_BYTES>>>::split(
-                chunk,
-                RawLineMetric(1),
-                summary,
-            );
+        let (first, rest) = chunk.split_at_line(1);
 
-        (first, first_summary, first_summary, rest, rest_summary)
+        let first_summary =
+            ChunkSummary { bytes: first.len(), line_breaks: 1 };
+
+        (first, first_summary, first_summary, rest, summary - first_summary)
     }
 }
 
