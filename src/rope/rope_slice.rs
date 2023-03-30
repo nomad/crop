@@ -343,20 +343,19 @@ impl<'a> RopeSlice<'a> {
             line_index_out_of_bounds(line_index, self.line_len());
         }
 
-        let mut tree_slice = self
+        let tree_slice = self
             .tree_slice
             .slice(RawLineMetric(line_index)..RawLineMetric(line_index + 1));
 
-        if tree_slice.summary().line_breaks == 1 {
-            let byte_end = tree_slice.summary().bytes
-                - bytes_line_break(tree_slice.end_slice().last_chunk());
+        let mut line = Self { tree_slice, has_trailing_newline: false };
 
-            tree_slice = tree_slice.slice(ByteMetric(0)..ByteMetric(byte_end));
+        if line.tree_slice.summary().line_breaks == 1 {
+            line.truncate_trailing_line_break();
         }
 
-        debug_assert_eq!(0, tree_slice.summary().line_breaks);
+        debug_assert_eq!(line.tree_slice.summary().line_breaks, 0);
 
-        Self { tree_slice, has_trailing_newline: false }
+        line
     }
 
     /// Returns the number of lines in the `RopeSlice`.
@@ -532,6 +531,71 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn raw_lines(&self) -> RawLines<'a> {
         RawLines::from(self)
+    }
+
+    #[inline]
+    pub(super) fn truncate_last_byte(&mut self) {
+        debug_assert!(!self.is_empty());
+
+        let slice = &mut self.tree_slice;
+
+        // The last slice only contains one byte so we have to re-slice.
+        if slice.last_summary.bytes == 1 {
+            *self = self.byte_slice(..self.byte_len() - 1);
+        }
+        // The last slice contains more than 2 bytes so we can just mutate
+        // in place.
+        else {
+            let last = &mut slice.last_slice;
+
+            let is_newline = last.has_trailing_newline();
+
+            use std::cmp::Ordering;
+
+            match last.len_right.cmp(&1) {
+                Ordering::Less => {
+                    last.len_left -= 1;
+                    last.bytes = &last.bytes[..last.len_left()];
+                    last.line_breaks_left -= is_newline as u16;
+                },
+
+                Ordering::Equal => {
+                    last.bytes = &last.bytes[..last.len_left()];
+                    last.len_right = 0;
+                },
+
+                Ordering::Greater => {
+                    last.bytes = &last.bytes[..last.bytes.len() - 1];
+                    last.len_right -= 1;
+                },
+            }
+
+            slice.last_summary.bytes -= 1;
+            slice.last_summary.line_breaks -= is_newline as usize;
+
+            slice.summary.bytes -= 1;
+            slice.summary.line_breaks -= is_newline as usize;
+
+            if slice.leaf_count() == 1 {
+                slice.first_slice = slice.last_slice;
+                slice.first_summary = slice.summary;
+            }
+        }
+    }
+
+    #[inline]
+    pub(super) fn truncate_trailing_line_break(&mut self) {
+        debug_assert!(self
+            .tree_slice
+            .end_slice()
+            .last_chunk()
+            .ends_with('\n'));
+
+        self.truncate_last_byte();
+
+        if self.tree_slice.end_slice().last_chunk().ends_with('\r') {
+            self.truncate_last_byte();
+        }
     }
 }
 

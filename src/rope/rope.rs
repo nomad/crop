@@ -425,20 +425,19 @@ impl Rope {
             line_index_out_of_bounds(line_index, self.line_len());
         }
 
-        let mut tree_slice = self
+        let tree_slice = self
             .tree
             .slice(RawLineMetric(line_index)..RawLineMetric(line_index + 1));
 
-        if tree_slice.summary().line_breaks == 1 {
-            let byte_end = tree_slice.summary().bytes
-                - bytes_line_break(tree_slice.end_slice().last_chunk());
+        let mut line = RopeSlice { tree_slice, has_trailing_newline: false };
 
-            tree_slice = tree_slice.slice(ByteMetric(0)..ByteMetric(byte_end));
+        if line.tree_slice.summary().line_breaks == 1 {
+            line.truncate_trailing_line_break();
         }
 
-        debug_assert_eq!(0, tree_slice.summary().line_breaks);
+        debug_assert_eq!(line.tree_slice.summary().line_breaks, 0);
 
-        RopeSlice { tree_slice, has_trailing_newline: false }
+        line
     }
 
     /// Returns the number of lines in the `Rope`.

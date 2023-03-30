@@ -44,17 +44,6 @@ pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
     offset
 }
 
-/// Returns the number of bytes in `s`'s trailing line break: 1 for LF, 2 for
-/// CRLF.
-///
-/// NOTE: this function just assumes that `s` ends with a newline, if it
-/// doesn't it will return a wrong result.
-#[inline]
-pub(super) fn bytes_line_break(s: &str) -> usize {
-    debug_assert!(!s.is_empty() && *s.as_bytes().last().unwrap() == b'\n');
-    1 + (s.len() > 1 && s.as_bytes()[s.len() - 2] == b'\r') as usize
-}
-
 #[cfg(not(miri))]
 #[inline]
 pub(super) fn byte_of_line(s: &str, line: usize) -> usize {

@@ -65,7 +65,7 @@ where
 impl<'a, const FANOUT: usize, L: Leaf, M: UnitMetric<L>> Iterator
     for Units<'a, FANOUT, L, M>
 {
-    type Item = TreeSlice<'a, FANOUT, L>;
+    type Item = (TreeSlice<'a, FANOUT, L>, L::BaseMetric);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -74,7 +74,7 @@ impl<'a, const FANOUT: usize, L: Leaf, M: UnitMetric<L>> Iterator
         } else {
             let (tree_slice, advance) = self.forward.next();
             self.remaining -= advance;
-            tree_slice
+            tree_slice.map(|t| (t, advance))
         }
     }
 }
@@ -89,7 +89,7 @@ impl<const FANOUT: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         } else {
             let (tree_slice, advance) = self.backward.previous();
             self.remaining -= advance;
-            tree_slice
+            tree_slice.map(|t| (t, advance))
         }
     }
 }

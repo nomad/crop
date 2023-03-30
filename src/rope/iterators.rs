@@ -1,4 +1,4 @@
-use super::metrics::{LineMetric, RawLineMetric};
+use super::metrics::{ByteMetric, LineMetric, RawLineMetric};
 use super::rope::RopeChunk;
 use super::{Rope, RopeSlice};
 use crate::tree::{Leaves, Units};
@@ -410,7 +410,7 @@ impl<'a> Iterator for RawLines<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let tree_slice = self.units.next()?;
+        let (tree_slice, _) = self.units.next()?;
         self.lines_yielded += 1;
         Some(RopeSlice::from(tree_slice))
     }
@@ -425,7 +425,7 @@ impl<'a> Iterator for RawLines<'a> {
 impl DoubleEndedIterator for RawLines<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        let tree_slice = self.units.next_back()?;
+        let (tree_slice, _) = self.units.next_back()?;
         self.lines_yielded += 1;
         Some(RopeSlice::from(tree_slice))
     }
@@ -483,9 +483,22 @@ impl<'a> Iterator for Lines<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        let tree_slice = self.units.next()?;
+        let (tree_slice, ByteMetric(advance)) = self.units.next()?;
         self.lines_yielded += 1;
-        Some(RopeSlice { tree_slice, has_trailing_newline: false })
+
+        let mut slice = RopeSlice { tree_slice, has_trailing_newline: false };
+
+        // This handles CRLF pairs that have been split across chunks. For
+        // example, if we have "aaa\r" and "\nbbb" we should yield "aaa", but
+        // the tree slice currently contains "aaa\r", so we need to remove the
+        // trailing "\r".
+        if slice.tree_slice.end_slice().last_chunk().ends_with('\r')
+            && advance - slice.byte_len() == 1
+        {
+            slice.truncate_last_byte();
+        }
+
+        Some(slice)
     }
 
     #[inline]
@@ -498,9 +511,19 @@ impl<'a> Iterator for Lines<'a> {
 impl DoubleEndedIterator for Lines<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        let tree_slice = self.units.next_back()?;
+        let (tree_slice, ByteMetric(advance)) = self.units.next_back()?;
         self.lines_yielded += 1;
-        Some(RopeSlice { tree_slice, has_trailing_newline: false })
+
+        let mut slice = RopeSlice { tree_slice, has_trailing_newline: false };
+
+        // Same as above.
+        if slice.tree_slice.end_slice().last_chunk().ends_with('\r')
+            && advance - slice.byte_len() == 1
+        {
+            slice.truncate_last_byte();
+        }
+
+        Some(slice)
     }
 }
 

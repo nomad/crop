@@ -15,19 +15,19 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     pub(super) offset: L::Summary,
 
     /// The total summary of this slice.
-    pub(super) summary: L::Summary,
+    pub(crate) summary: L::Summary,
 
     /// The right sub-slice of the leaf containing the start of the sliced range.
-    pub(super) first_slice: L::Slice<'a>,
+    pub(crate) first_slice: L::Slice<'a>,
 
     /// [`first_slice`](Self::first_slice)'s summary.
-    pub(super) first_summary: L::Summary,
+    pub(crate) first_summary: L::Summary,
 
     /// The left sub-slice of the leaf containing the end of the sliced range.
-    pub(super) last_slice: L::Slice<'a>,
+    pub(crate) last_slice: L::Slice<'a>,
 
     /// [`last_slice`](Self::last_slice)'s summary.
-    pub(super) last_summary: L::Summary,
+    pub(crate) last_summary: L::Summary,
 
     /// The number of leaves spanned by this slice, including the leaves
     /// containing the first and last slices.

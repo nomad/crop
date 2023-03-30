@@ -119,7 +119,7 @@ impl<'a> GapSlice<'a> {
         } else {
             let bytes_line_break = bytes_line_break(self.left_chunk());
             self.len_left -= bytes_line_break as u16;
-            self.bytes = &self.bytes[..self.bytes.len() - bytes_line_break];
+            self.bytes = &self.bytes[..self.len_left()];
             self.line_breaks_left -= 1;
             bytes_line_break
         }
@@ -130,7 +130,7 @@ impl<'a> GapSlice<'a> {
         Self::default()
     }
 
-    /// Returns `true` if it ends with a newline (either LF or CRLF).
+    /// Returns `true` if it ends with a newline.
     #[inline]
     pub(super) fn has_trailing_newline(&self) -> bool {
         last_byte_is_newline(self.last_chunk())
@@ -150,10 +150,10 @@ impl<'a> GapSlice<'a> {
     /// The second segment if it's not empty, or the first one otherwise.
     #[inline]
     pub(super) fn last_chunk(&self) -> &'a str {
-        if !self.right_chunk().is_empty() {
-            self.right_chunk()
-        } else {
+        if self.len_right() == 0 {
             self.left_chunk()
+        } else {
+            self.right_chunk()
         }
     }
 
@@ -283,6 +283,17 @@ impl Summarize for GapSlice<'_> {
 
         ChunkSummary { bytes: self.len(), line_breaks }
     }
+}
+
+/// Returns the number of bytes in `s`'s trailing line break: 1 for LF, 2 for
+/// CRLF.
+///
+/// NOTE: this function just assumes that `s` ends with a newline, if it
+/// doesn't it will return a wrong result.
+#[inline]
+fn bytes_line_break(s: &str) -> usize {
+    debug_assert!(!s.is_empty() && *s.as_bytes().last().unwrap() == b'\n');
+    1 + (s.len() > 1 && s.as_bytes()[s.len() - 2] == b'\r') as usize
 }
 
 #[cfg(test)]
