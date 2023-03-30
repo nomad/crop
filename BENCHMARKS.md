@@ -1,6 +1,6 @@
 # Benchmarks
 
-I've benchmarked crop against and [Jumprope][jumprope] [Ropey][ropey] on 4
+I've benchmarked crop against [Jumprope][jumprope] and [Ropey][ropey] on 4
 different use cases:
 
 - [creating](#creation) a rope from a string or using a builder;

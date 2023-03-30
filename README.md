@@ -126,7 +126,7 @@ Jumprope is currently the fastest rope, beating crop by 0-15% on the real world
 editing traces provided by [crdt-benchmarks] (the results are listed below).
 The [synthetic benchmarks][synthetic-benches] show a similar story, although
 Jumprope's performance seems to degrade more rapidly than crop's as the size of
-the inserted/deleted/replaced text increases as shown by the
+the inserted/deleted/replaced text increases, as shown by the
 `{insert,delete,replace}_large` benchmarks.
 
 | Dataset         | crop (ms) | Jumprope (ms) | Ropey (ms) | `std::string::String` (ms) |
