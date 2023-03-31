@@ -68,6 +68,7 @@ fn byte_slice_random() {
         let mut ranges = Vec::new();
 
         while start != end {
+            rope_slice.assert_invariants();
             ranges.push(start..end);
             if str_slice != rope_slice {
                 println!("byte ranges: {ranges:?}");
@@ -167,6 +168,8 @@ fn line_slices_random() {
         let mut offset = 0;
 
         while start != end {
+            rope_slice.assert_invariants();
+
             assert_eq!(str_slice, rope_slice);
 
             start = rng.gen_range(0..rope_slice.line_len());

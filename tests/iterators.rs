@@ -399,6 +399,8 @@ fn iter_lines_over_test_vectors() {
         for ((rope_line, slice_line), s_line) in
             rope.lines().zip(slice.lines()).zip(s.lines())
         {
+            rope_line.assert_invariants();
+            slice_line.assert_invariants();
             assert_eq!(rope_line, s_line);
             assert_eq!(slice_line, s_line);
         }
@@ -444,6 +446,7 @@ fn iter_lines_over_random_slices() {
             for (idx, (rope_line, str_line)) in
                 rope_slice.lines().zip(str_slice.lines()).enumerate()
             {
+                rope_line.assert_invariants();
                 if rope_line != str_line {
                     println!(
                         "Failed on line #{} in byte range: {range:?}",
@@ -459,6 +462,7 @@ fn iter_lines_over_random_slices() {
                 .rev()
                 .zip(str_slice.lines().rev())
             {
+                rope_line.assert_invariants();
                 if rope_line != str_line {
                     println!(
                         "Failed on line #{} in byte range: {range:?}",
@@ -528,6 +532,7 @@ fn iter_raw_lines_over_test_vectors() {
         for (i, (rope_line, s_line)) in
             rope.raw_lines().zip(s.lines()).enumerate()
         {
+            rope_line.assert_invariants();
             if i != rope.line_len() - 1 || s.ends_with('\n') {
                 let mut line = s_line.to_owned();
                 line.push('\n');
@@ -559,6 +564,8 @@ fn iter_raw_lines_over_random_slices() {
             for (idx, (rope_line, str_line)) in
                 rope_slice.raw_lines().zip(str_slice.lines()).enumerate()
             {
+                rope_line.assert_invariants();
+
                 let is_last = idx == rope_slice.line_len() - 1;
 
                 // TODO: use `RopeSlice::ends_with` once that's implemented.
@@ -585,6 +592,8 @@ fn iter_raw_lines_over_random_slices() {
                 .rev()
                 .zip(str_slice.lines().rev())
             {
+                rope_line.assert_invariants();
+
                 let is_last = idx == rope_slice.line_len() - 1;
 
                 // TODO: use `RopeSlice::ends_with` once that's implemented.
