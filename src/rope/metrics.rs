@@ -146,7 +146,7 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        if offset <= chunk.len_left() {
+        if offset < chunk.len_left() {
             let line_breaks_left = if offset <= chunk.len_left() / 2 {
                 chunk.line_breaks_left
                     - count_line_breaks(&chunk.left_chunk()[..offset]) as u16
@@ -154,14 +154,8 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
                 count_line_breaks(&chunk.left_chunk()[offset..]) as u16
             };
 
-            let bytes = if offset == chunk.len_left() {
-                &chunk.bytes[chunk.bytes.len() - chunk.len_right()..]
-            } else {
-                &chunk.bytes[offset..]
-            };
-
             let slice = GapSlice {
-                bytes,
+                bytes: &chunk.bytes[offset..],
                 len_left: chunk.len_left - offset as u16,
                 line_breaks_left,
                 len_right: chunk.len_right,

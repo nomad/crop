@@ -221,15 +221,24 @@ impl<'a> GapSlice<'a> {
         if line_offset <= self.line_breaks_left as usize {
             let byte_offset = byte_of_line(self.left_chunk(), line_offset);
 
+            let (bytes_left, bytes_right) = if byte_offset != self.len_left() {
+                (&self.bytes[..byte_offset], &self.bytes[byte_offset..])
+            } else {
+                (
+                    (&self.bytes[..self.len_left()]),
+                    (&self.bytes[self.bytes.len() - self.len_right()..]),
+                )
+            };
+
             let left = Self {
-                bytes: &self.bytes[..byte_offset],
+                bytes: bytes_left,
                 len_left: byte_offset as u16,
                 line_breaks_left: line_offset as u16,
                 len_right: 0,
             };
 
             let right = Self {
-                bytes: &self.bytes[byte_offset..],
+                bytes: bytes_right,
                 len_left: self.len_left - left.len_left,
                 line_breaks_left: self.line_breaks_left - line_offset as u16,
                 len_right: self.len_right,
