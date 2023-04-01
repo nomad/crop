@@ -3,13 +3,12 @@
 
 use super::iterators::Chunks;
 
-/// Adjusts the candidate byte offset to make sure it's a valid split point for
-/// `s`, i.e. it makes sure that it lies on a char boundary and that it doesn't
-/// split a CRLF pair. Offsets past the end of the string will be clipped to
-/// the length of the string.
+/// Adjusts the candidate byte offset to make sure it's a char boundary for
+/// `s`. Offsets past the end of the string will be clipped to the length of
+/// the string.
 ///
-/// If the initial candidate is not a valid split offset we can either go left
-/// or right until it is. The direction is chosen based on the value of
+/// If the initial candidate is not on a char boundary we can either go left or
+/// right until it is. The direction is chosen based on the value of
 /// `WITH_RIGHT_BIAS`: true => go right, false => go left.
 ///
 /// In every case the adjusted split point will be within ± 3 bytes from the
@@ -29,14 +28,8 @@ pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
         while !s.is_char_boundary(offset) {
             offset += 1;
         }
-        if is_splitting_crlf_pair(s, offset) {
-            offset += 1;
-        }
     } else {
         while !s.is_char_boundary(offset) {
-            offset -= 1;
-        }
-        if is_splitting_crlf_pair(s, offset) {
             offset -= 1;
         }
     }
@@ -244,17 +237,6 @@ pub(super) fn is_grapheme_boundary(
             _ => unreachable!(),
         }
     }
-}
-
-/// Returns whether `byte_offset` sits between a CRLF pair in `s`.
-#[inline]
-pub(super) fn is_splitting_crlf_pair(s: &str, byte_offset: usize) -> bool {
-    byte_offset > 0
-        && byte_offset < s.len()
-        && ({
-            let s = s.as_bytes();
-            s[byte_offset - 1] == b'\r' && s[byte_offset] == b'\n'
-        })
 }
 
 /// Returns whether the last byte of the string is a newline (0x0A).

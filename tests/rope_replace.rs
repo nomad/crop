@@ -5,9 +5,6 @@ mod common;
 
 use common::{LARGE, MEDIUM, SMALL, TEXT, TINY};
 
-// TODO: remove the `ignore`s once we handle fixing CRLF seams in
-// `Rope::replace()`.
-
 #[test]
 fn insert_1() {
     let mut r = Rope::from(TEXT);
@@ -361,7 +358,6 @@ fn replace_random() {
 /// ├── "bbbb"
 /// └── "\nccc"
 /// ```
-#[ignore]
 #[test]
 fn fix_crlf_0() {
     let mut r = Rope::from("aaa\rbbbb\nccc");
@@ -374,7 +370,6 @@ fn fix_crlf_0() {
 /// Root
 /// └── "aaa\r"
 /// ```
-#[ignore]
 #[test]
 fn fix_crlf_1() {
     let mut r = Rope::from("aaa\r");
@@ -389,7 +384,6 @@ fn fix_crlf_1() {
 /// ├── "bbbb"
 /// └── "\nccc"
 /// ```
-#[ignore]
 #[test]
 fn fix_crlf_2() {
     let mut r = Rope::from("aaaabbbb\nccc");
@@ -398,7 +392,6 @@ fn fix_crlf_2() {
     assert_eq!(r, "aaaaddd\r\nccc");
 }
 
-#[ignore]
 #[test]
 fn fix_crlf_4() {
     let mut r =
