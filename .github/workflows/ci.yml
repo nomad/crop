@@ -44,7 +44,7 @@ jobs:
       - run: cargo bench --no-run
 
   clippy:
-    name: Clippy
+    name: clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -72,7 +72,7 @@ jobs:
       - run: cargo fmt --check
 
   miri:
-    name: Miri
+    name: miri
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
