@@ -6,6 +6,11 @@
 
 - the `byte_slice()` method on `Rope`s and `RopeSlice`s is around 10% faster;
 
+### Fixes
+
+- fixed a bug where the `Lines` iterator would include the trailing `'\r'` if a
+  line was terminated by a CRLF;
+
 
 ## [0.2.0] - Mar 26 2023
 
