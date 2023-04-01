@@ -568,7 +568,8 @@ fn iter_raw_lines_over_random_slices() {
 
                 let is_last = idx == rope_slice.line_len() - 1;
 
-                // TODO: use `RopeSlice::ends_with` once that's implemented.
+                // TODO: use `RopeSlice::ends_with()` if/when that's
+                // implemented.
                 let str_line = if !is_last || str_slice.ends_with('\n') {
                     let mut l = str_line.to_owned();
                     l.push('\n');
@@ -596,7 +597,8 @@ fn iter_raw_lines_over_random_slices() {
 
                 let is_last = idx == rope_slice.line_len() - 1;
 
-                // TODO: use `RopeSlice::ends_with` once that's implemented.
+                // TODO: use `RopeSlice::ends_with()` if/when that's
+                // implemented.
                 let str_line = if !is_last || str_slice.ends_with('\n') {
                     let mut l = str_line.to_owned();
                     l.push('\n');

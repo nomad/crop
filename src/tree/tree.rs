@@ -40,13 +40,13 @@ impl<const FANOUT: usize, L: BalancedLeaf + Clone>
             debug_assert!(slice.root().is_leaf());
 
             Arc::new(Node::Leaf(Lnode::new(
-                slice.first_slice.into(),
+                slice.start_slice.into(),
                 slice.summary,
             )))
         } else if slice.leaf_count() == 2 {
-            let mut first = Lnode::from(L::from(slice.first_slice));
+            let mut first = Lnode::from(L::from(slice.start_slice));
 
-            let mut second = Lnode::from(L::from(slice.last_slice));
+            let mut second = Lnode::from(L::from(slice.end_slice));
 
             first.balance(&mut second);
 
@@ -322,8 +322,8 @@ mod from_treeslice {
                     let first = cut_start_rec(
                         child,
                         start - offset,
-                        slice.first_slice,
-                        slice.first_summary.clone(),
+                        slice.start_slice,
+                        slice.start_summary.clone(),
                         &mut invalid_first,
                     );
 
@@ -349,8 +349,8 @@ mod from_treeslice {
                     let last = cut_end_rec(
                         child,
                         end - offset,
-                        slice.last_slice,
-                        slice.last_summary.clone(),
+                        slice.end_slice,
+                        slice.end_summary.clone(),
                         &mut invalid_last,
                     );
 

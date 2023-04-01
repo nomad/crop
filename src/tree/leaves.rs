@@ -188,8 +188,8 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&TreeSlice<'a, FANOUT, L>>
         Self {
             is_initialized: false,
             base_offset: L::BaseMetric::measure(&slice.offset),
-            first_slice: Some(slice.first_slice),
-            last_slice: Some(slice.last_slice),
+            first_slice: Some(slice.start_slice),
+            last_slice: Some(slice.end_slice),
             root: &**slice.root(),
             path: Vec::with_capacity(slice.root().depth().saturating_sub(1)),
             leaves: &[],
@@ -438,8 +438,8 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&TreeSlice<'a, FANOUT, L>>
         Self {
             is_initialized: false,
             base_offset,
-            first_slice: Some(slice.first_slice),
-            last_slice: Some(slice.last_slice),
+            first_slice: Some(slice.start_slice),
+            last_slice: Some(slice.end_slice),
             root: &**slice.root(),
             path: Vec::with_capacity(slice.root().depth().saturating_sub(1)),
             leaves: &[],
