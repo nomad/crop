@@ -129,7 +129,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
         M1: SlicingMetric<L>,
         M2: Metric<L>,
     {
-        debug_assert!(up_to <= self.measure::<M1>() + M1::one());
+        debug_assert!(up_to <= self.measure::<M1>());
 
         if up_to == M1::zero() {
             M2::zero()

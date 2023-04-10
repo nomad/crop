@@ -98,7 +98,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
         M1: SlicingMetric<L>,
         M2: Metric<L>,
     {
-        debug_assert!(up_to <= self.measure::<M1>() + M1::one());
+        debug_assert!(up_to <= self.measure::<M1>());
         self.root.convert_measure(up_to)
     }
 

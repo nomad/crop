@@ -102,10 +102,10 @@
 //!
 //! # On offsets and indexes
 //!
-//! Some functions like [`Rope::byte()`], [`Rope::byte_of_line()`] or
-//! [`RopeSlice::line_of_byte()`] take byte or line **indexes** as parameters,
-//! while others like [`Rope::insert()`], [`Rope::replace()`] or
-//! [`RopeSlice::is_char_boundary()`] expect byte or line **offsets**.
+//! Some functions like [`Rope::byte()`] or [`Rope::line()`] take byte or line
+//! **indexes** as parameters, while others like [`Rope::insert()`],
+//! [`Rope::replace()`] or [`Rope::is_char_boundary()`] expect byte or line
+//! **offsets**.
 //!
 //! These two terms may sound very similar to each other, but in this context
 //! they mean slightly different things.

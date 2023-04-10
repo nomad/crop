@@ -111,8 +111,8 @@ impl Rope {
     ///
     /// # Panics
     ///
-    /// Panics if the line index is out of bounds (i.e. greater than or equal
-    /// to [`line_len()`](Self::line_len())).
+    /// Panics if the line offset is out of bounds (i.e. greater than
+    /// [`line_len()`](Self::line_len())).
     ///
     /// # Examples
     ///
@@ -124,18 +124,21 @@ impl Rope {
     /// assert_eq!(r.byte_of_line(0), 0);
     /// assert_eq!(r.byte_of_line(1), "ƒoo\n".len());
     /// assert_eq!(r.byte_of_line(2), "ƒoo\nbär\r\n".len());
+    /// assert_eq!(r.byte_of_line(r.line_len()), r.byte_len());
     /// ```
     #[track_caller]
     #[inline]
-    pub fn byte_of_line(&self, line_index: usize) -> usize {
-        if line_index >= self.line_len() {
-            line_index_out_of_bounds(line_index, self.line_len());
+    pub fn byte_of_line(&self, line_offset: usize) -> usize {
+        if line_offset > self.line_len() {
+            line_offset_out_of_bounds(line_offset, self.line_len());
+        } else if line_offset > self.tree.summary().line_breaks {
+            return self.byte_len();
         }
 
-        let ByteMetric(byte_index) =
-            self.tree.convert_measure(RawLineMetric(line_index));
+        let ByteMetric(byte_offset) =
+            self.tree.convert_measure(RawLineMetric(line_offset));
 
-        byte_index
+        byte_offset
     }
 
     /// Returns an immutable slice of the `Rope` in the specified byte range,

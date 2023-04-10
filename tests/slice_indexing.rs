@@ -125,12 +125,12 @@ fn byte_of_line_random() {
             let ropey_slice = ropey.byte_slice(range.clone());
 
             for _ in 0..10 {
-                let line_index = rng.gen_range(0..crop_slice.line_len());
-                let crop_byte_offset = crop_slice.byte_of_line(line_index);
-                let ropey_byte_offset = ropey_slice.line_to_byte(line_index);
+                let line_offset = rng.gen_range(0..=crop_slice.line_len());
+                let crop_byte_offset = crop_slice.byte_of_line(line_offset);
+                let ropey_byte_offset = ropey_slice.line_to_byte(line_offset);
 
                 if crop_byte_offset != ropey_byte_offset {
-                    println!("line index: {line_index}");
+                    println!("line offset: {line_offset}");
                     println!("byte range: {range:?}");
                     assert_eq!(crop_byte_offset, ropey_byte_offset)
                 }

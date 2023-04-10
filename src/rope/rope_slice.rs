@@ -85,8 +85,8 @@ impl<'a> RopeSlice<'a> {
     ///
     /// # Panics
     ///
-    /// Panics if the line index is out of bounds (i.e. greater than or equal
-    /// to [`line_len()`](Self::line_len())).
+    /// Panics if the line offset is out of bounds (i.e. greater than
+    /// [`line_len()`](Self::line_len())).
     ///
     /// # Examples
     ///
@@ -101,18 +101,21 @@ impl<'a> RopeSlice<'a> {
     ///
     /// let s = r.byte_slice("ƒoo\n".len()..);
     /// assert_eq!(s.byte_of_line(1), "bär\r\n".len());
+    /// assert_eq!(s.byte_of_line(s.line_len()), s.byte_len());
     /// ```
     #[track_caller]
     #[inline]
-    pub fn byte_of_line(&self, line_index: usize) -> usize {
-        if line_index >= self.line_len() {
-            line_index_out_of_bounds(line_index, self.line_len());
+    pub fn byte_of_line(&self, line_offset: usize) -> usize {
+        if line_offset > self.line_len() {
+            line_offset_out_of_bounds(line_offset, self.line_len());
+        } else if line_offset > self.tree_slice.summary().line_breaks {
+            return self.byte_len();
         }
 
-        let ByteMetric(byte_index) =
-            self.tree_slice.convert_measure(RawLineMetric(line_index));
+        let ByteMetric(byte_offset) =
+            self.tree_slice.convert_measure(RawLineMetric(line_offset));
 
-        byte_index
+        byte_offset
     }
 
     /// Returns a sub-slice of this `RopeSlice` in the specified byte range,
@@ -340,7 +343,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn line(self, line_index: usize) -> RopeSlice<'a> {
         if line_index >= self.line_len() {
-            line_index_out_of_bounds(line_index, self.line_len());
+            line_offset_out_of_bounds(line_index, self.line_len());
         }
 
         let tree_slice = self

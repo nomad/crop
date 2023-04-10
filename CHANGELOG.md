@@ -2,14 +2,22 @@
 
 ## [Unreleased]
 
-### Performance
+### Changes
 
-- the `byte_slice()` method on `Rope`s and `RopeSlice`s is around 10% faster;
+- both the `line_of_byte()` and `byte_of_line()` methods on `Rope`s and
+  `RopeSlice`s now interpret their argument as byte and line offsets,
+  respectively. This allows those methods to accept the full byte length or
+  line length of the `Rope`/`RopeSlice` as a valid argument without panicking;
 
 ### Fixes
 
-- fixed a bug where the `Lines` iterator would include the trailing `'\r'` if a
-  line was terminated by a CRLF;
+- fixed a very rare bug where the `Lines` iterator would include the trailing
+  `'\r'` if a line was terminated by a CRLF which was split across consecutive
+  chunks;
+
+### Performance
+
+- the `byte_slice()` method on `Rope`s and `RopeSlice`s is around 10% faster;
 
 
 ## [0.2.0] - Mar 26 2023

@@ -86,7 +86,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         M1: SlicingMetric<L>,
         M2: Metric<L>,
     {
-        debug_assert!(up_to <= self.measure::<M1>() + M1::one());
+        debug_assert!(up_to <= self.measure::<M1>());
 
         let mut m1 = M1::zero();
         let mut m2 = M2::zero();
