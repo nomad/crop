@@ -55,5 +55,9 @@ name = "iterators"
 harness = false
 
 [[bench]]
+name = "metric_conversion"
+harness = false
+
+[[bench]]
 name = "slicing"
 harness = false
