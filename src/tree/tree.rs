@@ -232,13 +232,13 @@ mod from_treeslice {
 
     use super::*;
 
-    /// Converts a `TreeSlice` into the root of an equivalent `Tree`.
+    /// Converts a `TreeSlice` into the root of an equivalent `Tree`,
+    /// rebalancing if necessary.
     ///
     /// # Panics
     ///
-    /// This function can only be called if the slice has a leaf count of at
-    /// least 3. Leaf counts of 1 or 2 should be handled before calling this
-    /// function and will cause a panic.
+    /// This function can only be called if the slice spans at least 3 leaves.
+    /// Leaf counts of 1 and 2 must be handled by the caller.
     #[inline]
     pub(super) fn into_tree_root<const N: usize, L: BalancedLeaf + Clone>(
         slice: TreeSlice<'_, N, L>,
@@ -293,7 +293,7 @@ mod from_treeslice {
     ///
     /// # Panics
     ///
-    /// Panics if the slice has a leaf count less than 3.
+    /// Panics if the slice spans less than 3 leaves.
     #[inline]
     fn cut_tree_slice<const N: usize, L: BalancedLeaf + Clone>(
         slice: TreeSlice<'_, N, L>,
@@ -367,7 +367,8 @@ mod from_treeslice {
         (root, invalid_first, invalid_last)
     }
 
-    /// TODO: docs
+    /// Recursively removes all the nodes before `take_from`, replacing the
+    /// leaf at `take_from` with `start_slice`. Returns the resulting node.
     #[inline]
     fn cut_start_rec<const N: usize, L: BalancedLeaf + Clone>(
         node: &Arc<Node<N, L>>,
@@ -434,7 +435,8 @@ mod from_treeslice {
         }
     }
 
-    /// TODO: docs
+    /// Recursively removes all the nodes after `take_up_to`, replacing the
+    /// leaf at `take_up_to` with `end_slice`. Returns the resulting node.
     #[inline]
     fn cut_end_rec<const N: usize, L: BalancedLeaf + Clone>(
         node: &Arc<Node<N, L>>,
@@ -499,29 +501,20 @@ mod from_treeslice {
 
 mod tree_replace {
     //! This module contains the logic used to implement [`Tree::replace()`].
-    //!
-    //! TODO: explain how this works... we first call
-    //! [`replace_range_with_slice`] recursively until we get to the deepest
-    //! node that fully contains the replacement range.
-    //!
-    //! Once we get there we call [`replace_range_in_deepest`] which can either
-    //! return some extra nodes to be pushed after that node if the replace
-    //! operation was insertion-heavy, or handle the rebalancing of that node
-    //! (which could cause the node to be underfilled/be at a lower
-    //! depth/become a leaf) if the replace operation was removal-heavy.
-    //!
-    //! Once that's done we return to [`replace_range_with_slice`] which will
-    //! handle the insertion of those optional extra nodes or the rebalancing
-    //! of the tree.
 
     use super::*;
 
-    /// Replaces the content within the specified range of `node` with the
-    /// given slice, optionally returning a vector of nodes at the same depth
-    /// as `node` to be insert by `node`'s parent after `node`.
+    /// Recursively calls itself until it finds the deepest node that fully
+    /// contains `range`, calling [`replace_range_in_deepest`] if it's an
+    /// internal node.
     ///
-    /// Note that when no extra nodes are returned, `node` could be underfilled
-    /// or even at a lower depth than it was before calling this function.
+    /// It can return a vector of extra nodes (of the same depth as `node`) to
+    /// be inserted *right after* `node` if the replacement was
+    /// insertion-heavy.
+    ///
+    /// Viceversa, if the replacement was deletion-heavy it'll usually return
+    /// `None`, and `node` could be underfilled or even at a lower depth than
+    /// it was before calling this function.
     #[track_caller]
     #[inline]
     pub(super) fn replace_range_with_slice<const N: usize, M, L>(
@@ -620,7 +613,12 @@ mod tree_replace {
         }
     }
 
-    /// TODO: docs
+    /// Replaces the given range of the inode. At this point `inode` is assumed
+    /// to be the deepest node that fully contains the range.
+    ///
+    /// It can return a vector of inodes of the same depth as `inode` if the
+    /// replacement was insertion-heavy, and the inode can be underfilled (or
+    /// even contain a single child) if it was deletion-heavy.
     #[track_caller]
     #[inline]
     fn replace_range_in_deepest<const N: usize, M, L>(
@@ -632,37 +630,14 @@ mod tree_replace {
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
-        let (
-            start_idx,
-            end_idx,
-            start_should_rebalance,
-            end_should_rebalance,
-            extra_leaves,
-        ) = inode_replace_nodes_in_start_and_end_subtrees(
-            inode,
-            range,
-            replace_with,
-        );
+        let (start_idx, end_idx, extra_leaves) =
+            inode_replace_nodes_in_start_and_end_subtrees(
+                inode,
+                range,
+                replace_with,
+            );
 
-        let Some(mut extra_leaves) = extra_leaves else {
-            inode.drain(start_idx + 1..end_idx);
-
-            if start_should_rebalance || end_should_rebalance {
-                fix_seam_between_start_and_end_subtrees(
-                    inode,
-                    start_idx,
-                    start_should_rebalance,
-                    end_should_rebalance,
-                );
-            }
-
-            return None;
-        };
-
-        // If there are some extra leaves to insert then the subtrees
-        // containing the start and end of the replacement range must be
-        // balanced.
-        debug_assert!(!(start_should_rebalance || end_should_rebalance));
+        let mut extra_leaves = extra_leaves?;
 
         replace_child_range_with_leaves_from_back(
             inode,
@@ -741,15 +716,24 @@ mod tree_replace {
             .map(|extras| extras.map(Node::Internal).map(Arc::new).collect())
     }
 
-    /// TODO: docs
-    #[allow(clippy::type_complexity)]
+    /// Returns the following values:
+    ///
+    /// `start_idx`: the index of the child containing the start of the range;
+    ///
+    /// `end_idx`: the index of the child containing the end of the range
+    /// (strictly greater than `start_idx` because `inode` is assumed to be the
+    /// deepest node fully containing the range);
+    ///
+    /// `extra_leaves`: a vector of leaf nodes to be inserted between
+    /// `start_idx` and `end_idx`. This is only present if the replacement was
+    /// insertion-heavy.
     #[track_caller]
     #[inline]
     fn inode_replace_nodes_in_start_and_end_subtrees<const N: usize, M, L>(
         inode: &mut Inode<N, L>,
         range: Range<M>,
         replace_with: L::Replacement<'_>,
-    ) -> (usize, usize, bool, bool, Option<Vec<Arc<Node<N, L>>>>)
+    ) -> (usize, usize, Option<Vec<Arc<Node<N, L>>>>)
     where
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
@@ -813,16 +797,29 @@ mod tree_replace {
             }
         }
 
-        (
-            start_idx,
-            end_idx,
-            start_should_rebalance,
-            end_should_rebalance,
-            extra_leaves,
-        )
+        // There are no more leaves to insert, that means the replacement was
+        // deletion-heavy and we can remove the children between (but not
+        // including) `start_idx` and `end_idx`.
+        if extra_leaves.is_none() {
+            inode.drain(start_idx + 1..end_idx);
+
+            if start_should_rebalance || end_should_rebalance {
+                fix_seam_between_subtrees(
+                    inode,
+                    start_idx + 1,
+                    start_should_rebalance,
+                    end_should_rebalance,
+                );
+            }
+        }
+
+        (start_idx, end_idx, extra_leaves)
     }
 
-    /// TODO: docs
+    /// Recursively calls itself until it reaches the leaf containing the start
+    /// of the replacement range, then uses any extra leaves returned by
+    /// calling [`Lnode::replace()`] to replace the nodes after that leaf, or
+    /// removes them if there are no extra leaves.
     #[track_caller]
     #[inline]
     fn replace_nodes_in_start_subtree<const N: usize, M, L>(
@@ -897,7 +894,9 @@ mod tree_replace {
         extra_leaves
     }
 
-    /// TODO: docs
+    /// Recursively calls itself until it reaches the leaf containing the end
+    /// of the replacement range, then uses the extra leaves to replace the
+    /// nodes before that leaf, or removes them if there are no extra leaves.
     #[track_caller]
     #[inline]
     fn replace_nodes_in_end_subtree<const N: usize, M, L>(
@@ -983,7 +982,11 @@ mod tree_replace {
         *should_rebalance |= inode.is_underfilled();
     }
 
-    /// TODO: docs
+    /// Replaces `inode`'s children in the given index range by building nodes
+    /// at the children's depth using the `leaves` iterator.
+    ///
+    /// If the iterator is exhausted before the whole range has been replaced
+    /// it'll just remove the remaining children.
     #[inline]
     fn replace_child_range_with_leaves<const N: usize, L, I>(
         inode: &mut Inode<N, L>,
@@ -1065,7 +1068,9 @@ mod tree_replace {
         }
     }
 
-    /// TODO: docs
+    /// Same as [`replace_child_range_with_leaves_from_back`], except it
+    /// replaces the children in the given index range going backwards, i.e.
+    /// starting from the last child.
     #[inline]
     fn replace_child_range_with_leaves_from_back<const N: usize, L>(
         inode: &mut Inode<N, L>,
@@ -1150,20 +1155,24 @@ mod tree_replace {
         }
     }
 
-    /// TODO: docs
+    /// Fixes the seam left by a deletion-heavy replacement in the given inode.
+    ///
+    /// The left and right side of the seam are under the children before and
+    /// after the `seam_offset`, respectively.
     #[inline]
-    fn fix_seam_between_start_and_end_subtrees<const N: usize, L>(
+    fn fix_seam_between_subtrees<const N: usize, L>(
         inode: &mut Inode<N, L>,
-        start_idx: usize,
+        seam_offset: usize,
         start_should_rebalance: bool,
         end_should_rebalance: bool,
     ) where
         L: BalancedLeaf + Clone,
     {
-        debug_assert!(start_idx < inode.len() - 1);
+        debug_assert!(seam_offset < inode.len());
         debug_assert!(start_should_rebalance | end_should_rebalance);
 
-        let end_idx = start_idx + 1;
+        let start_idx = seam_offset - 1;
+        let end_idx = seam_offset;
 
         if start_should_rebalance {
             inode.with_child_mut(start_idx, |start| {
@@ -1348,6 +1357,9 @@ mod tree_replace {
     use iter::{TargetDepth, TargetDepthFromBack};
 
     mod iter {
+        //! Iterators transforming iterators/vectors of leaf nodes into
+        //! internal nodes at some target depth.
+
         use super::*;
 
         /// The minimum number of leaves required by [`Inode::from_nodes()`] to
@@ -1373,7 +1385,7 @@ mod tree_replace {
         /// Transforms an iterator over leaf nodes into internal nodes at a
         /// given target depth that are all guaranteed to have between
         /// `min_children` and `max_children` children, except for the last
-        /// inode which can be at a lower depth than the target (can even be a
+        /// node which can be at a lower depth than the target (can even be a
         /// leaf node) and contain less than `min_children` children.
         pub(super) struct TargetDepth<const N: usize, L, Leaves>
         where
@@ -1468,8 +1480,8 @@ mod tree_replace {
         }
 
         /// Same as `TargetDepth` except the inodes are constructed from back
-        /// to front instead of front to back by draining the nodes off of a
-        /// `Vec`.
+        /// to front instead of front to back by draining the nodes off of the
+        /// vector.
         pub(super) struct TargetDepthFromBack<'a, const N: usize, L>
         where
             L: Leaf,

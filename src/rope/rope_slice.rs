@@ -537,6 +537,11 @@ impl<'a> RopeSlice<'a> {
         RawLines::from(self)
     }
 
+    /// Removes the last byte from the range spanned by this slice.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the slice is empty.
     #[inline]
     pub(super) fn truncate_last_byte(&mut self) {
         debug_assert!(!self.is_empty());
@@ -587,6 +592,12 @@ impl<'a> RopeSlice<'a> {
         }
     }
 
+    /// Removes the trailing line break (either LF or CRLF) from the range
+    /// spanned by this slice.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this slice doesn't have a trailing line break.
     #[inline]
     pub(super) fn truncate_trailing_line_break(&mut self) {
         debug_assert!(self

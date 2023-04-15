@@ -440,8 +440,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.depth
     }
 
-    /// Removes all the nodes after `child_offset`, returning them and leaving
-    /// the inode with `child_offset` children.
+    /// Removes the children in the given index range, returning an iterator
+    /// over them.
     #[inline]
     pub(super) fn drain<R>(
         &mut self,
@@ -582,7 +582,15 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         self.children.insert(child_offset, child);
     }
 
-    /// TODO: docs
+    /// Inserts a node shallower than this inode's children at the right depth
+    /// by either appending it to the child at `child_offset - 1` or by
+    /// prepending it to the first child if the offset is zero.
+    ///
+    /// # Panics
+    ///
+    /// Panics if this inode is empty, if the given child has a depth greater
+    /// than `self.depth() - 2` or if the offset is out of bounds (i.e. greater
+    /// than `self.len()`.
     #[inline]
     pub(super) fn insert_at_depth(
         &mut self,
@@ -594,7 +602,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(!self.is_empty());
         debug_assert!(child_offset <= self.len());
         debug_assert!(self.depth() >= 2);
-        debug_assert!(node.depth() < self.depth() - 1);
+        debug_assert!(node.depth() <= self.depth() - 2);
 
         if child_offset > 0 {
             let extra = self.with_child_mut(child_offset - 1, |previous| {
