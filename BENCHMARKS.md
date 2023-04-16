@@ -98,7 +98,7 @@ GHz 6-Core Intel Core i7.
 [large]: https://github.com/noib3/rope_benches/blob/master/benches/common/large.txt
 
 [builder]: https://user-images.githubusercontent.com/59321248/227067900-48478bca-8fe9-403d-a92e-e95bd94e2ebc.png
-[byte_slice]: https://user-images.githubusercontent.com/59321248/227067906-f9dc8d6d-060b-45ac-ade4-3dac9b612a44.png
+[byte_slice]: https://user-images.githubusercontent.com/59321248/232328565-ac74e6b6-07cb-40b3-8379-7e9e3f47acad.png
 [delete_char]: https://user-images.githubusercontent.com/59321248/227067911-3509f006-3830-4d36-b8f5-8c78bb684b11.png
 [delete_large]: https://user-images.githubusercontent.com/59321248/227067916-e3ed1bbe-d706-4e53-bbc1-04218c8e46a7.png
 [delete_sentence]: https://user-images.githubusercontent.com/59321248/227067918-91af2770-8dea-49ad-a894-50a0cede60cf.png
