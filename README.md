@@ -27,7 +27,7 @@ Cloning a `Rope` takes up only 16 extra bytes of memory, and its copy-on-write
 semantics allow the actual text contents to be cloned incrementally as
 different clones diverge due to user edits.
 
-This allows to create cheap `Rope` snapshots to send to background threads to
+This allows to cheaply snapshot a `Rope` and send to a background thread to
 perform any IO or CPU-intensive computations, while the main thread is kept
 responsive and always ready for the next batch of edits.
 
@@ -147,9 +147,8 @@ re-allocating the actual text contents, just like it would with a regular
 
 crop and Ropey use a tiny bit of `unsafe` code to achieve their performance
 characteristics. Jumprope is a Rust port of a C codebase and has *a lot* of
-`unsafe`, making "heavy use of unsafe pointers". It should however be noted
-that all of them have been heavily fuzz-tested to ensure that the current
-implementations are sound.
+`unsafe`, making
+"[heavy use of unsafe pointers](https://github.com/josephg/jumprope-rs/blob/master/src/jumprope.rs#L6-L8)".
 
 ### Indexing metric
 

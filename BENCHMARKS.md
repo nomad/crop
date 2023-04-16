@@ -1,7 +1,7 @@
 # Benchmarks
 
-I've benchmarked crop against [Jumprope][jumprope] and [Ropey][ropey] on 4
-different use cases:
+The following benchmarks measure crop's performance against
+[Jumprope][jumprope] and [Ropey][ropey] across 4 different use cases:
 
 - [creating](#creation) a rope from a string or using a builder;
 - [slicing](#slices) the rope and converting the slice back to an owned `Rope`;
@@ -24,9 +24,9 @@ benchmarks because even though
 [iterators](https://docs.rs/jumprope/latest/jumprope/struct.JumpRope.html#method.substrings)
 are implemented, they are not exported publicly.
 
-I've decided to not include `xi_rope` in the benchmarks as it's been
-discontinued together with the rest of the Xi editor, and it was about an order
-of magnitude slower that all the other ropes on most use cases.
+The `xi_rope` project was not included in the benchmarks as it's been
+discontinued together with the rest of the Xi editor (and it was about an order
+of magnitude slower that all the other ropes on most use cases).
 
 The code used to run the benchmarks can be found
 [here](https://github.com/noib3/rope_benches).
