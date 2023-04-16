@@ -1,10 +1,10 @@
 [package]
 name = "crop"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.65"
 authors = ["Riccardo Mazzarini <me@noib3.dev>"]
-description = "A utf-8 text rope"
+description = "A pretty fast text rope"
 documentation = "https://docs.rs/crop"
 repository = "https://github.com/noib3/crop"
 readme = "README.md"

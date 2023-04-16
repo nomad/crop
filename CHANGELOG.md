@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - Apr 16 2023
+
 ### Changes
 
 - both the `line_of_byte()` and `byte_of_line()` methods on `Rope`s and
@@ -9,7 +11,7 @@
   respectively. This allows those methods to accept the full byte length or
   line length of the `Rope`/`RopeSlice` as a valid argument without panicking;
 
-### Fixes
+### Bug fixes
 
 - fixed a very rare bug where the `Lines` iterator would include the trailing
   `'\r'` if a line was terminated by a CRLF which was split across consecutive
@@ -37,5 +39,6 @@
 
 - the `Chunks` iterator no longer implements `ExactSizeIterator`;
 
-[Unreleased]: https://github.com/noib3/crop/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/noib3/crop/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/noib3/crop/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/noib3/crop/compare/v0.1.0...v0.2.0
