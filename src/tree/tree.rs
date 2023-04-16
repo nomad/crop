@@ -569,11 +569,14 @@ mod tree_replace {
 
                     break;
                 } else {
-                    return replace_range_in_deepest(
-                        node,
-                        range,
-                        replace_with,
-                    );
+                    let extras =
+                        replace_range_in_deepest(inode, range, replace_with);
+
+                    if extras.is_none() {
+                        Node::replace_with_single_child(node);
+                    }
+
+                    return extras;
                 };
             }
         }
@@ -621,7 +624,7 @@ mod tree_replace {
     #[track_caller]
     #[inline]
     fn replace_range_in_deepest<const N: usize, M, L>(
-        node: &mut Arc<Node<N, L>>,
+        inode: &mut Inode<N, L>,
         range: Range<M>,
         replace_with: L::Replacement<'_>,
     ) -> Option<Vec<Arc<Node<N, L>>>>
@@ -629,8 +632,6 @@ mod tree_replace {
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
-        let inode = Arc::get_mut(node).unwrap().get_internal_mut();
-
         let (
             start_idx,
             end_idx,
@@ -653,8 +654,6 @@ mod tree_replace {
                     start_should_rebalance,
                     end_should_rebalance,
                 );
-
-                Node::replace_with_single_child(node);
             }
 
             return None;
