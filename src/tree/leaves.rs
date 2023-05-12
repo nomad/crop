@@ -1,7 +1,7 @@
 use super::{Arc, Inode, Leaf, Metric, Node, Tree, TreeSlice};
 
 /// An iterator over the leaves of `Tree`s and `TreeSlice`s.
-pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
+pub struct Leaves<'a, const ARITY: usize, L: Leaf> {
     /*
       This iterator is implemented using two independent iterators advancing in
       opposite directions.
@@ -9,10 +9,10 @@ pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
     #[rustfmt::skip]
 
     /// Iterates over the leaves from front to back.
-    forward: LeavesForward<'a, FANOUT, L>,
+    forward: LeavesForward<'a, ARITY, L>,
 
     /// Iterates over the leaves from back to front.
-    backward: LeavesBackward<'a, FANOUT, L>,
+    backward: LeavesBackward<'a, ARITY, L>,
 
     /// The number of leaves that have been yielded so far.
     leaves_yielded: usize,
@@ -21,7 +21,7 @@ pub struct Leaves<'a, const FANOUT: usize, L: Leaf> {
     leaves_total: usize,
 }
 
-impl<const FANOUT: usize, L: Leaf> Clone for Leaves<'_, FANOUT, L> {
+impl<const ARITY: usize, L: Leaf> Clone for Leaves<'_, ARITY, L> {
     #[inline]
     fn clone(&self) -> Self {
         Self {
@@ -32,11 +32,11 @@ impl<const FANOUT: usize, L: Leaf> Clone for Leaves<'_, FANOUT, L> {
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
-    for Leaves<'a, FANOUT, L>
+impl<'a, const ARITY: usize, L: Leaf> From<&'a Tree<ARITY, L>>
+    for Leaves<'a, ARITY, L>
 {
     #[inline]
-    fn from(tree: &'a Tree<FANOUT, L>) -> Leaves<'a, FANOUT, L> {
+    fn from(tree: &'a Tree<ARITY, L>) -> Leaves<'a, ARITY, L> {
         Self {
             forward: LeavesForward::from(tree),
             backward: LeavesBackward::from(tree),
@@ -46,11 +46,11 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&'a Tree<FANOUT, L>>
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> From<&TreeSlice<'a, FANOUT, L>>
-    for Leaves<'a, FANOUT, L>
+impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
+    for Leaves<'a, ARITY, L>
 {
     #[inline]
-    fn from(slice: &TreeSlice<'a, FANOUT, L>) -> Leaves<'a, FANOUT, L> {
+    fn from(slice: &TreeSlice<'a, ARITY, L>) -> Leaves<'a, ARITY, L> {
         Self {
             forward: LeavesForward::from(slice),
             backward: LeavesBackward::from(slice),
@@ -60,7 +60,7 @@ impl<'a, const FANOUT: usize, L: Leaf> From<&TreeSlice<'a, FANOUT, L>>
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
+impl<'a, const ARITY: usize, L: Leaf> Iterator for Leaves<'a, ARITY, L> {
     type Item = L::Slice<'a>;
 
     #[inline]
@@ -80,8 +80,8 @@ impl<'a, const FANOUT: usize, L: Leaf> Iterator for Leaves<'a, FANOUT, L> {
     }
 }
 
-impl<const FANOUT: usize, L: Leaf> DoubleEndedIterator
-    for Leaves<'_, FANOUT, L>
+impl<const ARITY: usize, L: Leaf> DoubleEndedIterator
+    for Leaves<'_, ARITY, L>
 {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
@@ -94,17 +94,15 @@ impl<const FANOUT: usize, L: Leaf> DoubleEndedIterator
     }
 }
 
-impl<const FANOUT: usize, L: Leaf> ExactSizeIterator
-    for Leaves<'_, FANOUT, L>
-{
+impl<const ARITY: usize, L: Leaf> ExactSizeIterator for Leaves<'_, ARITY, L> {
     #[inline]
     fn len(&self) -> usize {
         self.leaves_total - self.leaves_yielded
     }
 }
 
-impl<const FANOUT: usize, L: Leaf> core::iter::FusedIterator
-    for Leaves<'_, FANOUT, L>
+impl<const ARITY: usize, L: Leaf> core::iter::FusedIterator
+    for Leaves<'_, ARITY, L>
 {
 }
 
@@ -180,11 +178,11 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> From<&TreeSlice<'a, FANOUT, L>>
-    for LeavesForward<'a, FANOUT, L>
+impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
+    for LeavesForward<'a, ARITY, L>
 {
     #[inline]
-    fn from(slice: &TreeSlice<'a, FANOUT, L>) -> LeavesForward<'a, FANOUT, L> {
+    fn from(slice: &TreeSlice<'a, ARITY, L>) -> LeavesForward<'a, ARITY, L> {
         Self {
             is_initialized: false,
             base_offset: L::BaseMetric::measure(&slice.offset),
@@ -424,13 +422,11 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> From<&TreeSlice<'a, FANOUT, L>>
-    for LeavesBackward<'a, FANOUT, L>
+impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
+    for LeavesBackward<'a, ARITY, L>
 {
     #[inline]
-    fn from(
-        slice: &TreeSlice<'a, FANOUT, L>,
-    ) -> LeavesBackward<'a, FANOUT, L> {
+    fn from(slice: &TreeSlice<'a, ARITY, L>) -> LeavesBackward<'a, ARITY, L> {
         let base_offset = slice.root().base_measure()
             - L::BaseMetric::measure(&slice.offset)
             - slice.base_measure();

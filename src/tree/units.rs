@@ -4,7 +4,7 @@ use super::{Arc, Lnode, Node, Tree, TreeSlice};
 
 /// An iterator over the units of a metric.
 #[derive(Clone)]
-pub struct Units<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
+pub struct Units<'a, const ARITY: usize, L: Leaf, M: Metric<L>> {
     /*
       Just like the `Leaves` iterator, this iterator is also implemented using
       two separate iterators, one for iterating forward (used in the `Iterator`
@@ -23,22 +23,22 @@ pub struct Units<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> {
     #[rustfmt::skip]
 
     /// Iterates over the `M`-units from front to back.
-    forward: UnitsForward<'a, FANOUT, L, M>,
+    forward: UnitsForward<'a, ARITY, L, M>,
 
     /// Iterates over the `M`-units from back to front.
-    backward: UnitsBackward<'a, FANOUT, L, M>,
+    backward: UnitsBackward<'a, ARITY, L, M>,
 
     /// The base measure of all the `TreeSlice`s which are yet to be yielded.
     remaining: L::BaseMetric,
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
-    for Units<'a, FANOUT, L, M>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>> From<&'a Tree<ARITY, L>>
+    for Units<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
 {
     #[inline]
-    fn from(tree: &'a Tree<FANOUT, L>) -> Units<'a, FANOUT, L, M> {
+    fn from(tree: &'a Tree<ARITY, L>) -> Units<'a, ARITY, L, M> {
         Self {
             forward: UnitsForward::from(tree),
             backward: UnitsBackward::from(tree),
@@ -47,13 +47,13 @@ where
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>>
-    From<&TreeSlice<'a, FANOUT, L>> for Units<'a, FANOUT, L, M>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>>
+    From<&TreeSlice<'a, ARITY, L>> for Units<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
 {
     #[inline]
-    fn from(tree_slice: &TreeSlice<'a, FANOUT, L>) -> Units<'a, FANOUT, L, M> {
+    fn from(tree_slice: &TreeSlice<'a, ARITY, L>) -> Units<'a, ARITY, L, M> {
         Self {
             forward: UnitsForward::from(tree_slice),
             backward: UnitsBackward::from(tree_slice),
@@ -62,8 +62,8 @@ where
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: UnitMetric<L>> Iterator
-    for Units<'a, FANOUT, L, M>
+impl<'a, const ARITY: usize, L: Leaf, M: UnitMetric<L>> Iterator
+    for Units<'a, ARITY, L, M>
 {
     /// The iterator returns the next `TreeSlice` in the iterating range
     /// together with its advance.
@@ -91,7 +91,7 @@ impl<'a, const FANOUT: usize, L: Leaf, M: UnitMetric<L>> Iterator
     /// following glyph.
     ///
     /// [1]: https://freetype.org/freetype2/docs/glyphs/glyph-metrics-3.svg
-    type Item = (TreeSlice<'a, FANOUT, L>, L::BaseMetric);
+    type Item = (TreeSlice<'a, ARITY, L>, L::BaseMetric);
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
@@ -136,8 +136,8 @@ impl<'a, const FANOUT: usize, L: Leaf, M: UnitMetric<L>> Iterator
     }
 }
 
-impl<const FANOUT: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
-    DoubleEndedIterator for Units<'_, FANOUT, L, M>
+impl<const ARITY: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
+    DoubleEndedIterator for Units<'_, ARITY, L, M>
 {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
@@ -185,8 +185,8 @@ impl<const FANOUT: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     }
 }
 
-impl<const FANOUT: usize, L: Leaf, M: UnitMetric<L>> core::iter::FusedIterator
-    for Units<'_, FANOUT, L, M>
+impl<const ARITY: usize, L: Leaf, M: UnitMetric<L>> core::iter::FusedIterator
+    for Units<'_, ARITY, L, M>
 {
 }
 
@@ -256,13 +256,13 @@ impl<const N: usize, L: Leaf, M: Metric<L>> Clone
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
-    for UnitsForward<'a, FANOUT, L, M>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>> From<&'a Tree<ARITY, L>>
+    for UnitsForward<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
 {
     #[inline]
-    fn from(tree: &'a Tree<FANOUT, L>) -> UnitsForward<'a, FANOUT, L, M> {
+    fn from(tree: &'a Tree<ARITY, L>) -> UnitsForward<'a, ARITY, L, M> {
         Self {
             is_initialized: false,
             path: Vec::with_capacity(tree.root().depth()),
@@ -281,15 +281,15 @@ where
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>>
-    From<&TreeSlice<'a, FANOUT, L>> for UnitsForward<'a, FANOUT, L, M>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>>
+    From<&TreeSlice<'a, ARITY, L>> for UnitsForward<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
 {
     #[inline]
     fn from(
-        tree_slice: &TreeSlice<'a, FANOUT, L>,
-    ) -> UnitsForward<'a, FANOUT, L, M> {
+        tree_slice: &TreeSlice<'a, ARITY, L>,
+    ) -> UnitsForward<'a, ARITY, L, M> {
         Self {
             is_initialized: false,
             path: Vec::with_capacity(tree_slice.root().depth()),
@@ -985,13 +985,13 @@ impl<const N: usize, L: Leaf, M: Metric<L>> Clone
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>> From<&'a Tree<FANOUT, L>>
-    for UnitsBackward<'a, FANOUT, L, M>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>> From<&'a Tree<ARITY, L>>
+    for UnitsBackward<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
 {
     #[inline]
-    fn from(tree: &'a Tree<FANOUT, L>) -> UnitsBackward<'a, FANOUT, L, M> {
+    fn from(tree: &'a Tree<ARITY, L>) -> UnitsBackward<'a, ARITY, L, M> {
         Self {
             is_initialized: false,
             path: Vec::with_capacity(tree.root().depth()),
@@ -1008,15 +1008,15 @@ where
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf, M: Metric<L>>
-    From<&TreeSlice<'a, FANOUT, L>> for UnitsBackward<'a, FANOUT, L, M>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>>
+    From<&TreeSlice<'a, ARITY, L>> for UnitsBackward<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
 {
     #[inline]
     fn from(
-        tree_slice: &TreeSlice<'a, FANOUT, L>,
-    ) -> UnitsBackward<'a, FANOUT, L, M> {
+        tree_slice: &TreeSlice<'a, ARITY, L>,
+    ) -> UnitsBackward<'a, ARITY, L, M> {
         Self {
             is_initialized: false,
             path: Vec::with_capacity(tree_slice.root().depth()),

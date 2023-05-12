@@ -7,7 +7,7 @@ use crate::tree::TreeBuilder;
 /// An incremental [`Rope`](crate::Rope) builder.
 #[derive(Clone, Default)]
 pub struct RopeBuilder {
-    tree_builder: TreeBuilder<{ Rope::fanout() }, RopeChunk>,
+    tree_builder: TreeBuilder<{ Rope::arity() }, RopeChunk>,
     buffer: RopeChunk,
     rope_has_trailing_newline: bool,
 }

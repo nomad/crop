@@ -4,18 +4,18 @@ use super::*;
 
 /// A self-balancing tree with metadata stored in each node.
 #[derive(Default)]
-pub struct Tree<const FANOUT: usize, L: Leaf> {
-    pub(super) root: Arc<Node<FANOUT, L>>,
+pub struct Tree<const ARITY: usize, L: Leaf> {
+    pub(super) root: Arc<Node<ARITY, L>>,
 }
 
-impl<const FANOUT: usize, L: Leaf> Clone for Tree<FANOUT, L> {
+impl<const ARITY: usize, L: Leaf> Clone for Tree<ARITY, L> {
     #[inline]
     fn clone(&self) -> Self {
         Tree { root: Arc::clone(&self.root) }
     }
 }
 
-impl<const FANOUT: usize, L: Leaf> core::fmt::Debug for Tree<FANOUT, L> {
+impl<const ARITY: usize, L: Leaf> core::fmt::Debug for Tree<ARITY, L> {
     #[inline]
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         if !f.alternate() {
@@ -26,11 +26,11 @@ impl<const FANOUT: usize, L: Leaf> core::fmt::Debug for Tree<FANOUT, L> {
     }
 }
 
-impl<const FANOUT: usize, L: BalancedLeaf + Clone>
-    From<TreeSlice<'_, FANOUT, L>> for Tree<FANOUT, L>
+impl<const ARITY: usize, L: BalancedLeaf + Clone> From<TreeSlice<'_, ARITY, L>>
+    for Tree<ARITY, L>
 {
     #[inline]
-    fn from(slice: TreeSlice<'_, FANOUT, L>) -> Tree<FANOUT, L> {
+    fn from(slice: TreeSlice<'_, ARITY, L>) -> Tree<ARITY, L> {
         let root = if slice.base_measure() == slice.root().base_measure() {
             // If the TreeSlice and its root have the same base measure it
             // means the TreeSlice spanned the whole Tree from which it was
@@ -67,14 +67,14 @@ impl<const FANOUT: usize, L: BalancedLeaf + Clone>
     }
 }
 
-impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
+impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     #[doc(hidden)]
     pub fn assert_invariants(&self) {
         match &*self.root {
             Node::Internal(root) => {
                 // The root is the only inode that can have as few as 2
                 // children.
-                assert!(root.len() >= 2 && root.len() <= FANOUT);
+                assert!(root.len() >= 2 && root.len() <= ARITY);
 
                 for child in root.children() {
                     child.assert_invariants()
@@ -152,7 +152,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
     /// Returns an iterator over the leaves of this `Tree`.
     #[inline]
-    pub fn leaves(&self) -> Leaves<'_, FANOUT, L> {
+    pub fn leaves(&self) -> Leaves<'_, ARITY, L> {
         Leaves::from(self)
     }
 
@@ -190,14 +190,14 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
     }
 
     #[inline]
-    pub(super) fn root(&self) -> &Arc<Node<FANOUT, L>> {
+    pub(super) fn root(&self) -> &Arc<Node<ARITY, L>> {
         &self.root
     }
 
     /// Returns a slice of the `Tree` in the range of the given metric.
     #[track_caller]
     #[inline]
-    pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, FANOUT, L>
+    pub fn slice<M>(&self, range: Range<M>) -> TreeSlice<'_, ARITY, L>
     where
         M: SlicingMetric<L>,
         L::BaseMetric: SlicingMetric<L>,
@@ -217,7 +217,7 @@ impl<const FANOUT: usize, L: Leaf> Tree<FANOUT, L> {
 
     /// Returns an iterator over the `M`-units of this `Tree`.
     #[inline]
-    pub fn units<M>(&self) -> Units<'_, FANOUT, L, M>
+    pub fn units<M>(&self) -> Units<'_, ARITY, L, M>
     where
         M: Metric<L>,
         for<'d> L::Slice<'d>: Default,

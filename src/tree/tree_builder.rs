@@ -3,7 +3,7 @@ use super::{Arc, Inode, Lnode, Node, Tree};
 
 /// An incremental [`Tree`] builder.
 #[derive(Clone)]
-pub struct TreeBuilder<const FANOUT: usize, L: Leaf> {
+pub struct TreeBuilder<const ARITY: usize, L: Leaf> {
     /// A stack of internal nodes.
     ///
     /// # Invariants
@@ -12,9 +12,9 @@ pub struct TreeBuilder<const FANOUT: usize, L: Leaf> {
     ///
     /// - all the inodes within a stack level have the same depth;
     ///
-    /// - all the vectors at every stack level have a length strictly less
-    /// than `FANOUT` (but it could also be zero, i.e. all levels except the
-    /// first one can be empty);
+    /// - all the vectors at every stack level have a length strictly less than
+    /// `ARITY` (but it could also be zero, i.e. all levels except the first
+    /// one can be empty);
     ///
     /// - the inodes are grouped in order of descending depth, with each stack
     /// level containing inodes of depth one less than the previous level;
@@ -24,27 +24,27 @@ pub struct TreeBuilder<const FANOUT: usize, L: Leaf> {
     ///
     /// - all the inodes in the last stack level (assuming there are any) have
     /// a depth of 1.
-    stack: Vec<Vec<Arc<Node<FANOUT, L>>>>,
+    stack: Vec<Vec<Arc<Node<ARITY, L>>>>,
 
     /// A bunch of leaves waiting to be grouped into an internal node.
-    leaves: Vec<Arc<Node<FANOUT, L>>>,
+    leaves: Vec<Arc<Node<ARITY, L>>>,
 }
 
-impl<const FANOUT: usize, L: Leaf> Default for TreeBuilder<FANOUT, L> {
+impl<const ARITY: usize, L: Leaf> Default for TreeBuilder<ARITY, L> {
     #[inline]
     fn default() -> Self {
-        Self { stack: Vec::new(), leaves: Vec::with_capacity(FANOUT) }
+        Self { stack: Vec::new(), leaves: Vec::with_capacity(ARITY) }
     }
 }
 
-impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
+impl<const ARITY: usize, L: Leaf> TreeBuilder<ARITY, L> {
     #[inline]
     pub fn append(&mut self, leaf: L) {
-        debug_assert!(self.leaves.len() < FANOUT);
+        debug_assert!(self.leaves.len() < ARITY);
 
         self.leaves.push(Arc::new(Node::Leaf(Lnode::from(leaf))));
 
-        if self.leaves.len() < FANOUT {
+        if self.leaves.len() < ARITY {
             return;
         }
 
@@ -54,7 +54,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
 
         let mut stack_idx = match self.stack.len() {
             0 => {
-                let mut first_level = Vec::with_capacity(FANOUT);
+                let mut first_level = Vec::with_capacity(ARITY);
                 first_level.push(inode);
                 self.stack.push(first_level);
                 return;
@@ -71,11 +71,11 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
                     || stack_level[0].depth() == inode.depth()
             );
 
-            debug_assert!(stack_level.len() < FANOUT);
+            debug_assert!(stack_level.len() < ARITY);
 
             stack_level.push(inode);
 
-            if stack_level.len() < FANOUT {
+            if stack_level.len() < ARITY {
                 return;
             }
 
@@ -85,7 +85,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
 
             if stack_idx == 0 {
                 stack_level.push(inode);
-                self.stack.push(Vec::with_capacity(FANOUT));
+                self.stack.push(Vec::with_capacity(ARITY));
 
                 #[cfg(debug_assertions)]
                 for level in &self.stack[1..] {
@@ -101,7 +101,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
 
     /// Completes the build and outputs the final `Tree`, consuming `self`.
     #[inline]
-    pub fn build(mut self) -> Tree<FANOUT, L>
+    pub fn build(mut self) -> Tree<ARITY, L>
     where
         L: Default + BalancedLeaf + Clone,
     {
@@ -117,7 +117,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
         }
 
         let mut root = if !self.leaves.is_empty() {
-            debug_assert!(self.leaves.len() < FANOUT);
+            debug_assert!(self.leaves.len() < ARITY);
             Arc::new(Node::Internal(Inode::from_children(self.leaves)))
         } else {
             loop {
@@ -147,7 +147,7 @@ impl<const FANOUT: usize, L: Leaf> TreeBuilder<FANOUT, L> {
                     || stack_level[0].depth() == root.depth()
             );
 
-            debug_assert!(stack_level.len() < FANOUT);
+            debug_assert!(stack_level.len() < ARITY);
 
             stack_level.push(root);
 

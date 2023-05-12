@@ -27,7 +27,7 @@ fn byte_slice_empty() {
 ///     ├── "gggg"
 ///     └── "hhhh"
 /// ```
-#[cfg(all(feature = "small_chunks", feature = "fanout_4"))]
+#[cfg(all(feature = "small_chunks", feature = "arity_4"))]
 #[test]
 fn byte_slice_0() {
     let r = Rope::from("aaaabbbbccccddddeeeeffffgggghhhh");

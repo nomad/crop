@@ -24,8 +24,8 @@ simd = ["str_indices/simd"]
 
 # Private features
 small_chunks = []
-fanout_4 = []
-deep_trees = ["small_chunks", "fanout_4"]
+arity_4 = []
+deep_trees = ["small_chunks", "arity_4"]
 dp = ["deep_trees"]
 
 [dependencies]

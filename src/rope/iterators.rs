@@ -9,7 +9,7 @@ use crate::tree::{Leaves, Units};
 /// and [`RopeSlice`](RopeSlice::chunks()). See their documentation for more.
 #[derive(Clone)]
 pub struct Chunks<'a> {
-    leaves: Leaves<'a, { Rope::fanout() }, RopeChunk>,
+    leaves: Leaves<'a, { Rope::arity() }, RopeChunk>,
     forward_extra_right: Option<&'a str>,
     backward_extra_left: Option<&'a str>,
 }
@@ -374,7 +374,7 @@ impl core::iter::FusedIterator for Chars<'_> {}
 /// their documentation for more.
 #[derive(Clone)]
 pub struct RawLines<'a> {
-    units: Units<'a, { Rope::fanout() }, RopeChunk, RawLineMetric>,
+    units: Units<'a, { Rope::arity() }, RopeChunk, RawLineMetric>,
 
     /// The number of lines that have been yielded so far.
     lines_yielded: usize,
@@ -447,7 +447,7 @@ impl core::iter::FusedIterator for RawLines<'_> {}
 /// [`RopeSlice`](RopeSlice::lines()). See their documentation for more.
 #[derive(Clone)]
 pub struct Lines<'a> {
-    units: Units<'a, { Rope::fanout() }, RopeChunk, LineMetric>,
+    units: Units<'a, { Rope::arity() }, RopeChunk, LineMetric>,
 
     /// The number of lines that have been yielded so far.
     lines_yielded: usize,

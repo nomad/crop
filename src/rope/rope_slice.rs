@@ -11,7 +11,7 @@ use crate::tree::TreeSlice;
 /// An immutable slice of a [`Rope`](crate::Rope).
 #[derive(Copy, Clone)]
 pub struct RopeSlice<'a> {
-    pub(super) tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>,
+    pub(super) tree_slice: TreeSlice<'a, { Rope::arity() }, RopeChunk>,
     pub(super) has_trailing_newline: bool,
 }
 
@@ -614,9 +614,9 @@ impl<'a> RopeSlice<'a> {
     }
 }
 
-impl<'a> From<TreeSlice<'a, { Rope::fanout() }, RopeChunk>> for RopeSlice<'a> {
+impl<'a> From<TreeSlice<'a, { Rope::arity() }, RopeChunk>> for RopeSlice<'a> {
     #[inline]
-    fn from(tree_slice: TreeSlice<'a, { Rope::fanout() }, RopeChunk>) -> Self {
+    fn from(tree_slice: TreeSlice<'a, { Rope::arity() }, RopeChunk>) -> Self {
         Self {
             has_trailing_newline: tree_slice
                 .end_slice()

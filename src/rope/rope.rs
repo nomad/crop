@@ -8,11 +8,11 @@ use super::RopeSlice;
 use crate::range_bounds_to_start_end;
 use crate::tree::Tree;
 
-#[cfg(any(test, feature = "fanout_4"))]
-const FANOUT: usize = 4;
+#[cfg(any(test, feature = "arity_4"))]
+const ARITY: usize = 4;
 
-#[cfg(not(any(test, feature = "fanout_4")))]
-const FANOUT: usize = 16;
+#[cfg(not(any(test, feature = "arity_4")))]
+const ARITY: usize = 16;
 
 #[cfg(any(test, feature = "small_chunks"))]
 const CHUNK_MAX_BYTES: usize = 4;
@@ -25,7 +25,7 @@ pub(super) type RopeChunk = GapBuffer<CHUNK_MAX_BYTES>;
 /// A UTF-8 text rope.
 #[derive(Clone, Default)]
 pub struct Rope {
-    pub(super) tree: Tree<{ Self::fanout() }, RopeChunk>,
+    pub(super) tree: Tree<{ Self::arity() }, RopeChunk>,
     pub(super) has_trailing_newline: bool,
 }
 
@@ -258,8 +258,8 @@ impl Rope {
         self.replace(byte_range, "");
     }
 
-    pub(super) const fn fanout() -> usize {
-        FANOUT
+    pub(super) const fn arity() -> usize {
+        ARITY
     }
 
     /// Returns an iterator over the extended grapheme clusters of this

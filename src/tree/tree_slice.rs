@@ -4,10 +4,10 @@ use super::*;
 
 /// An immutable slice of a [`Tree`].
 #[derive(Debug)]
-pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
+pub struct TreeSlice<'a, const ARITY: usize, L: Leaf> {
     /// The deepest node that contains all the leaves between (and including)
     /// [`start_slice`](Self::start_slice) and [`end_slice`](Self::end_slice).
-    pub(super) root: &'a Arc<Node<FANOUT, L>>,
+    pub(super) root: &'a Arc<Node<ARITY, L>>,
 
     /// The summary of the subtree under [`root`](Self::root) up to the start
     /// of the [`start_slice`](Self::start_slice).
@@ -33,7 +33,7 @@ pub struct TreeSlice<'a, const FANOUT: usize, L: Leaf> {
     pub(super) leaf_count: usize,
 }
 
-impl<const FANOUT: usize, L: Leaf> Clone for TreeSlice<'_, FANOUT, L> {
+impl<const ARITY: usize, L: Leaf> Clone for TreeSlice<'_, ARITY, L> {
     #[inline]
     fn clone(&self) -> Self {
         TreeSlice {
@@ -46,12 +46,12 @@ impl<const FANOUT: usize, L: Leaf> Clone for TreeSlice<'_, FANOUT, L> {
     }
 }
 
-impl<const FANOUT: usize, L: Leaf> Copy for TreeSlice<'_, FANOUT, L> where
+impl<const ARITY: usize, L: Leaf> Copy for TreeSlice<'_, ARITY, L> where
     L::Summary: Copy
 {
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
+impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     /*
       Public methods
     */
@@ -183,7 +183,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     #[inline]
-    pub fn leaves(&self) -> Leaves<'a, FANOUT, L> {
+    pub fn leaves(&self) -> Leaves<'a, ARITY, L> {
         Leaves::from(self)
     }
 
@@ -193,7 +193,7 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 
     #[inline]
-    pub(super) fn root(&self) -> &'a Arc<Node<FANOUT, L>> {
+    pub(super) fn root(&self) -> &'a Arc<Node<ARITY, L>> {
         self.root
     }
 
@@ -213,14 +213,14 @@ impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L> {
     }
 }
 
-impl<'a, const FANOUT: usize, L: Leaf> TreeSlice<'a, FANOUT, L>
+impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L>
 where
     for<'d> L::Slice<'d>: Default,
 {
     #[track_caller]
     #[inline]
     pub(super) fn from_range_in_root<M>(
-        root: &'a Arc<Node<FANOUT, L>>,
+        root: &'a Arc<Node<ARITY, L>>,
         range: Range<M>,
     ) -> Self
     where
@@ -296,7 +296,7 @@ where
     #[track_caller]
     #[inline]
     fn slice_impl<S, E>(
-        root: &'a Arc<Node<FANOUT, L>>,
+        root: &'a Arc<Node<ARITY, L>>,
         start: S,
         end: E,
     ) -> Self
@@ -350,7 +350,7 @@ where
     }
 
     #[inline]
-    pub fn units<M>(&self) -> Units<'a, FANOUT, L, M>
+    pub fn units<M>(&self) -> Units<'a, ARITY, L, M>
     where
         M: Metric<L>,
     {
