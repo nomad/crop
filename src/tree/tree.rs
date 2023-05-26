@@ -174,11 +174,9 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
         M: Metric<L>,
         L: ReplaceableLeaf<M> + Clone,
     {
-        if let Some(extras) = tree_replace::replace_range_with_slice(
-            &mut self.root,
-            range,
-            replace_with,
-        ) {
+        if let Some(extras) =
+            tree_replace::replace(&mut self.root, range, replace_with)
+        {
             debug_assert!(extras
                 .iter()
                 .all(|n| n.depth() == self.root.depth()));
@@ -517,7 +515,7 @@ mod tree_replace {
     /// it was before calling this function.
     #[track_caller]
     #[inline]
-    pub(super) fn replace_range_with_slice<const N: usize, M, L>(
+    pub(super) fn replace<const N: usize, M, L>(
         node: &mut Arc<Node<N, L>>,
         mut range: Range<M>,
         replace_with: L::Replacement<'_>,
@@ -537,42 +535,65 @@ mod tree_replace {
         };
 
         // The index of the child containing the entire replacement range.
-        let mut child_idx = 0;
+        let child_idx = {
+            let mut idx = 0;
 
-        let mut extras = None;
+            let mut offset = M::zero();
 
-        let mut offset = M::zero();
+            let children = inode.children();
 
-        for (idx, child) in inode.children().iter().enumerate() {
-            let child_measure = child.measure::<M>();
+            // This function is responsible for the tree traversal and is where
+            // the vast majority of the time (~95% according to
+            // cargo-flamegraph) is spent when doing single character
+            // insertions and deletions, which are by far the most common type
+            // of edits.
+            //
+            // This loop is optimized for performance instead of legibility. It
+            // was first implemented using the more idiomatic approach of a
+            // for-loop and iterator adapters. Re-writing it as a manual loop
+            // resulted in a 3-9% improvement in the editing traces.
+            loop {
+                debug_assert!(idx < children.len());
 
-            offset += child_measure;
+                // SAFETY: the only way for the index to get out of bounds is
+                // if none of the inode's children contain the start of the
+                // range, which can only happen if the range is out of bounds.
+                // Out of bounds ranges are always caught before getting here,
+                // so this is safe.
+                //
+                // Skipping the bounds checks brought a massive 10-13%
+                // improvement in the editing traces.
+                let measure =
+                    unsafe { children.get_unchecked(idx) }.measure::<M>();
 
-            if offset >= range.start {
-                if offset >= range.end {
-                    child_idx = idx;
+                offset += measure;
 
-                    offset -= child_measure;
-                    range.start -= offset;
-                    range.end -= offset;
+                if offset >= range.start {
+                    if offset >= range.end {
+                        offset -= measure;
+                        range.start -= offset;
+                        range.end -= offset;
+                        break idx;
+                    } else {
+                        let extras = replace_range_in_deepest(
+                            inode,
+                            range,
+                            replace_with,
+                        );
 
-                    extras = inode.with_child_mut(idx, |child| {
-                        replace_range_with_slice(child, range, replace_with)
-                    });
-
-                    break;
-                } else {
-                    let extras =
-                        replace_range_in_deepest(inode, range, replace_with);
-
-                    if extras.is_none() {
                         Node::replace_with_single_child(node);
-                    }
 
-                    return extras;
-                };
+                        return extras;
+                    }
+                }
+
+                idx += 1;
             }
-        }
+        };
+
+        let extras = inode.with_child_mut(child_idx, |child| {
+            replace(child, range, replace_with)
+        });
 
         let child = inode.child(child_idx);
 
