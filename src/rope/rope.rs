@@ -35,7 +35,7 @@ impl Rope {
         self.tree.assert_invariants();
 
         if let Some(last) = self.chunks().next_back() {
-            assert_eq!(self.has_trailing_newline, last_byte_is_newline(last));
+            assert_eq!(self.has_trailing_newline, last.ends_with('\n'));
         } else {
             return;
         }
@@ -141,6 +141,18 @@ impl Rope {
             self.tree.convert_measure(RawLineMetric(line_offset));
 
         byte_offset
+    }
+
+    /// TODO: docs
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[track_caller]
+    #[inline]
+    pub fn byte_of_utf16_code_unit(
+        &self,
+        utf16_code_unit_offset: usize,
+    ) -> usize {
+        todo!();
     }
 
     /// Returns an immutable slice of the `Rope` in the specified byte range,
@@ -663,7 +675,7 @@ impl Rope {
 
         if end == self.byte_len() {
             if !text.is_empty() {
-                self.has_trailing_newline = last_byte_is_newline(text);
+                self.has_trailing_newline = text.ends_with('\n');
             } else if start == 0 {
                 self.has_trailing_newline = false;
             } else {
@@ -675,8 +687,25 @@ impl Rope {
 
         if update_trailing {
             self.has_trailing_newline =
-                last_byte_is_newline(self.chunks().next_back().unwrap());
+                self.chunks().next_back().unwrap().ends_with('\n');
         }
+    }
+
+    /// TODO: docs
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[inline]
+    pub fn utf16_len(&self) -> usize {
+        self.tree.summary().utf16_code_units()
+    }
+
+    /// TODO: docs
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[track_caller]
+    #[inline]
+    pub fn utf16_code_unit_of_byte(&self, byte_offset: usize) -> usize {
+        todo!();
     }
 }
 
@@ -713,7 +742,7 @@ impl From<&str> for Rope {
     #[inline]
     fn from(s: &str) -> Self {
         Rope {
-            has_trailing_newline: last_byte_is_newline(s),
+            has_trailing_newline: s.ends_with('\n'),
             tree: Tree::from_leaves(
                 RopeChunk::segmenter(s).map(RopeChunk::from),
             ),

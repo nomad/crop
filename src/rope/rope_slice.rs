@@ -120,6 +120,18 @@ impl<'a> RopeSlice<'a> {
         byte_offset
     }
 
+    /// TODO: docs
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[track_caller]
+    #[inline]
+    pub fn byte_of_utf16_code_unit(
+        &self,
+        utf16_code_unit_offset: usize,
+    ) -> usize {
+        todo!();
+    }
+
     /// Returns a sub-slice of this `RopeSlice` in the specified byte range,
     /// where the start and end of the range are interpreted as offsets.
     ///
@@ -592,6 +604,23 @@ impl<'a> RopeSlice<'a> {
         if self.tree_slice.end_slice().last_chunk().ends_with('\r') {
             self.truncate_last_char();
         }
+    }
+
+    /// TODO: docs
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[inline]
+    pub fn utf16_len(&self) -> usize {
+        self.tree_slice.summary().utf16_code_units()
+    }
+
+    /// TODO: docs
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[track_caller]
+    #[inline]
+    pub fn utf16_code_unit_of_byte(&self, byte_offset: usize) -> usize {
+        todo!();
     }
 }
 

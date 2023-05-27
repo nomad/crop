@@ -163,7 +163,7 @@ impl<'a> GapSlice<'a> {
     /// Returns `true` if it ends with a newline.
     #[inline]
     pub(super) fn has_trailing_newline(&self) -> bool {
-        last_byte_is_newline(self.last_chunk())
+        self.last_chunk().ends_with('\n')
     }
 
     #[inline]

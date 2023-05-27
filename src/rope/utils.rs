@@ -37,36 +37,6 @@ pub(super) fn adjust_split_point<const WITH_RIGHT_BIAS: bool>(
     offset
 }
 
-#[cfg(not(miri))]
-#[inline]
-pub(super) fn byte_of_line(s: &str, line: usize) -> usize {
-    str_indices::lines_lf::to_byte_idx(s, line)
-}
-
-#[cfg(miri)]
-pub(super) fn byte_of_line(s: &str, line: usize) -> usize {
-    if line == 0 {
-        return 0;
-    }
-
-    let mut seen = 0;
-    let mut stop = false;
-
-    s.bytes()
-        .take_while(|&b| {
-            !stop && {
-                if b == b'\n' {
-                    seen += 1;
-                    if seen == line {
-                        stop = true;
-                    }
-                }
-                true
-            }
-        })
-        .count()
-}
-
 /// Checks equality between the chunks yielded by iterating over two
 /// [`Chunks`].
 ///
@@ -135,17 +105,6 @@ pub(super) fn chunks_eq_str(chunks: Chunks<'_>, s: &str) -> bool {
         checked += chunk.len();
     }
     true
-}
-
-#[cfg(not(miri))]
-#[inline]
-pub(super) fn count_line_breaks(s: &str) -> usize {
-    str_indices::lines_lf::count_breaks(s)
-}
-
-#[cfg(miri)]
-pub(super) fn count_line_breaks(s: &str) -> usize {
-    s.bytes().filter(|&b| b == b'\n').count()
 }
 
 /// Iterates over the string slices yielded by [`Chunks`], writing the debug
@@ -236,27 +195,6 @@ pub(super) fn is_grapheme_boundary(
 
             _ => unreachable!(),
         }
-    }
-}
-
-/// Returns whether the last byte of the string is a newline (0x0A).
-#[inline]
-pub(super) fn last_byte_is_newline(s: &str) -> bool {
-    !s.is_empty() && s.as_bytes()[s.len() - 1] == b'\n'
-}
-
-#[inline]
-pub(super) fn line_breaks_up_to(
-    s: &str,
-    byte_offset: usize,
-    tot_line_breaks: usize,
-) -> usize {
-    debug_assert_eq!(tot_line_breaks, count_line_breaks(s));
-
-    if byte_offset <= s.len() / 2 {
-        count_line_breaks(&s[..byte_offset])
-    } else {
-        tot_line_breaks - count_line_breaks(&s[byte_offset..])
     }
 }
 

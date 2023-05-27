@@ -402,7 +402,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// Returns `true` if the buffer ends with a newline ('\n') character.
     #[inline]
     pub(super) fn has_trailing_newline(&self) -> bool {
-        last_byte_is_newline(self.last_chunk())
+        self.last_chunk().ends_with('\n')
     }
 
     /// Inserts the string at the given byte offset, moving the gap to the new
