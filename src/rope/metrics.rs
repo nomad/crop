@@ -56,7 +56,7 @@ impl From<ByteMetric> for usize {
     }
 }
 
-impl<const MAX_BYTES: usize> Metric<GapBuffer<MAX_BYTES>> for ByteMetric {
+impl Metric<ChunkSummary> for ByteMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
@@ -234,7 +234,7 @@ impl SubAssign for RawLineMetric {
     }
 }
 
-impl<const MAX_BYTES: usize> Metric<GapBuffer<MAX_BYTES>> for RawLineMetric {
+impl Metric<ChunkSummary> for RawLineMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
@@ -397,7 +397,7 @@ impl SubAssign for LineMetric {
     }
 }
 
-impl<const MAX_BYTES: usize> Metric<GapBuffer<MAX_BYTES>> for LineMetric {
+impl Metric<ChunkSummary> for LineMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)

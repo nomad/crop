@@ -127,7 +127,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: SlicingMetric<L>,
-        M2: Metric<L>,
+        M2: Metric<L::Summary>,
     {
         debug_assert!(up_to <= self.measure::<M1>());
 
@@ -155,7 +155,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     #[inline]
     pub fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'a>, M)
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
     {
         debug_assert!(measure <= self.measure::<M>() + M::one());
 
@@ -188,7 +188,10 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     }
 
     #[inline]
-    pub fn measure<M: Metric<L>>(&self) -> M {
+    pub fn measure<M>(&self) -> M
+    where
+        M: Metric<L::Summary>,
+    {
         M::measure(self.summary())
     }
 
@@ -352,7 +355,7 @@ where
     #[inline]
     pub fn units<M>(&self) -> Units<'a, ARITY, L, M>
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
     {
         Units::from(self)
     }
@@ -369,8 +372,8 @@ fn deepest_node_containing_range<const N: usize, L, S, E>(
 ) -> (&Arc<Node<N, L>>, S, E)
 where
     L: Leaf,
-    S: Metric<L>,
-    E: Metric<L>,
+    S: Metric<L::Summary>,
+    E: Metric<L::Summary>,
 {
     'outer: loop {
         match &**node {
