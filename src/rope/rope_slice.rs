@@ -78,7 +78,7 @@ impl<'a> RopeSlice<'a> {
     /// ```
     #[inline]
     pub fn byte_len(&self) -> usize {
-        self.tree_slice.summary().bytes
+        self.tree_slice.summary().bytes()
     }
 
     /// Returns the byte offset of the start of the given line.
@@ -108,7 +108,9 @@ impl<'a> RopeSlice<'a> {
     pub fn byte_of_line(&self, line_offset: usize) -> usize {
         if line_offset > self.line_len() {
             line_offset_out_of_bounds(line_offset, self.line_len());
-        } else if line_offset > self.tree_slice.summary().line_breaks {
+        }
+
+        if line_offset > self.tree_slice.summary().line_breaks() {
             return self.byte_len();
         }
 
@@ -352,11 +354,9 @@ impl<'a> RopeSlice<'a> {
 
         let mut line = Self { tree_slice, has_trailing_newline: false };
 
-        if line.tree_slice.summary().line_breaks == 1 {
+        if line.tree_slice.summary().line_breaks() == 1 {
             line.truncate_trailing_line_break();
         }
-
-        debug_assert_eq!(line.tree_slice.summary().line_breaks, 0);
 
         line
     }
@@ -390,7 +390,7 @@ impl<'a> RopeSlice<'a> {
     /// ```
     #[inline]
     pub fn line_len(&self) -> usize {
-        self.tree_slice.summary().line_breaks + 1
+        self.tree_slice.summary().line_breaks() + 1
             - (self.has_trailing_newline as usize)
             - (self.is_empty() as usize)
     }
@@ -541,15 +541,18 @@ impl<'a> RopeSlice<'a> {
     ///
     /// # Panics
     ///
-    /// Panics if the slice is empty.
+    /// Panics if the slice is empty or if the relative offset is not on a char
+    /// boundary.
     #[inline]
     pub(super) fn truncate_last_byte(&mut self) {
         debug_assert!(!self.is_empty());
 
+        debug_assert!(self.is_char_boundary(self.byte_len() - 1));
+
         let slice = &mut self.tree_slice;
 
         // The last slice only contains one byte so we have to re-slice.
-        if slice.end_summary.bytes == 1 {
+        if slice.end_summary.bytes() == 1 {
             *self = self.byte_slice(..self.byte_len() - 1);
         }
         // The last slice contains more than 2 bytes so we can just mutate
@@ -557,37 +560,17 @@ impl<'a> RopeSlice<'a> {
         else {
             let last = &mut slice.end_slice;
 
-            let is_newline = last.has_trailing_newline();
+            slice.summary -= slice.end_summary;
 
-            use std::cmp::Ordering;
+            let new_end_summary = last.truncate_last_byte(slice.end_summary);
 
-            match last.len_right.cmp(&1) {
-                Ordering::Less => {
-                    last.len_left -= 1;
-                    last.bytes = &last.bytes[..last.len_left()];
-                    last.line_breaks_left -= is_newline as u16;
-                },
+            slice.end_summary = new_end_summary;
 
-                Ordering::Equal => {
-                    last.bytes = &last.bytes[..last.len_left()];
-                    last.len_right = 0;
-                },
-
-                Ordering::Greater => {
-                    last.bytes = &last.bytes[..last.bytes.len() - 1];
-                    last.len_right -= 1;
-                },
-            }
-
-            slice.end_summary.bytes -= 1;
-            slice.end_summary.line_breaks -= is_newline as usize;
-
-            slice.summary.bytes -= 1;
-            slice.summary.line_breaks -= is_newline as usize;
+            slice.summary += slice.end_summary;
 
             if slice.leaf_count() == 1 {
                 slice.start_slice = slice.end_slice;
-                slice.start_summary = slice.summary;
+                slice.start_summary = slice.end_summary;
             }
         }
     }
