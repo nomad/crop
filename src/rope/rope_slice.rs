@@ -125,11 +125,16 @@ impl<'a> RopeSlice<'a> {
     #[cfg(feature = "utf16-metric")]
     #[track_caller]
     #[inline]
-    pub fn byte_of_utf16_code_unit(
-        &self,
-        utf16_code_unit_offset: usize,
-    ) -> usize {
-        todo!();
+    pub fn byte_of_utf16_code_unit(&self, utf16_offset: usize) -> usize {
+        if utf16_offset > self.utf16_len() {
+            utf16_offset_out_of_bounds(utf16_offset, self.utf16_len())
+        }
+
+        let ByteMetric(byte_offset) = self
+            .tree_slice
+            .convert_measure(super::metrics::Utf16Metric(utf16_offset));
+
+        byte_offset
     }
 
     /// Returns a sub-slice of this `RopeSlice` in the specified byte range,

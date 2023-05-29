@@ -330,4 +330,19 @@ mod panic_messages {
              {line_end}"
         );
     }
+
+    #[track_caller]
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn utf16_offset_out_of_bounds(
+        utf16_offset: usize,
+        utf16_len: usize,
+    ) -> ! {
+        debug_assert!(utf16_offset > utf16_len);
+
+        panic!(
+            "UTF-16 offset out of bounds: the offset is {utf16_offset} but \
+             the length is {utf16_len}"
+        );
+    }
 }

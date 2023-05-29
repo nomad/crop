@@ -580,7 +580,7 @@ mod utf16_metric {
     use super::*;
 
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-    pub struct Utf16Metric(pub(super) usize);
+    pub struct Utf16Metric(pub usize);
 
     impl Add<Self> for Utf16Metric {
         type Output = Self;
