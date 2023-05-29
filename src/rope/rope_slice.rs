@@ -120,7 +120,26 @@ impl<'a> RopeSlice<'a> {
         byte_offset
     }
 
-    /// TODO: docs
+    /// Returns the byte offset corresponding to the given UTF-16 code unit
+    /// offset.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the UTF-16 code unit offset is out of bounds (i.e. greater
+    /// than [`utf16_len()`](Self::utf16_len())) or if it doesn't lie on a code
+    /// point boundary.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// // The "𐐀" character is encoded using two code units in UTF-16 and
+    /// // four bytes in UTF-8.
+    /// let r = Rope::from("a𐐀b");
+    /// let s = r.byte_slice(1..);
+    /// assert_eq!(s.byte_of_utf16_code_unit(2), 4);
+    /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
     #[cfg(feature = "utf16-metric")]
     #[track_caller]
@@ -611,7 +630,19 @@ impl<'a> RopeSlice<'a> {
         }
     }
 
-    /// TODO: docs
+    /// Returns the number of UTF-16 code units this `RopeSlice` would span if
+    /// it stores its contents as UTF-16 instead of UTF-8.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// // The "🐸" emoji is encoded using two UTF-16 code units.
+    /// let r = Rope::from("abc🐸");
+    /// let s = r.byte_slice(2..);
+    /// assert_eq!(s.utf16_len(), 3);
+    /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
     #[cfg(feature = "utf16-metric")]
     #[inline]
@@ -619,7 +650,25 @@ impl<'a> RopeSlice<'a> {
         self.tree_slice.summary().utf16_code_units()
     }
 
-    /// TODO: docs
+    /// Returns the UTF-16 code unit offset corresponding to the given byte
+    /// offset.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the byte offset is out of bounds (i.e. greater than
+    /// [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// // The "𐐀" character is encoded using two code units in UTF-16 and
+    /// // four bytes in UTF-8.
+    /// let r = Rope::from("a𐐀b");
+    /// let s = r.byte_slice(1..);
+    /// assert_eq!(s.utf16_code_unit_of_byte(4), 2);
+    /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
     #[cfg(feature = "utf16-metric")]
     #[track_caller]
@@ -635,7 +684,28 @@ impl<'a> RopeSlice<'a> {
         utf16_offset
     }
 
-    /// TODO: docs
+    /// Returns a sub-slice of this `RopeSlice` in the specified UTF-16 code
+    /// unit range, where the start and end of the range are interpreted as
+    /// offsets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the start is greater than the end or if the end is out of
+    /// bounds (i.e. greater than [`utf16_len()`](Self::utf16_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// // Both "𐐀" and "🐸" are encoded using two code units in UTF-16.
+    /// let r = Rope::from("ab𐐀de🐸");
+    /// let s = r.byte_slice(..);
+    ///
+    /// assert_eq!(s.utf16_slice(..4), "ab𐐀");
+    /// assert_eq!(s.utf16_slice(5..), "e🐸");
+    /// assert_eq!(s.utf16_slice(2..4), "𐐀");
+    /// ```
     #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
     #[cfg(feature = "utf16-metric")]
     #[track_caller]
