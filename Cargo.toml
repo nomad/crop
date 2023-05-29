@@ -14,7 +14,7 @@ categories = ["data-structures", "text-editors", "text-processing"]
 exclude = ["/.github/*", "/examples/**", "/fuzz/**", "/tests/**", "/BENCHMARKS.md"]
 
 [package.metadata.docs.rs]
-features = ["graphemes", "simd"]
+features = ["graphemes", "simd", "utf16-metric"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
