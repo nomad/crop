@@ -572,6 +572,129 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
     }
 }
 
+#[cfg(feature = "utf16-metric")]
+pub use utf16_metric::Utf16Metric;
+
+#[cfg(feature = "utf16-metric")]
+mod utf16_metric {
+    use super::*;
+
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct Utf16Metric(pub(super) usize);
+
+    impl Add<Self> for Utf16Metric {
+        type Output = Self;
+
+        #[inline]
+        fn add(self, other: Self) -> Self {
+            Self(self.0 + other.0)
+        }
+    }
+
+    impl Sub for Utf16Metric {
+        type Output = Self;
+
+        #[inline]
+        fn sub(self, other: Self) -> Self {
+            Self(self.0 - other.0)
+        }
+    }
+
+    impl AddAssign for Utf16Metric {
+        #[inline]
+        fn add_assign(&mut self, other: Self) {
+            self.0 += other.0
+        }
+    }
+
+    impl SubAssign for Utf16Metric {
+        #[inline]
+        fn sub_assign(&mut self, other: Self) {
+            self.0 -= other.0
+        }
+    }
+
+    impl ToByteOffset for Utf16Metric {
+        #[inline]
+        fn to_byte_offset(&self, in_str: &str) -> usize {
+            convert::byte_of_utf16_code_unit(in_str, self.0)
+        }
+    }
+
+    impl SummaryUpTo for Utf16Metric {
+        #[inline]
+        fn up_to(
+            in_str: &str,
+            str_summary: ChunkSummary,
+            Self(utf16_code_unit_offset): Self,
+            byte_offset: usize,
+        ) -> ChunkSummary {
+            ChunkSummary {
+                bytes: byte_offset,
+
+                line_breaks: count::line_breaks_up_to(
+                    in_str,
+                    byte_offset,
+                    str_summary.line_breaks,
+                ),
+
+                utf16_code_units: utf16_code_unit_offset,
+            }
+        }
+    }
+
+    impl Metric<ChunkSummary> for Utf16Metric {
+        #[inline]
+        fn zero() -> Self {
+            Self(0)
+        }
+
+        #[inline]
+        fn one() -> Self {
+            Self(1)
+        }
+
+        #[inline]
+        fn measure(summary: &ChunkSummary) -> Self {
+            Self(summary.utf16_code_units)
+        }
+    }
+
+    impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
+        for Utf16Metric
+    {
+        #[track_caller]
+        #[inline]
+        fn slice_up_to<'a>(
+            chunk: GapSlice<'a>,
+            utf16_code_unit_offset: Self,
+            &summary: &ChunkSummary,
+        ) -> (GapSlice<'a>, ChunkSummary)
+        where
+            'a: 'a,
+        {
+            let (left, _) =
+                chunk.split_at_offset(utf16_code_unit_offset, summary);
+            left
+        }
+
+        #[track_caller]
+        #[inline]
+        fn slice_from<'a>(
+            chunk: GapSlice<'a>,
+            utf16_code_unit_offset: Self,
+            &summary: &ChunkSummary,
+        ) -> (GapSlice<'a>, ChunkSummary)
+        where
+            'a: 'a,
+        {
+            let (_, right) =
+                chunk.split_at_offset(utf16_code_unit_offset, summary);
+            right
+        }
+    }
+}
+
 use str_utils::*;
 
 mod str_utils {
