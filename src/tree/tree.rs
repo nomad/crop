@@ -96,7 +96,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: SlicingMetric<L>,
-        M2: Metric<L>,
+        M2: Metric<L::Summary>,
     {
         debug_assert!(up_to <= self.measure::<M1>());
         self.root.convert_measure(up_to)
@@ -138,7 +138,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     #[inline]
     pub fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'_>, M)
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
     {
         debug_assert!(measure <= self.measure::<M>() + M::one());
 
@@ -159,7 +159,10 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     /// Returns the `M`-measure of this `Tree` obtaining by summing up the
     /// `M`-measures of all its leaves.
     #[inline]
-    pub fn measure<M: Metric<L>>(&self) -> M {
+    pub fn measure<M>(&self) -> M
+    where
+        M: Metric<L::Summary>,
+    {
         M::measure(self.summary())
     }
 
@@ -171,7 +174,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
         range: Range<M>,
         replace_with: L::Replacement<'_>,
     ) where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
         L: ReplaceableLeaf<M> + Clone,
     {
         if let Some(extras) =
@@ -217,7 +220,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     #[inline]
     pub fn units<M>(&self) -> Units<'_, ARITY, L, M>
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
         for<'d> L::Slice<'d>: Default,
     {
         Units::from(self)
@@ -521,7 +524,7 @@ mod tree_replace {
         replace_with: L::Replacement<'_>,
     ) -> Option<Vec<Arc<Node<N, L>>>>
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
         L: ReplaceableLeaf<M> + Clone,
     {
         let inode = match Arc::make_mut(node) {
@@ -648,7 +651,7 @@ mod tree_replace {
         replace_with: L::Replacement<'_>,
     ) -> Option<Vec<Arc<Node<N, L>>>>
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
         L: ReplaceableLeaf<M> + Clone,
     {
         let (start_idx, end_idx, extra_leaves) =
@@ -756,7 +759,7 @@ mod tree_replace {
         replace_with: L::Replacement<'_>,
     ) -> (usize, usize, Option<Vec<Arc<Node<N, L>>>>)
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
         L: ReplaceableLeaf<M> + Clone,
     {
         let mut start_idx = 0;
@@ -850,7 +853,7 @@ mod tree_replace {
         should_rebalance: &mut bool,
     ) -> Option<impl ExactSizeIterator<Item = Arc<Node<N, L>>>>
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
         L: ReplaceableLeaf<M> + Clone,
     {
         let inode = match node {
@@ -926,7 +929,7 @@ mod tree_replace {
         extra_leaves: &mut Option<Vec<Arc<Node<N, L>>>>,
         should_rebalance: &mut bool,
     ) where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
         L: ReplaceableLeaf<M> + Clone,
     {
         let inode = match node {
@@ -1687,7 +1690,7 @@ mod tests {
         }
     }
 
-    impl Metric<usize> for LeavesMetric {
+    impl Metric<Count> for LeavesMetric {
         fn zero() -> Self {
             0
         }

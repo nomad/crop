@@ -743,7 +743,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub fn measure<M: Metric<L>>(&self) -> M {
+    pub fn measure<M: Metric<L::Summary>>(&self) -> M {
         M::measure(self.summary())
     }
 

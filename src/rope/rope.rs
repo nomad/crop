@@ -104,7 +104,7 @@ impl Rope {
     /// ```
     #[inline]
     pub fn byte_len(&self) -> usize {
-        self.tree.summary().bytes
+        self.tree.summary().bytes()
     }
 
     /// Returns the byte offset of the start of the given line.
@@ -131,7 +131,9 @@ impl Rope {
     pub fn byte_of_line(&self, line_offset: usize) -> usize {
         if line_offset > self.line_len() {
             line_offset_out_of_bounds(line_offset, self.line_len());
-        } else if line_offset > self.tree.summary().line_breaks {
+        }
+
+        if line_offset > self.tree.summary().line_breaks() {
             return self.byte_len();
         }
 
@@ -434,11 +436,9 @@ impl Rope {
 
         let mut line = RopeSlice { tree_slice, has_trailing_newline: false };
 
-        if line.tree_slice.summary().line_breaks == 1 {
+        if line.tree_slice.summary().line_breaks() == 1 {
             line.truncate_trailing_line_break();
         }
-
-        debug_assert_eq!(line.tree_slice.summary().line_breaks, 0);
 
         line
     }
@@ -471,7 +471,7 @@ impl Rope {
     /// ```
     #[inline]
     pub fn line_len(&self) -> usize {
-        self.tree.summary().line_breaks + 1
+        self.tree.summary().line_breaks() + 1
             - (self.has_trailing_newline as usize)
             - (self.is_empty() as usize)
     }

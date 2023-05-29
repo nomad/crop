@@ -76,7 +76,7 @@ impl<L: Leaf> Lnode<L> {
     }
 
     #[inline]
-    pub(super) fn measure<M: Metric<L>>(&self) -> M {
+    pub(super) fn measure<M: Metric<L::Summary>>(&self) -> M {
         M::measure(self.summary())
     }
 
@@ -88,7 +88,7 @@ impl<L: Leaf> Lnode<L> {
     #[inline]
     pub(super) fn remove_up_to<M>(&mut self, up_to: M)
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
         L: ReplaceableLeaf<M>,
     {
         self.value.remove_up_to(&mut self.summary, up_to);
@@ -102,7 +102,7 @@ impl<L: Leaf> Lnode<L> {
         replace_with: L::Replacement<'_>,
     ) -> Option<impl ExactSizeIterator<Item = Self>>
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
         R: RangeBounds<M>,
         L: ReplaceableLeaf<M>,
     {

@@ -1,13 +1,12 @@
-use super::gap_buffer::ChunkSummary;
+use super::metrics::{ChunkSummary, SummaryUpTo, ToByteOffset};
 use super::utils::*;
-use crate::tree::Summarize;
+use crate::tree::{Metric, Summarize};
 
 /// A slice of a [`GapBuffer`](super::gap_buffer::GapBuffer).
 #[derive(Copy, Clone, Default)]
 pub struct GapSlice<'a> {
     pub(super) bytes: &'a [u8],
-    pub(super) len_left: u16,
-    pub(super) line_breaks_left: u16,
+    pub(super) left_summary: ChunkSummary,
     pub(super) len_right: u16,
 }
 
@@ -52,10 +51,7 @@ impl<'a> GapSlice<'a> {
     }
 
     pub(super) fn assert_invariants(&self) {
-        assert_eq!(
-            self.line_breaks_left,
-            count_line_breaks(self.left_chunk()) as u16
-        );
+        assert_eq!(self.left_summary, ChunkSummary::from(self.left_chunk()));
 
         if self.len_right() == 0 {
             assert_eq!(self.len_left(), self.bytes.len());
@@ -81,48 +77,81 @@ impl<'a> GapSlice<'a> {
         }
     }
 
+    #[inline]
+    fn left_measure<M>(&self) -> M
+    where
+        M: Metric<ChunkSummary>,
+    {
+        M::measure(&self.left_summary)
+    }
+
+    #[inline]
+    pub(super) fn truncate_last_byte(
+        &mut self,
+        summary: ChunkSummary,
+    ) -> ChunkSummary {
+        debug_assert!(self.len() > 0);
+        debug_assert_eq!(summary, self.summarize());
+
+        use core::cmp::Ordering;
+
+        match self.len_right.cmp(&1) {
+            // The slice doesn't have a right chunk, so we shorten the left
+            // chunk.
+            Ordering::Less => {
+                self.left_summary =
+                    self.left_summary.without_last_byte(self.left_chunk());
+
+                self.bytes = &self.bytes[..self.len_left()];
+
+                self.left_summary
+            },
+
+            // The right chunk has 2 or more bytes, so we shorten the right
+            // chunk.
+            Ordering::Greater => {
+                let new_right_summary = self
+                    .right_summary(summary)
+                    .without_last_byte(self.right_chunk());
+
+                self.len_right = new_right_summary.bytes() as u16;
+
+                self.bytes = &self.bytes[..self.bytes.len() - 1];
+
+                self.left_summary + new_right_summary
+            },
+
+            // The right chunk has exactly 1 byte, so we can keep just the left
+            // chunk.
+            Ordering::Equal => {
+                self.bytes = &self.bytes[..self.len_left()];
+                self.len_right = 0;
+                self.left_summary
+            },
+        }
+    }
+
     /// Removes the trailing line break (if it has one), returning the number
     /// of bytes that were removed: 0 if there was no trailing line break, 1
     /// if it was a LF, or 2 if it was a CRLF.
     #[inline]
-    pub(super) fn truncate_trailing_line_break(&mut self) -> usize {
+    pub(super) fn truncate_trailing_line_break(
+        &mut self,
+        summary: ChunkSummary,
+    ) -> ChunkSummary {
+        debug_assert_eq!(summary, self.summarize());
+
         if !self.has_trailing_newline() {
-            0
-        } else if self.len_right() > 0 {
-            let bytes_line_break = bytes_line_break(self.right_chunk());
-
-            // Check if the right chunk only contained a trailing line break.
-            // This only checks for LF and CRLF.
-            if self.len_right == bytes_line_break as u16 {
-                self.len_right = 0;
-
-                // Check if the right chunk only contained a '\n' and the left
-                // chunk contains a trailing CR.
-                if bytes_line_break == 1
-                    && self.len_left() > 0
-                    && self.left_chunk().as_bytes()[self.len_left() - 1]
-                        == b'\r'
-                {
-                    self.bytes = &self.bytes[..self.len_left() - 1];
-                    self.len_left -= 1;
-                    2
-                } else {
-                    self.bytes = &self.bytes[..self.len_left()];
-                    bytes_line_break
-                }
-            } else {
-                self.len_right -= bytes_line_break as u16;
-                self.bytes =
-                    &self.bytes[..self.bytes.len() - bytes_line_break];
-                bytes_line_break
-            }
-        } else {
-            let bytes_line_break = bytes_line_break(self.left_chunk());
-            self.len_left -= bytes_line_break as u16;
-            self.bytes = &self.bytes[..self.len_left()];
-            self.line_breaks_left -= 1;
-            bytes_line_break
+            return summary;
         }
+
+        let mut new_summary = self.truncate_last_byte(summary);
+
+        if self.last_chunk().ends_with('r') {
+            new_summary = self.truncate_last_byte(new_summary)
+        }
+
+        new_summary
     }
 
     #[inline]
@@ -177,7 +206,7 @@ impl<'a> GapSlice<'a> {
 
     #[inline]
     pub(super) fn len_left(&self) -> usize {
-        self.len_left as _
+        self.left_summary.bytes()
     }
 
     #[inline]
@@ -195,81 +224,128 @@ impl<'a> GapSlice<'a> {
         }
     }
 
-    /// Splits the slice at the given line offset, returning the left and right
-    /// slices.
+    #[inline]
+    fn right_summary(&self, summary: ChunkSummary) -> ChunkSummary {
+        debug_assert_eq!(summary, self.summarize());
+        summary - self.left_summary
+    }
+
+    /// Splits the slice at the given offset, returning the left and right
+    /// slices and their summary.
     ///
     /// # Panics
     ///
-    /// Panics if the line offset is greater than the number of line breaks in
-    /// the slice.
+    /// Panics if the offset is greater than the M-measure of the slice.
     ///
     /// # Examples
     ///
-    /// ```
-    /// # use crop::GapBuffer;
-    /// # use crop::tree::AsSlice;
+    /// ```ignore
     /// let gap_buffer = GapBuffer::<20>::from("foo\nbar\r\nbaz");
     ///
-    /// let (left, right) = gap_buffer.as_slice().split_at_line(1);
+    /// let summary = gap_buffer.summarize();
+    ///
+    /// let ((left, _), (right, _)) =
+    ///     gap_buffer.as_slice().split_at_offset(RawLineMetric(1));
+    ///
     /// assert_eq!("foo\n", left);
+    ///
     /// assert_eq!("bar\r\nbaz", right);
     /// ```
     #[inline]
-    pub fn split_at_line(&self, line_offset: usize) -> (Self, Self) {
-        debug_assert!(line_offset <= self.summarize().line_breaks);
+    pub fn split_at_offset<M>(
+        &self,
+        mut offset: M,
+        summary: ChunkSummary,
+    ) -> ((Self, ChunkSummary), (Self, ChunkSummary))
+    where
+        M: Metric<ChunkSummary> + ToByteOffset + SummaryUpTo,
+    {
+        debug_assert_eq!(summary, self.summarize());
 
-        if line_offset <= self.line_breaks_left as usize {
-            let byte_offset = byte_of_line(self.left_chunk(), line_offset);
+        debug_assert!(offset <= M::measure(&summary));
 
-            let (bytes_left, bytes_right) = if byte_offset != self.len_left() {
-                (&self.bytes[..byte_offset], &self.bytes[byte_offset..])
-            } else {
-                (
-                    (&self.bytes[..self.len_left()]),
-                    (&self.bytes[self.bytes.len() - self.len_right()..]),
-                )
-            };
+        if offset <= self.left_measure::<M>() {
+            let byte_offset: usize = offset.to_byte_offset(self.left_chunk());
+
+            let (bytes_left, bytes_right) = self.split_bytes(byte_offset);
+
+            let left_left_summary = M::up_to(
+                self.left_chunk(),
+                self.left_summary,
+                offset,
+                byte_offset,
+            );
 
             let left = Self {
                 bytes: bytes_left,
-                len_left: byte_offset as u16,
-                line_breaks_left: line_offset as u16,
+                left_summary: left_left_summary,
                 len_right: 0,
             };
 
             let right = Self {
                 bytes: bytes_right,
-                len_left: self.len_left - left.len_left,
-                line_breaks_left: self.line_breaks_left - line_offset as u16,
+                left_summary: self.left_summary - left_left_summary,
                 len_right: self.len_right,
             };
 
-            (left, right)
+            ((left, left.left_summary), (right, summary - left.left_summary))
         } else {
-            let byte_offset = byte_of_line(
+            offset -= self.left_measure::<M>();
+
+            let byte_offset = offset.to_byte_offset(self.right_chunk());
+
+            let (bytes_left, bytes_right) =
+                self.split_bytes(self.len_left() + byte_offset);
+
+            let right_left_summary = M::up_to(
                 self.right_chunk(),
-                line_offset - self.line_breaks_left as usize,
+                self.right_summary(summary),
+                offset,
+                byte_offset,
             );
 
-            let split_point =
-                self.bytes.len() - self.len_right() + byte_offset;
-
             let left = Self {
-                bytes: &self.bytes[..split_point],
-                len_left: self.len_left,
-                line_breaks_left: self.line_breaks_left,
-                len_right: byte_offset as u16,
+                bytes: bytes_left,
+                left_summary: self.left_summary,
+                len_right: right_left_summary.bytes() as u16,
             };
 
             let right = Self {
-                bytes: &self.bytes[split_point..],
-                len_left: 0,
-                line_breaks_left: 0,
-                len_right: self.len_right - left.len_right,
+                bytes: bytes_right,
+                left_summary: self.right_summary(summary) - right_left_summary,
+                len_right: 0,
             };
 
-            (left, right)
+            ((left, summary - right.left_summary), (right, right.left_summary))
         }
+    }
+
+    #[inline]
+    fn split_bytes(&self, byte_offset: usize) -> (&'a [u8], &'a [u8]) {
+        debug_assert!(byte_offset <= self.len());
+
+        use core::cmp::Ordering;
+
+        let offset = match byte_offset.cmp(&self.len_left()) {
+            Ordering::Less => byte_offset,
+
+            Ordering::Greater => byte_offset + self.len_gap(),
+
+            Ordering::Equal => {
+                return (
+                    self.left_chunk().as_bytes(),
+                    self.right_chunk().as_bytes(),
+                )
+            },
+        };
+
+        // TODO: use `split_at_unchecked()` once it's stable.
+        self.bytes.split_at(offset)
+    }
+
+    #[inline]
+    fn summarize_right_chunk(&self) -> ChunkSummary {
+        ChunkSummary::from(self.right_chunk())
     }
 }
 
@@ -278,22 +354,8 @@ impl Summarize for GapSlice<'_> {
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        let line_breaks = self.line_breaks_left as usize
-            + count_line_breaks(self.right_chunk());
-
-        ChunkSummary { bytes: self.len(), line_breaks }
+        self.left_summary + self.summarize_right_chunk()
     }
-}
-
-/// Returns the number of bytes in `s`'s trailing line break: 1 for LF, 2 for
-/// CRLF.
-///
-/// NOTE: this function just assumes that `s` ends with a newline, if it
-/// doesn't it will return a wrong result.
-#[inline]
-fn bytes_line_break(s: &str) -> usize {
-    debug_assert!(!s.is_empty() && *s.as_bytes().last().unwrap() == b'\n');
-    1 + (s.len() > 1 && s.as_bytes()[s.len() - 2] == b'\r') as usize
 }
 
 #[cfg(test)]

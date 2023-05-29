@@ -490,8 +490,8 @@ impl<'a> Iterator for Lines<'a> {
 
         // This handles CRLF pairs that have been split across chunks. For
         // example, if we have "aaa\r" and "\nbbb" we should yield "aaa", but
-        // the tree slice currently contains "aaa\r", so we need to remove the
-        // trailing "\r".
+        // the tree slice currently contains "aaa\r", so we need to remove
+        // the trailing "\r".
         if slice.tree_slice.end_slice().last_chunk().ends_with('\r')
             && advance - slice.byte_len() == 1
         {

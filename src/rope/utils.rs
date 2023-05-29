@@ -246,6 +246,21 @@ pub(super) fn last_byte_is_newline(s: &str) -> bool {
 }
 
 #[inline]
+pub(super) fn line_breaks_up_to(
+    s: &str,
+    byte_offset: usize,
+    tot_line_breaks: usize,
+) -> usize {
+    debug_assert_eq!(tot_line_breaks, count_line_breaks(s));
+
+    if byte_offset <= s.len() / 2 {
+        count_line_breaks(&s[..byte_offset])
+    } else {
+        tot_line_breaks - count_line_breaks(&s[byte_offset..])
+    }
+}
+
+#[inline]
 pub(super) fn split_adjusted<const WITH_RIGHT_BIAS: bool>(
     s: &str,
     candidate: usize,

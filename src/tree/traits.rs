@@ -15,7 +15,7 @@ pub trait Summarize: Debug {
 }
 
 pub trait BaseMeasured: Summarize {
-    type BaseMetric: Metric<Self>;
+    type BaseMetric: Metric<Self::Summary>;
 }
 
 pub trait AsSlice: Summarize {
@@ -45,8 +45,9 @@ pub trait BalancedLeaf: Leaf + for<'a> From<Self::Slice<'a>> {
     );
 }
 
-pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
+pub trait ReplaceableLeaf<M: Metric<Self::Summary>>: BalancedLeaf {
     type Replacement<'a>;
+
     type ExtraLeaves: ExactSizeIterator<Item = Self>;
 
     /// Replace the contents of the leaf in the range with the given
@@ -68,7 +69,7 @@ pub trait ReplaceableLeaf<M: Metric<Self>>: BalancedLeaf {
     fn remove_up_to(&mut self, summary: &mut Self::Summary, up_to: M);
 }
 
-pub trait Metric<L: Summarize + ?Sized>:
+pub trait Metric<Summary: ?Sized>:
     Debug
     + Copy
     + Ord
@@ -88,11 +89,11 @@ pub trait Metric<L: Summarize + ?Sized>:
     fn one() -> Self;
 
     /// Returns the measure of the summary according to this metric.
-    fn measure(summary: &L::Summary) -> Self;
+    fn measure(summary: &Summary) -> Self;
 }
 
 /// Metrics that can be used to slice `Tree`s and `TreeSlice`s.
-pub trait SlicingMetric<L: Leaf>: Metric<L> {
+pub trait SlicingMetric<L: Leaf>: Metric<L::Summary> {
     fn slice_up_to<'a>(
         slice: L::Slice<'a>,
         up_to: Self,
@@ -107,7 +108,7 @@ pub trait SlicingMetric<L: Leaf>: Metric<L> {
 }
 
 /// Allows iterating forward over the units of this metric.
-pub trait UnitMetric<L: Leaf>: Metric<L> {
+pub trait UnitMetric<L: Leaf>: Metric<L::Summary> {
     /// Returns a
     /// `(first_slice, first_summary, advance, rest_slice, rest_summary)`
     /// tuple, where `advance` is equal to `first_summary` **plus** the summary

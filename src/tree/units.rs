@@ -4,7 +4,7 @@ use super::{Arc, Lnode, Node, Tree, TreeSlice};
 
 /// An iterator over the units of a metric.
 #[derive(Clone)]
-pub struct Units<'a, const ARITY: usize, L: Leaf, M: Metric<L>> {
+pub struct Units<'a, const ARITY: usize, L: Leaf, M: Metric<L::Summary>> {
     /*
       Just like the `Leaves` iterator, this iterator is also implemented using
       two separate iterators, one for iterating forward (used in the `Iterator`
@@ -32,8 +32,8 @@ pub struct Units<'a, const ARITY: usize, L: Leaf, M: Metric<L>> {
     remaining: L::BaseMetric,
 }
 
-impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>> From<&'a Tree<ARITY, L>>
-    for Units<'a, ARITY, L, M>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L::Summary>>
+    From<&'a Tree<ARITY, L>> for Units<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
 {
@@ -47,7 +47,7 @@ where
     }
 }
 
-impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L::Summary>>
     From<&TreeSlice<'a, ARITY, L>> for Units<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
@@ -191,7 +191,7 @@ impl<const ARITY: usize, L: Leaf, M: UnitMetric<L>> core::iter::FusedIterator
 }
 
 #[derive(Debug)]
-struct UnitsForward<'a, const N: usize, L: Leaf, M: Metric<L>> {
+struct UnitsForward<'a, const N: usize, L: Leaf, M: Metric<L::Summary>> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](UnitsForward::initialize()).
     is_initialized: bool,
@@ -240,7 +240,7 @@ struct UnitsForward<'a, const N: usize, L: Leaf, M: Metric<L>> {
     units_total: M,
 }
 
-impl<const N: usize, L: Leaf, M: Metric<L>> Clone
+impl<const N: usize, L: Leaf, M: Metric<L::Summary>> Clone
     for UnitsForward<'_, N, L, M>
 {
     #[inline]
@@ -256,8 +256,8 @@ impl<const N: usize, L: Leaf, M: Metric<L>> Clone
     }
 }
 
-impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>> From<&'a Tree<ARITY, L>>
-    for UnitsForward<'a, ARITY, L, M>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L::Summary>>
+    From<&'a Tree<ARITY, L>> for UnitsForward<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
 {
@@ -281,7 +281,7 @@ where
     }
 }
 
-impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L::Summary>>
     From<&TreeSlice<'a, ARITY, L>> for UnitsForward<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
@@ -926,7 +926,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 }
 
 #[derive(Debug)]
-struct UnitsBackward<'a, const N: usize, L: Leaf, M: Metric<L>> {
+struct UnitsBackward<'a, const N: usize, L: Leaf, M: Metric<L::Summary>> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](UnitsBackward::initialize()).
     is_initialized: bool,
@@ -969,7 +969,7 @@ struct UnitsBackward<'a, const N: usize, L: Leaf, M: Metric<L>> {
     units_remaining: M,
 }
 
-impl<const N: usize, L: Leaf, M: Metric<L>> Clone
+impl<const N: usize, L: Leaf, M: Metric<L::Summary>> Clone
     for UnitsBackward<'_, N, L, M>
 {
     #[inline]
@@ -985,8 +985,8 @@ impl<const N: usize, L: Leaf, M: Metric<L>> Clone
     }
 }
 
-impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>> From<&'a Tree<ARITY, L>>
-    for UnitsBackward<'a, ARITY, L, M>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L::Summary>>
+    From<&'a Tree<ARITY, L>> for UnitsBackward<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,
 {
@@ -1008,7 +1008,7 @@ where
     }
 }
 
-impl<'a, const ARITY: usize, L: Leaf, M: Metric<L>>
+impl<'a, const ARITY: usize, L: Leaf, M: Metric<L::Summary>>
     From<&TreeSlice<'a, ARITY, L>> for UnitsBackward<'a, ARITY, L, M>
 where
     for<'d> L::Slice<'d>: Default,

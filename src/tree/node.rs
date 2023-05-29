@@ -84,7 +84,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     pub(super) fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: SlicingMetric<L>,
-        M2: Metric<L>,
+        M2: Metric<L::Summary>,
     {
         debug_assert!(up_to <= self.measure::<M1>());
 
@@ -197,7 +197,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     #[inline]
     pub(super) fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'_>, M)
     where
-        M: Metric<L>,
+        M: Metric<L::Summary>,
     {
         debug_assert!(measure <= self.measure::<M>() + M::one());
 
@@ -238,7 +238,10 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn measure<M: Metric<L>>(&self) -> M {
+    pub(super) fn measure<M>(&self) -> M
+    where
+        M: Metric<L::Summary>,
+    {
         match self {
             Node::Internal(inode) => inode.measure(),
             Node::Leaf(leaf) => leaf.measure(),

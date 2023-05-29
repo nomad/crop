@@ -142,10 +142,6 @@
 
 extern crate alloc;
 
-mod rope;
-#[doc(hidden)]
-pub mod tree;
-
 pub mod iter {
     //! Iterators over [`Rope`](crate::Rope)s and
     //! [`RopeSlice`](crate::RopeSlice)s.
@@ -153,10 +149,19 @@ pub mod iter {
     pub use crate::rope::iterators::*;
 }
 
+mod rope;
+
+#[doc(hidden)]
+pub mod tree;
+
 // These are not part of the public API, we only export them to be able to run
 // doctests.
 #[doc(hidden)]
-pub use rope::{gap_buffer::GapBuffer, gap_slice::GapSlice};
+pub use rope::{
+    gap_buffer::GapBuffer,
+    gap_slice::GapSlice,
+    metrics::ChunkSummary,
+};
 pub use rope::{Rope, RopeBuilder, RopeSlice};
 
 #[inline]
