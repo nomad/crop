@@ -3,7 +3,7 @@ use core::ops::RangeBounds;
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
 use super::rope::RopeChunk;
-use super::utils::*;
+use super::utils::{panic_messages as panic, *};
 use super::Rope;
 use crate::range_bounds_to_start_end;
 use crate::tree::TreeSlice;
@@ -52,7 +52,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn byte(&self, byte_index: usize) -> u8 {
         if byte_index >= self.byte_len() {
-            byte_index_out_of_bounds(byte_index, self.byte_len());
+            panic::byte_index_out_of_bounds(byte_index, self.byte_len());
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
@@ -107,7 +107,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn byte_of_line(&self, line_offset: usize) -> usize {
         if line_offset > self.line_len() {
-            line_offset_out_of_bounds(line_offset, self.line_len());
+            panic::line_offset_out_of_bounds(line_offset, self.line_len());
         }
 
         if line_offset > self.tree_slice.summary().line_breaks() {
@@ -116,6 +116,42 @@ impl<'a> RopeSlice<'a> {
 
         let ByteMetric(byte_offset) =
             self.tree_slice.convert_measure(RawLineMetric(line_offset));
+
+        byte_offset
+    }
+
+    /// Returns the byte offset corresponding to the given UTF-16 code unit
+    /// offset.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the UTF-16 code unit offset is out of bounds (i.e. greater
+    /// than [`utf16_len()`](Self::utf16_len())) or if it doesn't lie on a code
+    /// point boundary.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// // The "𐐀" character is encoded using two code units in UTF-16 and
+    /// // four bytes in UTF-8.
+    /// let r = Rope::from("a𐐀b");
+    /// let s = r.byte_slice(1..);
+    /// assert_eq!(s.byte_of_utf16_code_unit(2), 4);
+    /// ```
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[track_caller]
+    #[inline]
+    pub fn byte_of_utf16_code_unit(&self, utf16_offset: usize) -> usize {
+        if utf16_offset > self.utf16_len() {
+            panic::utf16_offset_out_of_bounds(utf16_offset, self.utf16_len())
+        }
+
+        let ByteMetric(byte_offset) = self
+            .tree_slice
+            .convert_measure(super::metrics::Utf16Metric(utf16_offset));
 
         byte_offset
     }
@@ -150,11 +186,11 @@ impl<'a> RopeSlice<'a> {
             range_bounds_to_start_end(byte_range, 0, self.byte_len());
 
         if start > end {
-            byte_start_after_end(start, end);
+            panic::byte_start_after_end(start, end);
         }
 
         if end > self.byte_len() {
-            byte_offset_out_of_bounds(end, self.byte_len());
+            panic::byte_offset_out_of_bounds(end, self.byte_len());
         }
 
         self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)).into()
@@ -260,7 +296,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn is_char_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
-            byte_offset_out_of_bounds(byte_offset, self.byte_len());
+            panic::byte_offset_out_of_bounds(byte_offset, self.byte_len());
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
@@ -313,7 +349,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn is_grapheme_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
-            byte_offset_out_of_bounds(byte_offset, self.byte_len());
+            panic::byte_offset_out_of_bounds(byte_offset, self.byte_len());
         }
 
         is_grapheme_boundary(self.chunks(), self.byte_len(), byte_offset)
@@ -345,7 +381,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn line(self, line_index: usize) -> RopeSlice<'a> {
         if line_index >= self.line_len() {
-            line_offset_out_of_bounds(line_index, self.line_len());
+            panic::line_offset_out_of_bounds(line_index, self.line_len());
         }
 
         let tree_slice = self
@@ -422,7 +458,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn line_of_byte(&self, byte_offset: usize) -> usize {
         if byte_offset > self.byte_len() {
-            byte_offset_out_of_bounds(byte_offset, self.byte_len());
+            panic::byte_offset_out_of_bounds(byte_offset, self.byte_len());
         }
 
         let RawLineMetric(line_offset) =
@@ -461,11 +497,11 @@ impl<'a> RopeSlice<'a> {
             range_bounds_to_start_end(line_range, 0, self.line_len());
 
         if start > end {
-            line_start_after_end(start, end);
+            panic::line_start_after_end(start, end);
         }
 
         if end > self.line_len() {
-            line_offset_out_of_bounds(end, self.line_len());
+            panic::line_offset_out_of_bounds(end, self.line_len());
         }
 
         self.tree_slice.slice(RawLineMetric(start)..RawLineMetric(end)).into()
@@ -592,6 +628,106 @@ impl<'a> RopeSlice<'a> {
         if self.tree_slice.end_slice().last_chunk().ends_with('\r') {
             self.truncate_last_char();
         }
+    }
+
+    /// Returns the number of UTF-16 code units this `RopeSlice` would span if
+    /// it stores its contents as UTF-16 instead of UTF-8.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// // The "🐸" emoji is encoded using two UTF-16 code units.
+    /// let r = Rope::from("abc🐸");
+    /// let s = r.byte_slice(2..);
+    /// assert_eq!(s.utf16_len(), 3);
+    /// ```
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[inline]
+    pub fn utf16_len(&self) -> usize {
+        self.tree_slice.summary().utf16_code_units()
+    }
+
+    /// Returns the UTF-16 code unit offset corresponding to the given byte
+    /// offset.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the byte offset is out of bounds (i.e. greater than
+    /// [`byte_len()`](Self::byte_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// // The "𐐀" character is encoded using two code units in UTF-16 and
+    /// // four bytes in UTF-8.
+    /// let r = Rope::from("a𐐀b");
+    /// let s = r.byte_slice(1..);
+    /// assert_eq!(s.utf16_code_unit_of_byte(4), 2);
+    /// ```
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[track_caller]
+    #[inline]
+    pub fn utf16_code_unit_of_byte(&self, byte_offset: usize) -> usize {
+        if byte_offset > self.byte_len() {
+            panic::byte_offset_out_of_bounds(byte_offset, self.byte_len());
+        }
+
+        let super::metrics::Utf16Metric(utf16_offset) =
+            self.tree_slice.convert_measure(ByteMetric(byte_offset));
+
+        utf16_offset
+    }
+
+    /// Returns a sub-slice of this `RopeSlice` in the specified UTF-16 code
+    /// unit range, where the start and end of the range are interpreted as
+    /// offsets.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the start is greater than the end or if the end is out of
+    /// bounds (i.e. greater than [`utf16_len()`](Self::utf16_len())).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use crop::Rope;
+    /// #
+    /// // Both "𐐀" and "🐸" are encoded using two code units in UTF-16.
+    /// let r = Rope::from("ab𐐀de🐸");
+    /// let s = r.byte_slice(..);
+    ///
+    /// assert_eq!(s.utf16_slice(..4), "ab𐐀");
+    /// assert_eq!(s.utf16_slice(5..), "e🐸");
+    /// assert_eq!(s.utf16_slice(2..4), "𐐀");
+    /// ```
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[track_caller]
+    #[inline]
+    pub fn utf16_slice<R>(self, utf16_range: R) -> RopeSlice<'a>
+    where
+        R: RangeBounds<usize>,
+    {
+        use super::metrics::Utf16Metric;
+
+        let (start, end) =
+            range_bounds_to_start_end(utf16_range, 0, self.utf16_len());
+
+        if start > end {
+            panic::utf16_start_after_end(start, end);
+        }
+
+        if end > self.utf16_len() {
+            panic::utf16_offset_out_of_bounds(end, self.utf16_len());
+        }
+
+        self.tree_slice.slice(Utf16Metric(start)..Utf16Metric(end)).into()
     }
 }
 

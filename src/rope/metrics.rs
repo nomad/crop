@@ -2,7 +2,6 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use super::gap_buffer::GapBuffer;
 use super::gap_slice::GapSlice;
-use super::utils;
 use crate::tree::{DoubleEndedUnitMetric, Metric, SlicingMetric, UnitMetric};
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
@@ -10,19 +9,31 @@ use crate::tree::{DoubleEndedUnitMetric, Metric, SlicingMetric, UnitMetric};
 pub struct ChunkSummary {
     bytes: usize,
     line_breaks: usize,
+    #[cfg(feature = "utf16-metric")]
+    utf16_code_units: usize,
 }
 
 impl From<&str> for ChunkSummary {
     #[inline]
     fn from(s: &str) -> Self {
-        Self { bytes: s.len(), line_breaks: utils::count_line_breaks(s) }
+        Self {
+            bytes: s.len(),
+            line_breaks: count::line_breaks(s),
+            #[cfg(feature = "utf16-metric")]
+            utf16_code_units: count::utf16_code_units(s),
+        }
     }
 }
 
 impl From<char> for ChunkSummary {
     #[inline]
     fn from(ch: char) -> Self {
-        Self { bytes: ch.len_utf8(), line_breaks: (ch == '\n') as usize }
+        Self {
+            bytes: ch.len_utf8(),
+            line_breaks: (ch == '\n') as usize,
+            #[cfg(feature = "utf16-metric")]
+            utf16_code_units: ch.len_utf16(),
+        }
     }
 }
 
@@ -41,6 +52,12 @@ impl ChunkSummary {
     #[inline]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    #[cfg(feature = "utf16-metric")]
+    #[inline]
+    pub fn utf16_code_units(&self) -> usize {
+        self.utf16_code_units
     }
 }
 
@@ -89,6 +106,10 @@ impl AddAssign<Self> for ChunkSummary {
     fn add_assign(&mut self, rhs: Self) {
         self.bytes += rhs.bytes;
         self.line_breaks += rhs.line_breaks;
+        #[cfg(feature = "utf16-metric")]
+        {
+            self.utf16_code_units += rhs.utf16_code_units;
+        }
     }
 }
 
@@ -97,6 +118,10 @@ impl SubAssign<Self> for ChunkSummary {
     fn sub_assign(&mut self, rhs: Self) {
         self.bytes -= rhs.bytes;
         self.line_breaks -= rhs.line_breaks;
+        #[cfg(feature = "utf16-metric")]
+        {
+            self.utf16_code_units -= rhs.utf16_code_units;
+        }
     }
 }
 
@@ -206,10 +231,17 @@ impl SummaryUpTo for ByteMetric {
         ChunkSummary {
             bytes: byte_offset,
 
-            line_breaks: utils::line_breaks_up_to(
+            line_breaks: count::line_breaks_up_to(
                 in_str,
                 byte_offset,
                 str_summary.line_breaks,
+            ),
+
+            #[cfg(feature = "utf16-metric")]
+            utf16_code_units: count::utf16_code_units_up_to(
+                in_str,
+                byte_offset,
+                str_summary.utf16_code_units,
             ),
         }
     }
@@ -306,19 +338,31 @@ impl SubAssign for RawLineMetric {
 impl ToByteOffset for RawLineMetric {
     #[inline]
     fn to_byte_offset(&self, s: &str) -> usize {
-        utils::byte_of_line(s, self.0)
+        convert::byte_of_line(s, self.0)
     }
 }
 
 impl SummaryUpTo for RawLineMetric {
+    #[cfg_attr(not(feature = "utf16-metric"), allow(unused_variables))]
     #[inline]
     fn up_to(
-        _: &str,
-        _: ChunkSummary,
+        in_str: &str,
+        str_summary: ChunkSummary,
         Self(line_offset): Self,
         byte_offset: usize,
     ) -> ChunkSummary {
-        ChunkSummary { bytes: byte_offset, line_breaks: line_offset }
+        ChunkSummary {
+            bytes: byte_offset,
+
+            line_breaks: line_offset,
+
+            #[cfg(feature = "utf16-metric")]
+            utf16_code_units: count::utf16_code_units_up_to(
+                in_str,
+                byte_offset,
+                str_summary.utf16_code_units,
+            ),
+        }
     }
 }
 
@@ -526,5 +570,276 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
         'a: 'a,
     {
         <RawLineMetric as DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>>::remainder(chunk, summary)
+    }
+}
+
+#[cfg(feature = "utf16-metric")]
+pub use utf16_metric::Utf16Metric;
+
+#[cfg(feature = "utf16-metric")]
+mod utf16_metric {
+    use super::*;
+
+    #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+    pub struct Utf16Metric(pub usize);
+
+    impl Add<Self> for Utf16Metric {
+        type Output = Self;
+
+        #[inline]
+        fn add(self, other: Self) -> Self {
+            Self(self.0 + other.0)
+        }
+    }
+
+    impl Sub for Utf16Metric {
+        type Output = Self;
+
+        #[inline]
+        fn sub(self, other: Self) -> Self {
+            Self(self.0 - other.0)
+        }
+    }
+
+    impl AddAssign for Utf16Metric {
+        #[inline]
+        fn add_assign(&mut self, other: Self) {
+            self.0 += other.0
+        }
+    }
+
+    impl SubAssign for Utf16Metric {
+        #[inline]
+        fn sub_assign(&mut self, other: Self) {
+            self.0 -= other.0
+        }
+    }
+
+    impl ToByteOffset for Utf16Metric {
+        #[track_caller]
+        #[inline]
+        fn to_byte_offset(&self, in_str: &str) -> usize {
+            // TODO: we should panic the given UTF-16 offset doesn't lie on a
+            // char boundary. Right now we just return the byte offset up to
+            // the previous char boundary.
+            convert::byte_of_utf16_code_unit(in_str, self.0)
+        }
+    }
+
+    impl SummaryUpTo for Utf16Metric {
+        #[inline]
+        fn up_to(
+            in_str: &str,
+            str_summary: ChunkSummary,
+            Self(utf16_code_unit_offset): Self,
+            byte_offset: usize,
+        ) -> ChunkSummary {
+            ChunkSummary {
+                bytes: byte_offset,
+
+                line_breaks: count::line_breaks_up_to(
+                    in_str,
+                    byte_offset,
+                    str_summary.line_breaks,
+                ),
+
+                utf16_code_units: utf16_code_unit_offset,
+            }
+        }
+    }
+
+    impl Metric<ChunkSummary> for Utf16Metric {
+        #[inline]
+        fn zero() -> Self {
+            Self(0)
+        }
+
+        #[inline]
+        fn one() -> Self {
+            Self(1)
+        }
+
+        #[inline]
+        fn measure(summary: &ChunkSummary) -> Self {
+            Self(summary.utf16_code_units)
+        }
+    }
+
+    impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
+        for Utf16Metric
+    {
+        #[track_caller]
+        #[inline]
+        fn slice_up_to<'a>(
+            chunk: GapSlice<'a>,
+            utf16_code_unit_offset: Self,
+            &summary: &ChunkSummary,
+        ) -> (GapSlice<'a>, ChunkSummary)
+        where
+            'a: 'a,
+        {
+            let (left, _) =
+                chunk.split_at_offset(utf16_code_unit_offset, summary);
+            left
+        }
+
+        #[track_caller]
+        #[inline]
+        fn slice_from<'a>(
+            chunk: GapSlice<'a>,
+            utf16_code_unit_offset: Self,
+            &summary: &ChunkSummary,
+        ) -> (GapSlice<'a>, ChunkSummary)
+        where
+            'a: 'a,
+        {
+            let (_, right) =
+                chunk.split_at_offset(utf16_code_unit_offset, summary);
+            right
+        }
+    }
+}
+
+use str_utils::*;
+
+mod str_utils {
+    #[cfg(not(miri))]
+    use str_indices::lines_lf as lines;
+    #[cfg(all(not(miri), feature = "utf16-metric"))]
+    use str_indices::utf16;
+
+    pub mod count {
+        #[cfg(not(miri))]
+        use super::*;
+
+        #[inline]
+        pub fn line_breaks(s: &str) -> usize {
+            #[cfg(not(miri))]
+            {
+                lines::count_breaks(s)
+            }
+            #[cfg(miri)]
+            {
+                s.bytes().filter(|&b| b == b'\n').count()
+            }
+        }
+
+        #[cfg(feature = "utf16-metric")]
+        #[inline]
+        pub fn utf16_code_units(s: &str) -> usize {
+            #[cfg(not(miri))]
+            {
+                utf16::count(s)
+            }
+            #[cfg(miri)]
+            {
+                s.encode_utf16().count()
+            }
+        }
+
+        #[inline(always)]
+        pub fn line_breaks_up_to(
+            s: &str,
+            byte_offset: usize,
+            tot_line_breaks: usize,
+        ) -> usize {
+            metric_up_to(s, byte_offset, tot_line_breaks, line_breaks)
+        }
+
+        #[cfg(feature = "utf16-metric")]
+        #[inline(always)]
+        pub fn utf16_code_units_up_to(
+            s: &str,
+            byte_offset: usize,
+            tot_utf16_code_units: usize,
+        ) -> usize {
+            metric_up_to(
+                s,
+                byte_offset,
+                tot_utf16_code_units,
+                utf16_code_units,
+            )
+        }
+
+        #[inline(always)]
+        fn metric_up_to(
+            s: &str,
+            byte_offset: usize,
+            tot: usize,
+            count: fn(&str) -> usize,
+        ) -> usize {
+            debug_assert!(s.is_char_boundary(byte_offset));
+
+            debug_assert_eq!(tot, count(s));
+
+            // Count the shorter side and get the other by subtracting it from
+            // the total if necessary.
+            if byte_offset <= s.len() / 2 {
+                count(&s[..byte_offset])
+            } else {
+                tot - count(&s[byte_offset..])
+            }
+        }
+    }
+
+    pub mod convert {
+        #[cfg(not(miri))]
+        use super::*;
+
+        #[inline]
+        pub fn byte_of_line(s: &str, line_offset: usize) -> usize {
+            #[cfg(not(miri))]
+            {
+                lines::to_byte_idx(s, line_offset)
+            }
+
+            #[cfg(miri)]
+            {
+                if line_offset == 0 {
+                    return 0;
+                }
+
+                let mut seen = 0;
+                let mut stop = false;
+
+                s.bytes()
+                    .take_while(|&b| {
+                        !stop && {
+                            if b == b'\n' {
+                                seen += 1;
+                                if seen == line_offset {
+                                    stop = true;
+                                }
+                            }
+                            true
+                        }
+                    })
+                    .count()
+            }
+        }
+
+        #[cfg(feature = "utf16-metric")]
+        #[inline]
+        pub fn byte_of_utf16_code_unit(
+            s: &str,
+            utf16_code_unit_offset: usize,
+        ) -> usize {
+            #[cfg(not(miri))]
+            {
+                utf16::to_byte_idx(s, utf16_code_unit_offset)
+            }
+
+            #[cfg(miri)]
+            {
+                let encoded_utf16 = s.encode_utf16().collect::<Vec<_>>();
+
+                let decoded_utf16 = String::from_utf16(
+                    &encoded_utf16[..utf16_code_unit_offset],
+                )
+                .unwrap();
+
+                decoded_utf16.len()
+            }
+        }
     }
 }

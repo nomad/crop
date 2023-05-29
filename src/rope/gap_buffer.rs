@@ -7,7 +7,7 @@ use core::ops::{Range, RangeBounds};
 
 use super::gap_slice::GapSlice;
 use super::metrics::{ByteMetric, ChunkSummary};
-use super::utils::*;
+use super::utils::{panic_messages as panic, *};
 use crate::range_bounds_to_start_end;
 use crate::tree::{
     AsSlice,
@@ -287,9 +287,12 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
         if !self.is_char_boundary(byte_offset) {
             if byte_offset < self.len_left() {
-                byte_offset_not_char_boundary(self.left_chunk(), byte_offset)
+                panic::byte_offset_not_char_boundary(
+                    self.left_chunk(),
+                    byte_offset,
+                )
             } else {
-                byte_offset_not_char_boundary(
+                panic::byte_offset_not_char_boundary(
                     self.right_chunk(),
                     byte_offset - self.len_left(),
                 )
@@ -402,7 +405,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// Returns `true` if the buffer ends with a newline ('\n') character.
     #[inline]
     pub(super) fn has_trailing_newline(&self) -> bool {
-        last_byte_is_newline(self.last_chunk())
+        self.last_chunk().ends_with('\n')
     }
 
     /// Inserts the string at the given byte offset, moving the gap to the new

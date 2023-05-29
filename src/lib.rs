@@ -125,13 +125,19 @@
 //!
 //! # Feature flags
 //!
-//! Below is a list of the available feature flags:
+//! The following feature flags can be used to tweak crop's behavior and
+//! enable additional APIs:
 //!
-//! - `simd`: enables SIMD on supported platforms (enabled by default);
+//! - `simd` (enabled by default): enables SIMD on supported platforms;
 //!
-//! - `graphemes`: enables a few grapheme-oriented APIs on `Rope`s and
-//! `RopeSlice`s such as the [`Graphemes`](crate::iter::Graphemes) iterator and
-//! others.
+//! - `graphemes` (disabled by default): enables a few grapheme-oriented APIs
+//! on `Rope`s and `RopeSlice`s such as the
+//! [`Graphemes`](crate::iter::Graphemes) iterator and others;
+//!
+//! - `utf16-metric` (disabled by default): makes the `Rope` and `RopeSlice`
+//! track the UTF-16 code units they'd have if their content was stored as
+//! UTF-16 instead of UTF-8, allowing them to efficiently convert UTF-16
+//! code unit offsets to and from byte offsets in logarithmic time.
 
 #![allow(clippy::explicit_auto_deref)]
 #![allow(clippy::module_inception)]

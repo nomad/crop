@@ -14,13 +14,14 @@ categories = ["data-structures", "text-editors", "text-processing"]
 exclude = ["/.github/*", "/examples/**", "/fuzz/**", "/tests/**", "/BENCHMARKS.md"]
 
 [package.metadata.docs.rs]
-features = ["graphemes", "simd"]
+features = ["graphemes", "simd", "utf16-metric"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["simd"]
 graphemes = ["unicode-segmentation"]
 simd = ["str_indices/simd"]
+utf16-metric = []
 
 # Private features
 small_chunks = []

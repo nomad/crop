@@ -1,5 +1,5 @@
 use super::metrics::{ChunkSummary, SummaryUpTo, ToByteOffset};
-use super::utils::*;
+use super::utils::{debug_no_quotes, panic_messages as panic};
 use crate::tree::{Metric, Summarize};
 
 /// A slice of a [`GapBuffer`](super::gap_buffer::GapBuffer).
@@ -40,9 +40,12 @@ impl<'a> GapSlice<'a> {
 
         if !self.is_char_boundary(byte_offset) {
             if byte_offset < self.len_left() {
-                byte_offset_not_char_boundary(self.left_chunk(), byte_offset)
+                panic::byte_offset_not_char_boundary(
+                    self.left_chunk(),
+                    byte_offset,
+                )
             } else {
-                byte_offset_not_char_boundary(
+                panic::byte_offset_not_char_boundary(
                     self.right_chunk(),
                     byte_offset - self.len_left(),
                 )
@@ -163,7 +166,7 @@ impl<'a> GapSlice<'a> {
     /// Returns `true` if it ends with a newline.
     #[inline]
     pub(super) fn has_trailing_newline(&self) -> bool {
-        last_byte_is_newline(self.last_chunk())
+        self.last_chunk().ends_with('\n')
     }
 
     #[inline]
@@ -252,6 +255,7 @@ impl<'a> GapSlice<'a> {
     ///
     /// assert_eq!("bar\r\nbaz", right);
     /// ```
+    #[track_caller]
     #[inline]
     pub fn split_at_offset<M>(
         &self,
