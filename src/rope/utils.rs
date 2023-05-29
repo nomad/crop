@@ -329,6 +329,7 @@ pub mod panic_messages {
         );
     }
 
+    #[cfg(feature = "utf16-metric")]
     #[track_caller]
     #[cold]
     #[inline(never)]
@@ -344,6 +345,7 @@ pub mod panic_messages {
         );
     }
 
+    #[cfg(feature = "utf16-metric")]
     #[track_caller]
     #[cold]
     #[inline(never)]

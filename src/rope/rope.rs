@@ -412,7 +412,7 @@ impl Rope {
     #[inline]
     pub fn is_grapheme_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
-            byte_offset_out_of_bounds(byte_offset, self.byte_len());
+            panic::byte_offset_out_of_bounds(byte_offset, self.byte_len());
         }
 
         is_grapheme_boundary(self.chunks(), self.byte_len(), byte_offset)

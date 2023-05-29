@@ -343,6 +343,7 @@ impl ToByteOffset for RawLineMetric {
 }
 
 impl SummaryUpTo for RawLineMetric {
+    #[cfg_attr(not(feature = "utf16-metric"), allow(unused_variables))]
     #[inline]
     fn up_to(
         in_str: &str,
@@ -704,7 +705,7 @@ use str_utils::*;
 mod str_utils {
     #[cfg(not(miri))]
     use str_indices::lines_lf as lines;
-    #[cfg(not(miri))]
+    #[cfg(all(not(miri), feature = "utf16-metric"))]
     use str_indices::utf16;
 
     pub mod count {
@@ -723,6 +724,7 @@ mod str_utils {
             }
         }
 
+        #[cfg(feature = "utf16-metric")]
         #[inline]
         pub fn utf16_code_units(s: &str) -> usize {
             #[cfg(not(miri))]
@@ -744,6 +746,7 @@ mod str_utils {
             metric_up_to(s, byte_offset, tot_line_breaks, line_breaks)
         }
 
+        #[cfg(feature = "utf16-metric")]
         #[inline(always)]
         pub fn utf16_code_units_up_to(
             s: &str,
@@ -815,6 +818,7 @@ mod str_utils {
             }
         }
 
+        #[cfg(feature = "utf16-metric")]
         #[inline]
         pub fn byte_of_utf16_code_unit(
             s: &str,
