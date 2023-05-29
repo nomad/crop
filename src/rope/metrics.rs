@@ -615,8 +615,12 @@ mod utf16_metric {
     }
 
     impl ToByteOffset for Utf16Metric {
+        #[track_caller]
         #[inline]
         fn to_byte_offset(&self, in_str: &str) -> usize {
+            // TODO: we should panic the given UTF-16 offset doesn't lie on a
+            // char boundary. Right now we just return the byte offset up to
+            // the previous char boundary.
             convert::byte_of_utf16_code_unit(in_str, self.0)
         }
     }

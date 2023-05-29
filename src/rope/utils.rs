@@ -207,9 +207,7 @@ pub(super) fn split_adjusted<const WITH_RIGHT_BIAS: bool>(
     (&s[..split_point], &s[split_point..])
 }
 
-pub(super) use panic_messages::*;
-
-mod panic_messages {
+pub mod panic_messages {
     #[track_caller]
     #[cold]
     #[inline(never)]

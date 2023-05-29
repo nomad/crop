@@ -3,7 +3,7 @@ use core::ops::RangeBounds;
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
 use super::rope::RopeChunk;
-use super::utils::*;
+use super::utils::{panic_messages as panic, *};
 use super::Rope;
 use crate::range_bounds_to_start_end;
 use crate::tree::TreeSlice;
@@ -52,7 +52,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn byte(&self, byte_index: usize) -> u8 {
         if byte_index >= self.byte_len() {
-            byte_index_out_of_bounds(byte_index, self.byte_len());
+            panic::byte_index_out_of_bounds(byte_index, self.byte_len());
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
@@ -107,7 +107,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn byte_of_line(&self, line_offset: usize) -> usize {
         if line_offset > self.line_len() {
-            line_offset_out_of_bounds(line_offset, self.line_len());
+            panic::line_offset_out_of_bounds(line_offset, self.line_len());
         }
 
         if line_offset > self.tree_slice.summary().line_breaks() {
@@ -127,7 +127,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn byte_of_utf16_code_unit(&self, utf16_offset: usize) -> usize {
         if utf16_offset > self.utf16_len() {
-            utf16_offset_out_of_bounds(utf16_offset, self.utf16_len())
+            panic::utf16_offset_out_of_bounds(utf16_offset, self.utf16_len())
         }
 
         let ByteMetric(byte_offset) = self
@@ -167,11 +167,11 @@ impl<'a> RopeSlice<'a> {
             range_bounds_to_start_end(byte_range, 0, self.byte_len());
 
         if start > end {
-            byte_start_after_end(start, end);
+            panic::byte_start_after_end(start, end);
         }
 
         if end > self.byte_len() {
-            byte_offset_out_of_bounds(end, self.byte_len());
+            panic::byte_offset_out_of_bounds(end, self.byte_len());
         }
 
         self.tree_slice.slice(ByteMetric(start)..ByteMetric(end)).into()
@@ -277,7 +277,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn is_char_boundary(&self, byte_offset: usize) -> bool {
         if byte_offset > self.byte_len() {
-            byte_offset_out_of_bounds(byte_offset, self.byte_len());
+            panic::byte_offset_out_of_bounds(byte_offset, self.byte_len());
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
@@ -362,7 +362,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn line(self, line_index: usize) -> RopeSlice<'a> {
         if line_index >= self.line_len() {
-            line_offset_out_of_bounds(line_index, self.line_len());
+            panic::line_offset_out_of_bounds(line_index, self.line_len());
         }
 
         let tree_slice = self
@@ -439,7 +439,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn line_of_byte(&self, byte_offset: usize) -> usize {
         if byte_offset > self.byte_len() {
-            byte_offset_out_of_bounds(byte_offset, self.byte_len());
+            panic::byte_offset_out_of_bounds(byte_offset, self.byte_len());
         }
 
         let RawLineMetric(line_offset) =
@@ -478,11 +478,11 @@ impl<'a> RopeSlice<'a> {
             range_bounds_to_start_end(line_range, 0, self.line_len());
 
         if start > end {
-            line_start_after_end(start, end);
+            panic::line_start_after_end(start, end);
         }
 
         if end > self.line_len() {
-            line_offset_out_of_bounds(end, self.line_len());
+            panic::line_offset_out_of_bounds(end, self.line_len());
         }
 
         self.tree_slice.slice(RawLineMetric(start)..RawLineMetric(end)).into()
@@ -626,7 +626,7 @@ impl<'a> RopeSlice<'a> {
     #[inline]
     pub fn utf16_code_unit_of_byte(&self, byte_offset: usize) -> usize {
         if byte_offset > self.byte_len() {
-            byte_offset_out_of_bounds(byte_offset, self.byte_len());
+            panic::byte_offset_out_of_bounds(byte_offset, self.byte_len());
         }
 
         let super::metrics::Utf16Metric(utf16_offset) =

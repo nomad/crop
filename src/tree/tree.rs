@@ -92,6 +92,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
 
     /// Returns the `M2`-measure of all the leaves before `up_to` plus the
     /// `M2`-measure of the left sub-slice of the leaf at `up_to`.
+    #[track_caller]
     #[inline]
     pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
