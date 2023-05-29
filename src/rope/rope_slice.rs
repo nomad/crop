@@ -625,7 +625,14 @@ impl<'a> RopeSlice<'a> {
     #[track_caller]
     #[inline]
     pub fn utf16_code_unit_of_byte(&self, byte_offset: usize) -> usize {
-        todo!();
+        if byte_offset > self.byte_len() {
+            byte_offset_out_of_bounds(byte_offset, self.byte_len());
+        }
+
+        let super::metrics::Utf16Metric(utf16_offset) =
+            self.tree_slice.convert_measure(ByteMetric(byte_offset));
+
+        utf16_offset
     }
 }
 
