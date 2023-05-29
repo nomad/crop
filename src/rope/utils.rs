@@ -343,4 +343,19 @@ pub mod panic_messages {
              the length is {utf16_len}"
         );
     }
+
+    #[track_caller]
+    #[cold]
+    #[inline(never)]
+    pub(crate) fn utf16_start_after_end(
+        utf16_start: usize,
+        utf16_end: usize,
+    ) -> ! {
+        debug_assert!(utf16_start > utf16_end);
+
+        panic!(
+            "UTF-16 offset start after end: the start is {utf16_start} but \
+             the end is {utf16_end}"
+        );
+    }
 }

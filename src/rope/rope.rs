@@ -719,6 +719,31 @@ impl Rope {
 
         utf16_offset
     }
+
+    /// TODO: docs
+    #[cfg_attr(docsrs, doc(cfg(feature = "utf16-metric")))]
+    #[cfg(feature = "utf16-metric")]
+    #[track_caller]
+    #[inline]
+    pub fn utf16_slice<R>(&self, utf16_range: R) -> RopeSlice<'_>
+    where
+        R: RangeBounds<usize>,
+    {
+        use super::metrics::Utf16Metric;
+
+        let (start, end) =
+            range_bounds_to_start_end(utf16_range, 0, self.utf16_len());
+
+        if start > end {
+            panic::utf16_start_after_end(start, end);
+        }
+
+        if end > self.utf16_len() {
+            panic::utf16_offset_out_of_bounds(end, self.utf16_len());
+        }
+
+        self.tree.slice(Utf16Metric(start)..Utf16Metric(end)).into()
+    }
 }
 
 impl From<RopeSlice<'_>> for Rope {
