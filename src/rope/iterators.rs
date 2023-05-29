@@ -495,7 +495,7 @@ impl<'a> Iterator for Lines<'a> {
         if slice.tree_slice.end_slice().last_chunk().ends_with('\r')
             && advance - slice.byte_len() == 1
         {
-            slice.truncate_last_byte();
+            slice.truncate_last_char();
         }
 
         Some(slice)
@@ -520,7 +520,7 @@ impl DoubleEndedIterator for Lines<'_> {
         if slice.tree_slice.end_slice().last_chunk().ends_with('\r')
             && advance - slice.byte_len() == 1
         {
-            slice.truncate_last_byte();
+            slice.truncate_last_char();
         }
 
         Some(slice)

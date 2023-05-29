@@ -19,6 +19,13 @@ impl From<&str> for ChunkSummary {
     }
 }
 
+impl From<char> for ChunkSummary {
+    #[inline]
+    fn from(ch: char) -> Self {
+        Self { bytes: ch.len_utf8(), line_breaks: (ch == '\n') as usize }
+    }
+}
+
 impl ChunkSummary {
     #[inline]
     pub fn bytes(&self) -> usize {
@@ -34,25 +41,6 @@ impl ChunkSummary {
     #[inline]
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Returns the summary of the given string excluding its last byte, where
-    /// `self` is the summary of the string.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `self` is empty or if it's different from the string's
-    /// summary.
-    #[inline]
-    pub(super) fn without_last_byte(&self, in_str: &str) -> Self {
-        debug_assert!(self.bytes > 0);
-
-        debug_assert_eq!(*self, Self::from(in_str));
-
-        Self {
-            bytes: self.bytes - 1,
-            line_breaks: self.line_breaks - in_str.ends_with('\n') as usize,
-        }
     }
 }
 

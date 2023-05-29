@@ -537,17 +537,15 @@ impl<'a> RopeSlice<'a> {
         RawLines::from(self)
     }
 
-    /// Removes the last byte from the range spanned by this slice.
+    /// Removes the last char from the range spanned by this slice.
     ///
     /// # Panics
     ///
     /// Panics if the slice is empty or if the relative offset is not on a char
     /// boundary.
     #[inline]
-    pub(super) fn truncate_last_byte(&mut self) {
+    pub(super) fn truncate_last_char(&mut self) {
         debug_assert!(!self.is_empty());
-
-        debug_assert!(self.is_char_boundary(self.byte_len() - 1));
 
         let slice = &mut self.tree_slice;
 
@@ -562,7 +560,7 @@ impl<'a> RopeSlice<'a> {
 
             slice.summary -= slice.end_summary;
 
-            let new_end_summary = last.truncate_last_byte(slice.end_summary);
+            let new_end_summary = last.truncate_last_char(slice.end_summary);
 
             slice.end_summary = new_end_summary;
 
@@ -589,10 +587,10 @@ impl<'a> RopeSlice<'a> {
             .last_chunk()
             .ends_with('\n'));
 
-        self.truncate_last_byte();
+        self.truncate_last_char();
 
         if self.tree_slice.end_slice().last_chunk().ends_with('\r') {
-            self.truncate_last_byte();
+            self.truncate_last_char();
         }
     }
 }

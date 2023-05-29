@@ -86,7 +86,7 @@ impl<'a> GapSlice<'a> {
     }
 
     #[inline]
-    pub(super) fn truncate_last_byte(
+    pub(super) fn truncate_last_char(
         &mut self,
         summary: ChunkSummary,
     ) -> ChunkSummary {
@@ -95,37 +95,38 @@ impl<'a> GapSlice<'a> {
 
         use core::cmp::Ordering;
 
-        match self.len_right.cmp(&1) {
+        let last_char = self
+            .last_chunk()
+            .chars()
+            .next_back()
+            .expect("this slice isn't empty");
+
+        let removed_summary = ChunkSummary::from(last_char);
+
+        let len_utf8 = removed_summary.bytes();
+
+        match self.len_right.cmp(&(len_utf8 as u16)) {
             // The slice doesn't have a right chunk, so we shorten the left
             // chunk.
             Ordering::Less => {
-                self.left_summary =
-                    self.left_summary.without_last_byte(self.left_chunk());
-
+                self.left_summary -= removed_summary;
                 self.bytes = &self.bytes[..self.len_left()];
-
                 self.left_summary
             },
 
-            // The right chunk has 2 or more bytes, so we shorten the right
+            // The right chunk has 2 or more characters, so we shorten the right
             // chunk.
             Ordering::Greater => {
-                let new_right_summary = self
-                    .right_summary(summary)
-                    .without_last_byte(self.right_chunk());
-
-                self.len_right = new_right_summary.bytes() as u16;
-
-                self.bytes = &self.bytes[..self.bytes.len() - 1];
-
-                self.left_summary + new_right_summary
+                self.len_right -= len_utf8 as u16;
+                self.bytes = &self.bytes[..self.bytes.len() - len_utf8];
+                summary - removed_summary
             },
 
-            // The right chunk has exactly 1 byte, so we can keep just the left
-            // chunk.
+            // The right chunk has exactly 1 character, so we can keep just the
+            // left chunk.
             Ordering::Equal => {
-                self.bytes = &self.bytes[..self.len_left()];
                 self.len_right = 0;
+                self.bytes = &self.bytes[..self.len_left()];
                 self.left_summary
             },
         }
@@ -145,10 +146,10 @@ impl<'a> GapSlice<'a> {
             return summary;
         }
 
-        let mut new_summary = self.truncate_last_byte(summary);
+        let mut new_summary = self.truncate_last_char(summary);
 
         if self.last_chunk().ends_with('r') {
-            new_summary = self.truncate_last_byte(new_summary)
+            new_summary = self.truncate_last_char(new_summary)
         }
 
         new_summary
@@ -339,7 +340,6 @@ impl<'a> GapSlice<'a> {
             },
         };
 
-        // TODO: use `split_at_unchecked()` once it's stable.
         self.bytes.split_at(offset)
     }
 
