@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo test --features graphemes --no-fail-fast
+      - run: cargo test --features graphemes,utf16-metric --no-fail-fast
 
   test-small-chunks-arity-prod:
     name: test-small-chunks-arity-prod
@@ -25,7 +25,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo test --features graphemes,small_chunks --no-fail-fast
+      - run: cargo test --features graphemes,utf16-metric,small_chunks --no-fail-fast
 
   test-small-chunks-arity-4:
     name: test-small-chunks-arity-4
@@ -33,7 +33,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: dtolnay/rust-toolchain@nightly
-      - run: cargo test --features graphemes,arity_4,small_chunks --no-fail-fast
+      - run: cargo test --features graphemes,utf16-metric,arity_4,small_chunks --no-fail-fast
 
   bench:
     name: bench
@@ -51,7 +51,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: clippy
-      - run: cargo clippy --features graphemes -- -D warnings
+      - run: cargo clippy --features graphemes,utf16-metric -- -D warnings
 
   docs:
     name: docs

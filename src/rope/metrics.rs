@@ -698,10 +698,13 @@ mod utf16_metric {
 use str_utils::*;
 
 mod str_utils {
+    #[cfg(not(miri))]
     use str_indices::lines_lf as lines;
+    #[cfg(not(miri))]
     use str_indices::utf16;
 
     pub mod count {
+        #[cfg(not(miri))]
         use super::*;
 
         #[inline]
@@ -724,7 +727,7 @@ mod str_utils {
             }
             #[cfg(miri)]
             {
-                text.encode_utf16().count()
+                s.encode_utf16().count()
             }
         }
 
@@ -773,6 +776,7 @@ mod str_utils {
     }
 
     pub mod convert {
+        #[cfg(not(miri))]
         use super::*;
 
         #[inline]
@@ -784,7 +788,7 @@ mod str_utils {
 
             #[cfg(miri)]
             {
-                if line == 0 {
+                if line_offset == 0 {
                     return 0;
                 }
 
@@ -796,7 +800,7 @@ mod str_utils {
                         !stop && {
                             if b == b'\n' {
                                 seen += 1;
-                                if seen == line {
+                                if seen == line_offset {
                                     stop = true;
                                 }
                             }
