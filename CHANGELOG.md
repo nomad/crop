@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Additions
+
+- added a few new methods to `Rope` and `RopeSlice` that allow converting
+  between UTF-16 and byte offsets by tracking the number of UTF-16 code units
+  stored in those objects. It is important to note that these APIs come with a
+  performance cost. As a result, these methods are only accessible by enabling
+  a new feature flag called `utf16-metric`, which is disabled by default;
+
 ## [0.3.0] - Apr 16 2023
 
 ### Changes

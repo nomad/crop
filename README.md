@@ -166,16 +166,6 @@ recognizes LF and CRLF as line terminators.
 
 Jumprope doesn't currently have any line-based APIs.
 
-### UTF-16 support
-
-While all the ropes store text internally as UTF-8, both Jumprope and Ropey
-have APIs to efficiently convert between UTF-16 code unit offsets and `char`
-offsets in `O(log n)` in the size of the rope.
-
-crop doesn't currently implement those APIs but adding them would be extremely
-easy. If you need those features in your application please open an issue
-describing your use case.
-
 
 ## Acknowledgements
 
