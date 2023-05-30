@@ -122,19 +122,16 @@ to help you decide which one is best suited for your specific use case.
 
 ### Speed
 
-Jumprope is currently the fastest rope, beating crop by 0-15% on the real world
-editing traces provided by [crdt-benchmarks] (the results are listed below).
-The [synthetic benchmarks][synthetic-benches] show a similar story, although
-Jumprope's performance seems to degrade more rapidly than crop's as the size of
-the inserted/deleted/replaced text increases, as shown by the
-`{insert,delete,replace}_large` benchmarks.
+The following results were obtained by running the real world,
+character-by-character editing traces provided by [crdt-benchmarks] on a 2018
+MacBook Pro with an Intel Core i7.
 
 | Dataset         | crop (ms) | Jumprope (ms) | Ropey (ms) | `std::string::String` (ms) |
 |-----------------|-----------|---------------|------------|----------------------------|
-| automerge-paper | 14.62     | 12.59         | 44.14      | 108.57                     |
-| rustcode        | 3.142     | 2.855         | 8.009      | 13.398                     |
-| sveltecomponent | 1.089     | 1.084         | 3.645      | 1.215                      |
-| seph-blog1      | 7.845     | 7.423         | 23.46      | 22.26                      |
+| automerge-paper | 12.39     | 12.52         | 44.14      | 108.57                     |
+| rustcode        | 2.67      | 2.86          | 7.96       | 13.40                      |
+| sveltecomponent | 0.95      | 1.08          | 3.65       | 1.22                       |
+| seph-blog1      | 6.47      | 6.94          | 23.46      | 22.26                      |
 
 ### Cheap clones
 
@@ -143,19 +140,11 @@ space by sharing data between clones, whereas cloning a `JumpRope` involves
 re-allocating the actual text contents, just like it would with a regular
 `String`.
 
-### Unsafe
-
-crop and Ropey use a tiny bit of `unsafe` code to achieve their performance
-characteristics. Jumprope is a Rust port of a C codebase and has *a lot* of
-`unsafe`, making
-"[heavy use of unsafe pointers](https://github.com/josephg/jumprope-rs/blob/master/src/jumprope.rs#L6-L8)".
-
 ### Indexing metric
 
 Jumprope and Ropey both use Unicode codepoint offsets (`char`s in Rust) as
-their primary indexing metric, with Jumprope also supporting UTF-16 offsets
-(more on this below). crop uses UTF-8 code unit (aka byte) offsets, just like
-Rust's `String`s.
+their primary indexing metric. crop uses UTF-8 code unit (aka byte) offsets,
+just like Rust's `String`s.
 
 ### Line breaks
 
