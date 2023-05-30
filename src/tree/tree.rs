@@ -538,62 +538,20 @@ mod tree_replace {
             },
         };
 
-        // The index of the child containing the entire replacement range.
-        let child_idx = {
-            let mut idx = 0;
+        let Some((child_idx, offset)) = inode.child_containing_range(range.clone()) else {
+            let extras = replace_range_in_deepest(
+                inode,
+                range,
+                replace_with,
+            );
 
-            let mut offset = M::zero();
+            Node::replace_with_single_child(node);
 
-            let children = inode.children();
-
-            // This function is responsible for the tree traversal and is where
-            // the vast majority of the time (~95% according to
-            // cargo-flamegraph) is spent when doing single character
-            // insertions and deletions, which are by far the most common type
-            // of edits.
-            //
-            // This loop is optimized for performance instead of legibility. It
-            // was first implemented using the more idiomatic approach of a
-            // for-loop and iterator adapters. Re-writing it as a manual loop
-            // resulted in a 3-9% improvement in the editing traces.
-            loop {
-                debug_assert!(idx < children.len());
-
-                // SAFETY: the only way for the index to get out of bounds is
-                // if none of the inode's children contain the start of the
-                // range, which can only happen if the range is out of bounds.
-                // Out of bounds ranges are always caught before getting here,
-                // so this is safe.
-                //
-                // Skipping the bounds checks brought a massive 10-13%
-                // improvement in the editing traces.
-                let measure =
-                    unsafe { children.get_unchecked(idx) }.measure::<M>();
-
-                offset += measure;
-
-                if offset >= range.start {
-                    if offset >= range.end {
-                        offset -= measure;
-                        range.start -= offset;
-                        range.end -= offset;
-                        break idx;
-                    } else {
-                        let extras = replace_range_in_deepest(
-                            inode,
-                            range,
-                            replace_with,
-                        );
-
-                        Node::replace_with_single_child(node);
-
-                        return extras;
-                    }
-                }
-
-                idx += 1;
-            }
+            return extras;
         };
+
+        range.start -= offset;
+        range.end -= offset;
 
         let extras = inode.with_child_mut(child_idx, |child| {
             replace(child, range, replace_with)

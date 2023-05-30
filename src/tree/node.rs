@@ -200,27 +200,21 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     where
         M: Metric<L::Summary>,
     {
-        debug_assert!(measure <= self.measure::<M>() + M::one());
+        debug_assert!(measure <= self.measure::<M>());
 
         let mut measured = M::zero();
 
         let mut node = self;
 
-        'outer: loop {
+        loop {
             match node {
                 Node::Internal(inode) => {
-                    for child in inode.children() {
-                        let child_measure = child.measure::<M>();
+                    let (child_idx, offset) =
+                        inode.child_at_measure(measure - measured);
 
-                        if measured + child_measure >= measure {
-                            node = &**child;
-                            continue 'outer;
-                        } else {
-                            measured += child_measure;
-                        }
-                    }
+                    measured += offset;
 
-                    unreachable!();
+                    node = inode.child(child_idx);
                 },
 
                 Node::Leaf(leaf) => {

@@ -1,4 +1,4 @@
-use core::ops::RangeBounds;
+use core::ops::{Range, RangeBounds};
 
 use super::traits::*;
 use super::{Arc, ExactChain, Node};
@@ -207,26 +207,6 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         }
     }
 
-    // ```
-    // ChunkSummary { b
-    // ├── ChunkSummary
-    // │   └── ""
-    // ├── ChunkSummary
-    // │   ├── "s \nn"
-    // │   ├── "ec t"
-    // │   ├── "urpi"
-    // │   └── "s fe"
-    // ├── ChunkSummary
-    // │   ├── "ugia"
-    // │   ├── "t se"
-    // │   ├── "mper"
-    // │   └── ". Na"
-    // └── ChunkSummary
-    //     ├── "m at"
-    //     ├── " nu"
-    //     └── "t a"
-    // ```
-
     /// Recursively balances the first child all the way down to the deepest
     /// inode.
     ///
@@ -433,6 +413,83 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     #[inline]
     pub(super) fn children(&self) -> &[Arc<Node<N, L>>] {
         &self.children
+    }
+
+    /// Returns the index of the child at the given measure together
+    /// with the combined `M`-offset of the other children up to but not
+    /// including that child.
+    #[inline]
+    pub(super) fn child_at_measure<M>(&self, measure: M) -> (usize, M)
+    where
+        M: Metric<L::Summary>,
+    {
+        debug_assert!(measure <= self.measure::<M>());
+
+        let mut idx = 0;
+        let mut offset = M::zero();
+        let children = self.children();
+
+        loop {
+            debug_assert!(idx < children.len());
+
+            // SAFETY: the measure is not of out bounds so one of the children
+            // must contain it, which means we always return before the index
+            // goes out of bounds.
+            let child = unsafe { children.get_unchecked(idx) };
+
+            let child_measure = child.measure::<M>();
+
+            offset += child_measure;
+
+            if offset >= measure {
+                return (idx, offset - child_measure);
+            }
+
+            idx += 1;
+        }
+    }
+
+    /// Returns the index of the child containing the entire range together
+    /// with the combined `M`-offset of the other children up to but not
+    /// including that child, or `None` if none of the children contain the
+    /// range entirely.
+    #[inline]
+    pub(super) fn child_containing_range<M>(
+        &self,
+        range: Range<M>,
+    ) -> Option<(usize, M)>
+    where
+        M: Metric<L::Summary>,
+    {
+        debug_assert!(range.start <= range.end);
+        debug_assert!(range.end <= self.measure::<M>());
+
+        let mut idx = 0;
+        let mut offset = M::zero();
+        let children = self.children();
+
+        loop {
+            debug_assert!(idx < children.len());
+
+            // SAFETY: the start of the range is not of out bounds so one of
+            // the children must contain it, which means we always return
+            // before the index goes out of bounds.
+            let child = unsafe { children.get_unchecked(idx) };
+
+            let measure = child.measure::<M>();
+
+            offset += measure;
+
+            if offset >= range.start {
+                if offset >= range.end {
+                    return Some((idx, offset - measure));
+                } else {
+                    return None;
+                }
+            }
+
+            idx += 1;
+        }
     }
 
     #[inline]
