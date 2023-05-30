@@ -830,34 +830,16 @@ mod tree_replace {
             },
         };
 
-        // The index of the child containing the start of the replacement
-        // range.
-        let mut start_idx = 0;
+        let (start_idx, offset) = inode.child_at_measure(replace_from);
 
-        let mut extra_leaves = None;
-
-        let mut offset = M::zero();
-
-        for (idx, child) in inode.children().iter().enumerate() {
-            let child_measure = child.measure::<M>();
-
-            offset += child_measure;
-
-            if offset >= replace_from {
-                start_idx = idx;
-
-                extra_leaves = inode.with_child_mut(start_idx, |child| {
-                    replace_nodes_in_start_subtree(
-                        Arc::make_mut(child),
-                        replace_from + child_measure - offset,
-                        replace_with,
-                        should_rebalance,
-                    )
-                });
-
-                break;
-            }
-        }
+        let extra_leaves = inode.with_child_mut(start_idx, |child| {
+            replace_nodes_in_start_subtree(
+                Arc::make_mut(child),
+                replace_from - offset,
+                replace_with,
+                should_rebalance,
+            )
+        });
 
         let extra_leaves = if let Some(mut extra_leaves) = extra_leaves {
             replace_child_range_with_leaves(
