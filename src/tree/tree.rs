@@ -538,12 +538,10 @@ mod tree_replace {
             },
         };
 
-        let Some((child_idx, offset)) = inode.child_containing_range(range.clone()) else {
-            let extras = replace_range_in_deepest(
-                inode,
-                range,
-                replace_with,
-            );
+        let Some((child_idx, offset)) =
+            inode.child_containing_range(range.clone())
+        else {
+            let extras = replace_range_in_deepest(inode, range, replace_with);
 
             Node::replace_with_single_child(node);
 
