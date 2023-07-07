@@ -151,7 +151,7 @@ impl<T> Drop for Arc<T> {
 
             // SAFETY: this is the last owner of the `Arc` so the memory has
             // not yet been reclaimed by a previous call to `Box::from_raw()`.
-            unsafe { Box::from_raw(self.ptr.as_ptr()) };
+            let _ = unsafe { Box::from_raw(self.ptr.as_ptr()) };
         }
     }
 }
