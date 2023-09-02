@@ -47,6 +47,6 @@
 
 - the `Chunks` iterator no longer implements `ExactSizeIterator`;
 
-[Unreleased]: https://github.com/noib3/crop/compare/v0.3.0...HEAD
-[0.3.0]: https://github.com/noib3/crop/compare/v0.2.0...v0.3.0
-[0.2.0]: https://github.com/noib3/crop/compare/v0.1.0...v0.2.0
+[Unreleased]: https://github.com/nomad/crop/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/nomad/crop/compare/v0.2.0...v0.3.0
+[0.2.0]: https://github.com/nomad/crop/compare/v0.1.0...v0.2.0
