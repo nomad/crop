@@ -1,3 +1,4 @@
-target
-corpus
+Cargo.lock
 artifacts
+corpus
+target
