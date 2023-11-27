@@ -1,12 +1,12 @@
 # 🌾 crop
 
 [![Latest version]](https://crates.io/crates/crop)
+[![Docs badge]](https://docs.rs/crop)
 [![CI]](https://github.com/nomad/crop/actions)
-[![Docs]](https://docs.rs/crop)
 
 [Latest version]: https://img.shields.io/crates/v/crop.svg
+[Docs badge]: https://docs.rs/crop/badge.svg
 [CI]: https://github.com/nomad/crop/actions/workflows/ci.yml/badge.svg
-[Docs]: https://docs.rs/crop/badge.svg
 
 crop is an implementation of a text rope, a data structure designed to be used
 in applications that need to handle frequent edits to arbitrarily large
