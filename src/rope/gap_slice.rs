@@ -135,9 +135,8 @@ impl<'a> GapSlice<'a> {
         }
     }
 
-    /// Removes the trailing line break (if it has one), returning the number
-    /// of bytes that were removed: 0 if there was no trailing line break, 1
-    /// if it was a LF, or 2 if it was a CRLF.
+    /// Removes the trailing line break (if it has one), returning the new
+    /// summary.
     #[inline]
     pub(super) fn truncate_trailing_line_break(
         &mut self,
@@ -151,7 +150,7 @@ impl<'a> GapSlice<'a> {
 
         let mut new_summary = self.truncate_last_char(summary);
 
-        if self.last_chunk().ends_with('r') {
+        if self.last_chunk().ends_with('\r') {
             new_summary = self.truncate_last_char(new_summary)
         }
 
@@ -365,11 +364,29 @@ impl Summarize for GapSlice<'_> {
 #[cfg(test)]
 mod tests {
     use crate::rope::gap_buffer::GapBuffer;
-    use crate::tree::AsSlice;
+    use crate::tree::{AsSlice, Summarize};
 
     #[test]
     fn debug_slice() {
         let buffer = GapBuffer::<10>::from("Hello");
         assert_eq!("\"He~~~~~llo\"", format!("{:?}", buffer.as_slice()));
+    }
+
+    #[test]
+    fn truncate_trailing_crlf() {
+        let buffer = GapBuffer::<5>::from("bar\r\n");
+        let mut slice = buffer.as_slice();
+        let summary = slice.summarize();
+        slice.truncate_trailing_line_break(summary);
+        assert_eq!("bar", slice);
+    }
+
+    #[test]
+    fn truncate_trailing_lf() {
+        let buffer = GapBuffer::<5>::from("bar\n");
+        let mut slice = buffer.as_slice();
+        let summary = slice.summarize();
+        slice.truncate_trailing_line_break(summary);
+        assert_eq!("bar", slice);
     }
 }

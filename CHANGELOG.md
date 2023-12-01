@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Bug fixes
+
+- fixed a typo that caused `"r"` to be stripped instead of the carriage return
+  character (`"\r"`) when truncating trailing line breaks;
+
 ## [0.4.0] - Oct 11 2023
 
 ### Additions
