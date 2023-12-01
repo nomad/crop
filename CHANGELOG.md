@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.1] - Dec 1 2023
+
 ### Bug fixes
 
 - fixed a typo that caused `"r"` to be stripped instead of the carriage return
@@ -58,6 +60,8 @@
 
 - the `Chunks` iterator no longer implements `ExactSizeIterator`;
 
-[Unreleased]: https://github.com/nomad/crop/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/nomad/crop/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/nomad/crop/compare/v0.4.0...v0.4.1
+[0.4.0]: https://github.com/nomad/crop/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/nomad/crop/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/nomad/crop/compare/v0.1.0...v0.2.0
