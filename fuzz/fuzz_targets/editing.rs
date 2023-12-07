@@ -24,10 +24,12 @@ enum StartingText<'a> {
 fuzz_target!(|data: (StartingText, Vec<EditOp>)| {
     let (starting, ops) = data;
 
-    let mut rope = Rope::from(match starting {
+    let start = match starting {
         StartingText::Custom(s) => s,
         StartingText::NonAscii => NON_ASCII,
-    });
+    };
+    let mut rope = Rope::from(start);
+    let mut string = String::from(start);
 
     for op in ops {
         match op {
@@ -38,6 +40,7 @@ fuzz_target!(|data: (StartingText, Vec<EditOp>)| {
                     byte_offset += 1;
                 }
                 rope.insert(byte_offset, text);
+                string.insert_str(byte_offset, text);
             },
 
             EditOp::Delete { mut byte_range }
@@ -50,7 +53,8 @@ fuzz_target!(|data: (StartingText, Vec<EditOp>)| {
                 while !rope.is_char_boundary(byte_range.end) {
                     byte_range.end += 1;
                 }
-                rope.delete(byte_range);
+                rope.delete(byte_range.clone());
+                string.replace_range(byte_range, "");
             },
 
             EditOp::Replace { mut byte_range, text }
@@ -63,7 +67,8 @@ fuzz_target!(|data: (StartingText, Vec<EditOp>)| {
                 while !rope.is_char_boundary(byte_range.end) {
                     byte_range.end += 1;
                 }
-                rope.replace(byte_range, text);
+                rope.replace(byte_range.clone(), text);
+                string.replace_range(byte_range, text);
             },
 
             _ => continue,
@@ -71,4 +76,9 @@ fuzz_target!(|data: (StartingText, Vec<EditOp>)| {
     }
 
     rope.assert_invariants();
+    assert_eq!(rope, string);
+    assert_eq!(
+        rope.lines().collect::<Vec<_>>(),
+        string.lines().collect::<Vec<_>>(),
+    );
 });

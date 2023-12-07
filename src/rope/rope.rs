@@ -8,16 +8,20 @@ use super::RopeSlice;
 use crate::range_bounds_to_start_end;
 use crate::tree::Tree;
 
-#[cfg(any(test, feature = "arity_4"))]
+#[cfg(any(test, fuzzing, feature = "arity_4"))]
 const ARITY: usize = 4;
 
-#[cfg(not(any(test, feature = "arity_4")))]
+#[cfg(not(any(test, fuzzing, feature = "arity_4")))]
 const ARITY: usize = 16;
 
 #[cfg(any(test, feature = "small_chunks"))]
 const CHUNK_MAX_BYTES: usize = 4;
 
-#[cfg(not(any(test, feature = "small_chunks")))]
+// With 4-byte chunks, fuzzing is unbearably slow.
+#[cfg(fuzzing)]
+const CHUNK_MAX_BYTES: usize = 16;
+
+#[cfg(not(any(test, fuzzing, feature = "small_chunks")))]
 const CHUNK_MAX_BYTES: usize = 2048;
 
 pub(super) type RopeChunk = GapBuffer<CHUNK_MAX_BYTES>;
