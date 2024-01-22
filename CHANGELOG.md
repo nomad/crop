@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.2] - Jan 22 2024
+
 ### Bug fixes
 
 - fixed a bug that caused `RopeSlice::line_slice()` to panic or halt forever
@@ -67,7 +69,8 @@
 
 - the `Chunks` iterator no longer implements `ExactSizeIterator`;
 
-[Unreleased]: https://github.com/nomad/crop/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/nomad/crop/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/nomad/crop/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/nomad/crop/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/nomad/crop/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/nomad/crop/compare/v0.2.0...v0.3.0
