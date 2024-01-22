@@ -485,7 +485,8 @@ impl<'a> RopeSlice<'a> {
     ///
     /// assert_eq!(s.line_slice(..1), "o\n");
     /// assert_eq!(s.line_slice(1..3), "bar\r\nbaz\n");
-    /// assert_eq!(s.line_slice(3..), "foob");
+    /// assert_eq!(s.line_slice(3..4), "foob");
+    /// assert_eq!(s.line_slice(4..), "");
     /// ```
     #[track_caller]
     #[inline]

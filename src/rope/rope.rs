@@ -565,7 +565,8 @@ impl Rope {
     ///
     /// assert_eq!(r.line_slice(..1), "foo\n");
     /// assert_eq!(r.line_slice(1..3), "bar\r\nbaz\n");
-    /// assert_eq!(r.line_slice(3..), "foobar\n");
+    /// assert_eq!(r.line_slice(3..4), "foobar\n");
+    /// assert_eq!(r.line_slice(4..), "");
     /// ```
     #[track_caller]
     #[inline]

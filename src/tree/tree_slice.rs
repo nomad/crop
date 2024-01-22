@@ -264,10 +264,17 @@ where
                 Self::from_range_in_root(self.root, range)
             },
 
-            (true, false) => {
+            (true, false) if range.start < self.measure::<M>() + M::one() => {
                 let start = M::measure(&self.offset) + range.start;
                 let end =
                     L::BaseMetric::measure(&self.offset) + self.base_measure();
+                Self::slice_impl(self.root, start, end)
+            },
+
+            (true, false) => {
+                let start =
+                    L::BaseMetric::measure(&self.offset) + self.base_measure();
+                let end = start;
                 Self::slice_impl(self.root, start, end)
             },
 

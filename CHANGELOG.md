@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Bug fixes
+
+- fixed a bug that caused `RopeSlice::line_slice()` to panic or halt forever
+  when both the start and end of the range are equal to `RopeSlice::line_len()`
+  and the `RopeSlice` didn't end with a line break
+  ([#16](https://github.com/nomad/crop/issues/16));
+
 ## [0.4.1] - Dec 1 2023
 
 ### Bug fixes
