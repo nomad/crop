@@ -4,6 +4,14 @@ use common::LARGE;
 use crop::{Rope, RopeBuilder};
 
 #[test]
+fn builder_line_len() {
+    let mut builder = RopeBuilder::new();
+    builder.append("\n");
+    let rope = builder.build();
+    assert_eq!(rope.line_len(), Rope::from("\n").line_len());
+}
+
+#[test]
 fn builder_empty() {
     let r = RopeBuilder::new().build();
 

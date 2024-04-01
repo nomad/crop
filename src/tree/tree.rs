@@ -1548,7 +1548,6 @@ mod tests {
     use core::ops::{Add, AddAssign, Sub, SubAssign};
 
     use super::*;
-    use crate::tree::Summarize;
 
     #[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
     pub struct Count {

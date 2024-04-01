@@ -107,11 +107,11 @@ impl RopeBuilder {
     #[inline]
     pub fn build(mut self) -> Rope {
         if self.buffer_len_left > 0 {
-            self.rope_has_trailing_newline =
-                self.buffer.has_trailing_newline();
-
             self.buffer.left_summary =
                 ChunkSummary::from(self.buffer_left_chunk());
+
+            self.rope_has_trailing_newline =
+                self.buffer.has_trailing_newline();
 
             self.tree_builder.append(self.buffer);
         }
