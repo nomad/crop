@@ -13,17 +13,17 @@ pub struct TreeBuilder<const ARITY: usize, L: Leaf> {
     /// - all the inodes within a stack level have the same depth;
     ///
     /// - all the vectors at every stack level have a length strictly less than
-    /// `ARITY` (but it could also be zero, i.e. all levels except the first
-    /// one can be empty);
+    ///   `ARITY` (but it could also be zero, i.e. all levels except the first
+    ///   one can be empty);
     ///
     /// - the inodes are grouped in order of descending depth, with each stack
-    /// level containing inodes of depth one less than the previous level;
+    ///   level containing inodes of depth one less than the previous level;
     ///
     /// - every inode at every stack level is completely full, i.e. for every
-    /// inode it holds `inode.leaf_count() == max_children ^ inode.depth()`;
+    ///   inode it holds `inode.leaf_count() == max_children ^ inode.depth()`;
     ///
     /// - all the inodes in the last stack level (assuming there are any) have
-    /// a depth of 1.
+    ///   a depth of 1.
     stack: Vec<Vec<Arc<Node<ARITY, L>>>>,
 
     /// A bunch of leaves waiting to be grouped into an internal node.

@@ -283,10 +283,10 @@ mod from_treeslice {
     /// Returns a `(root, invalid_first, invalid_last)` tuple where:
     ///
     /// - `root` is the internal node obtained by removing all the nodes before
-    /// `slice.before` and after `slice.before + slice.base_measure`,
+    ///   `slice.before` and after `slice.before + slice.base_measure`,
     ///
     /// - `invalid_{first,last}` are the number of invalid nodes contained in
-    /// the subtrees of the first and last child, respectively.
+    ///   the subtrees of the first and last child, respectively.
     ///
     /// Note that all the `Arc`s enclosing the nodes on the left and right side
     /// of the subtree under `root` are guaranteed to have a strong count of 1,

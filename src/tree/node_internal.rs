@@ -275,7 +275,8 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// - this inode has only one child (the second child is assumed to exist);
     ///
     /// - the `Arc` enclosing the first child has a strong counter > 1. This
-    /// function assumes that there are zero `Arc::clone`s of the first child.
+    ///   function assumes that there are zero `Arc::clone`s of the first
+    ///   child.
     #[inline]
     pub(super) fn balance_first_child_with_second(&mut self)
     where
@@ -340,10 +341,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     /// Panics if:
     ///
     /// - this inode has only one child (the penultimate child is assumed to
-    /// exist);
+    ///   exist);
     ///
     /// - the `Arc` enclosing the last child has a strong counter > 1. This
-    /// function assumes that there are zero `Arc::clone`s of the last child.
+    ///   function assumes that there are zero `Arc::clone`s of the last child.
     #[inline]
     pub(super) fn balance_last_child_with_penultimate(&mut self)
     where

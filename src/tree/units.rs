@@ -464,17 +464,17 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     /// - `leaf` is that leaf node;
     ///
     /// - `root` is the deepest internal node containing both the current
-    /// `self.leaf_node` and `leaf` in its subtree;
+    ///   `self.leaf_node` and `leaf` in its subtree;
     ///
     /// - `before` is the total base measure of all the nodes from the first
-    /// leaf in `root`'s subtree to the leaf preceding the current
-    /// `self.leaf_node`. If `self.leaf_node` is the first leaf in `root`'s
-    /// subtree this measure will be zero;
+    ///   leaf in `root`'s subtree to the leaf preceding the current
+    ///   `self.leaf_node`. If `self.leaf_node` is the first leaf in `root`'s
+    ///   subtree this measure will be zero;
     ///
     /// - `summary` and `count` are the total summary and leaf count of all the
-    /// nodes between (but not including) `self.leaf_node` and `leaf`. If
-    /// `leaf` is the leaf node immediately after `self.leaf` then `summary`
-    /// will be empty and `count` will be zero.
+    ///   nodes between (but not including) `self.leaf_node` and `leaf`. If
+    ///   `leaf` is the leaf node immediately after `self.leaf` then `summary`
+    ///   will be empty and `count` will be zero.
     ///
     /// NOTE: it assumes that such a leaf node exists. If that's not the case
     /// this function may panic or return a leaf node outside of the valid
@@ -1280,8 +1280,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
     /// Yields the first unit in the range. This function is used by
     ///
-    /// - [`Self::remainder()`] if there are no units in the iterating range, in
-    /// which case it'll yield the whole range;
+    /// - [`Self::remainder()`] if there are no units in the iterating range,
+    ///   in which case it'll yield the whole range;
     ///
     /// - by [`Self::previous()`] when there's one final unit to yield.
     #[inline]
@@ -1424,17 +1424,17 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     /// - `leaf` is that leaf node;
     ///
     /// - `root` is the deepest internal node containing both `leaf` and the
-    /// current `self.leaf_node` in its subtree;
+    ///   current `self.leaf_node` in its subtree;
     ///
     /// - `after` is the total base measure of all the nodes from the last leaf
-    /// in `root`'s subtree to the leaf after the current `self.leaf_node`. If
-    /// `self.leaf_node` if the last leaf in `root`'s subtree this measure will
-    /// be zero;
+    ///   in `root`'s subtree to the leaf after the current `self.leaf_node`.
+    ///   If `self.leaf_node` if the last leaf in `root`'s subtree this measure
+    ///   will be zero;
     ///
     /// - `summary` and `count` are the total summary and leaf count of all the
-    /// nodes between (but not including) `leaf` and `self.leaf_node`. If
-    /// `leaf` is the leaf node immediately before `self.leaf` then `summary`
-    /// will be empty and `count` will be zero.
+    ///   nodes between (but not including) `leaf` and `self.leaf_node`. If
+    ///   `leaf` is the leaf node immediately before `self.leaf` then `summary`
+    ///   will be empty and `count` will be zero.
     ///
     /// NOTE: it assumes that such a leaf node exists. If that's not the case
     /// this function may panic or return a leaf node outside of the valid

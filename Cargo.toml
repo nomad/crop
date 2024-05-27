@@ -38,6 +38,9 @@ criterion = "0.5"
 rand = "0.8"
 ropey = "1.6"
 
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }
+
 [[bench]]
 name = "creation"
 harness = false
