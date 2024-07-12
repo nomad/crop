@@ -3,6 +3,8 @@
 //! It also implements several traits exported by the [tree](crate::tree)
 //! module on it to be able to use it as the leaf of our [`Rope`](crate::Rope).
 
+use alloc::boxed::Box;
+use alloc::vec::Vec;
 use core::ops::{Range, RangeBounds};
 
 use super::gap_slice::GapSlice;

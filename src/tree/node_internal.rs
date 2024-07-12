@@ -1,3 +1,5 @@
+use alloc::string::String;
+use alloc::vec::Vec;
 use core::ops::{Range, RangeBounds};
 
 use super::traits::*;

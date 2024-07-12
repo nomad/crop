@@ -139,12 +139,16 @@
 //!   UTF-16 instead of UTF-8, allowing them to efficiently convert UTF-16
 //!   code unit offsets to and from byte offsets in logarithmic time.
 
+#![cfg_attr(not(any(test, feature = "std")), no_std)]
 #![allow(clippy::explicit_auto_deref)]
 #![allow(clippy::module_inception)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(rustdoc::private_intra_doc_links)]
+#![warn(clippy::std_instead_of_core)]
+#![warn(clippy::std_instead_of_alloc)]
+#![warn(clippy::alloc_instead_of_core)]
 
 extern crate alloc;
 

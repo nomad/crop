@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use super::{Arc, Inode, Leaf, Metric, Node, Tree, TreeSlice};
 
 /// An iterator over the leaves of `Tree`s and `TreeSlice`s.

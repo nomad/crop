@@ -18,10 +18,11 @@ features = ["graphemes", "simd", "utf16-metric"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-default = ["simd"]
+default = ["simd", "std"]
 graphemes = ["unicode-segmentation"]
 simd = ["str_indices/simd"]
 utf16-metric = []
+std = []
 
 # Private features
 small_chunks = []

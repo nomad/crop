@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use super::traits::{BalancedLeaf, Leaf};
 use super::{Arc, Inode, Lnode, Node, Tree};
 
