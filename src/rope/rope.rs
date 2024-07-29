@@ -1,3 +1,4 @@
+use alloc::string::String;
 use core::ops::RangeBounds;
 
 use super::gap_buffer::GapBuffer;

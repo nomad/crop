@@ -4,6 +4,7 @@
 //!
 //! [rclite]: https://github.com/fereidani/rclite
 
+use alloc::boxed::Box;
 use core::mem::MaybeUninit;
 use core::ptr::{addr_of_mut, NonNull};
 use core::sync::atomic;
