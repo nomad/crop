@@ -277,7 +277,7 @@ impl<'a> From<&RopeSlice<'a>> for Chars<'a> {
     }
 }
 
-impl<'a> Iterator for Chars<'a> {
+impl Iterator for Chars<'_> {
     type Item = char;
 
     #[inline]

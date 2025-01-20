@@ -3,13 +3,10 @@ use alloc::vec::Vec;
 use super::{Arc, Inode, Leaf, Metric, Node, Tree, TreeSlice};
 
 /// An iterator over the leaves of `Tree`s and `TreeSlice`s.
+//
+// This iterator is implemented using two independent iterators advancing in
+// opposite directions.
 pub struct Leaves<'a, const ARITY: usize, L: Leaf> {
-    /*
-      This iterator is implemented using two independent iterators advancing in
-      opposite directions.
-    */
-    #[rustfmt::skip]
-
     /// Iterates over the leaves from front to back.
     forward: LeavesForward<'a, ARITY, L>,
 
@@ -395,7 +392,7 @@ struct LeavesBackward<'a, const N: usize, L: Leaf> {
     whole_total: usize,
 }
 
-impl<'a, const N: usize, L: Leaf> Clone for LeavesBackward<'a, N, L> {
+impl<const N: usize, L: Leaf> Clone for LeavesBackward<'_, N, L> {
     #[inline]
     fn clone(&self) -> Self {
         Self { path: self.path.clone(), ..*self }

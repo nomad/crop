@@ -1446,8 +1446,8 @@ impl<'a, const CHUNKS: usize, const MAX_BYTES: usize>
     }
 }
 
-impl<'a, const CHUNKS: usize, const MAX_BYTES: usize> Iterator
-    for Resegmenter<'a, CHUNKS, MAX_BYTES>
+impl<const CHUNKS: usize, const MAX_BYTES: usize> Iterator
+    for Resegmenter<'_, CHUNKS, MAX_BYTES>
 {
     type Item = GapBuffer<MAX_BYTES>;
 

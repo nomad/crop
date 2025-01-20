@@ -5,25 +5,22 @@ use super::tree_slice;
 use super::{Arc, Lnode, Node, Tree, TreeSlice};
 
 /// An iterator over the units of a metric.
+//
+// Just like the `Leaves` iterator, this iterator is also implemented using two
+// separate iterators, one for iterating forward (used in the `Iterator` impl),
+// and the other for iterating backward (used in the `DoubleEndedIterator`
+// impl).
+//
+// These two iterators are completely independent and don't know about each
+// other, which could cause them to overlap if alternating between calling
+// `Units::next()` and `Units::next_back()`.
+//
+// To prevent this we also store the base measure of the unyielded iterating
+// range, which is decreased as new `TreeSliece`s are yielded (both forward and
+// backward). Once that reaches zero this iterator will stop yielding any more
+// items.
 #[derive(Clone)]
 pub struct Units<'a, const ARITY: usize, L: Leaf, M: Metric<L::Summary>> {
-    /*
-      Just like the `Leaves` iterator, this iterator is also implemented using
-      two separate iterators, one for iterating forward (used in the `Iterator`
-      impl), and the other for iterating backward (used in the
-      `DoubleEndedIterator` impl).
-
-      These two iterators are completely independent and don't know about each
-      other, which could cause them to overlap if alternating between calling
-      `Units::next()` and `Units::next_back()`.
-
-      To prevent this we also store the base measure of the unyielded iterating
-      range, which is decreased as new `TreeSliece`s are yielded (both forward
-      and backward). Once that reaches zero this iterator will stop yielding
-      any more items.
-    */
-    #[rustfmt::skip]
-
     /// Iterates over the `M`-units from front to back.
     forward: UnitsForward<'a, ARITY, L, M>,
 
