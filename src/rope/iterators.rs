@@ -121,8 +121,7 @@ pub struct Bytes<'a> {
     /// The chunk used when calling [`Bytes::next_back()`].
     backward_chunk: &'a [u8],
 
-    /// The number of bytes of `backward_chunk` which
-    /// are yet to be yielded.
+    /// The number of bytes of `backward_chunk` which are yet to be yielded.
     backward_byte_idx: usize,
 
     /// The number of bytes that have been yielded so far.

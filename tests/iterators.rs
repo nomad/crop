@@ -487,10 +487,7 @@ fn iter_raw_lines_0() {
     assert_eq!("Hey \r\n", lines.next().unwrap());
     assert_eq!("this contains\n", lines.next().unwrap());
     assert_eq!("mixed line breaks, emojis -> \r\n", lines.next().unwrap());
-    assert_eq!(
-        "🐕‍🦺 and other -> こんにちは chars.\r\n",
-        lines.next().unwrap()
-    );
+    assert_eq!("🐕‍🦺 and other -> こんにちは chars.\r\n", lines.next().unwrap());
     assert_eq!("Can we iterate\n", lines.next().unwrap());
     assert_eq!("over this?\n", lines.next().unwrap());
     assert_eq!("\r\n", lines.next().unwrap());
@@ -513,10 +510,7 @@ fn iter_raw_lines_backward_0() {
     assert_eq!("\r\n", lines.next().unwrap());
     assert_eq!("over this?\n", lines.next().unwrap());
     assert_eq!("Can we iterate\n", lines.next().unwrap());
-    assert_eq!(
-        "🐕‍🦺 and other -> こんにちは chars.\r\n",
-        lines.next().unwrap()
-    );
+    assert_eq!("🐕‍🦺 and other -> こんにちは chars.\r\n", lines.next().unwrap());
     assert_eq!("mixed line breaks, emojis -> \r\n", lines.next().unwrap());
     assert_eq!("this contains\n", lines.next().unwrap());
     assert_eq!("Hey \r\n", lines.next().unwrap());
