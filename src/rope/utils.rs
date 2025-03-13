@@ -158,6 +158,10 @@ pub(super) fn is_grapheme_boundary(
 
     debug_assert!(byte_offset <= byte_len);
 
+    if byte_len == 0 {
+        return byte_offset == 0;
+    }
+
     let mut cursor = GraphemeCursor::new(0, byte_len, true);
     cursor.set_cursor(byte_offset);
 
