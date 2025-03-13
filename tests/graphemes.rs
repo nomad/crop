@@ -138,3 +138,9 @@ fn graphemes_is_boundary_out_of_bounds() {
     let r = Rope::from("🇷🇸🇮🇴");
     assert!(r.is_grapheme_boundary(17));
 }
+
+#[cfg(feature = "graphemes")]
+#[test]
+fn graphemes_is_boundary_empty_rope() {
+    assert!(Rope::new().is_grapheme_boundary(0));
+}
