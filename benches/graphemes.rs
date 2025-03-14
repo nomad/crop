@@ -1,13 +1,8 @@
 mod common;
 
 use common::{LARGE, MEDIUM, SMALL, TINY};
-use criterion::{criterion_group, criterion_main, Criterion};
-use crop::{iter::Graphemes, Rope};
-
-const TINY: &str = include_str!("../tests/common/tiny.txt");
-const SMALL: &str = include_str!("../tests/common/small.txt");
-const MEDIUM: &str = include_str!("../tests/common/medium.txt");
-const LARGE: &str = include_str!("../tests/common/large.txt");
+use criterion::{Criterion, criterion_group, criterion_main};
+use crop::Rope;
 
 fn iter_graphemes(c: &mut Criterion) {
     let mut group = c.benchmark_group("iter_graphemes");
