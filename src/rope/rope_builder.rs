@@ -1,8 +1,8 @@
+use super::Rope;
 use super::gap_buffer::GapBuffer;
 use super::metrics::ChunkSummary;
 use super::rope::RopeChunk;
 use super::utils::split_adjusted;
-use super::Rope;
 use crate::tree::TreeBuilder;
 
 /// An incremental [`Rope`](crate::Rope) builder.
@@ -41,11 +41,7 @@ fn gap_buffer_push_with_remainder<'a, const MAX_BYTES: usize>(
 
     *buffer_len_left += push.len();
 
-    if rest.is_empty() {
-        None
-    } else {
-        Some(rest)
-    }
+    if rest.is_empty() { None } else { Some(rest) }
 }
 
 impl RopeBuilder {

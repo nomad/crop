@@ -137,7 +137,7 @@ impl<const ARITY: usize, L: Leaf> TreeBuilder<ARITY, L> {
                     _ => {
                         break Arc::new(Node::Internal(Inode::from_children(
                             stack_level,
-                        )))
+                        )));
                     },
                 }
             }

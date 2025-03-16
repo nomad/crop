@@ -1,11 +1,11 @@
 use alloc::string::String;
 use core::ops::RangeBounds;
 
+use super::Rope;
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
 use super::rope::RopeChunk;
 use super::utils::{panic_messages as panic, *};
-use super::Rope;
 use crate::range_bounds_to_start_end;
 use crate::tree::TreeSlice;
 
@@ -619,11 +619,9 @@ impl<'a> RopeSlice<'a> {
     /// Panics if this slice doesn't have a trailing line break.
     #[inline]
     pub(super) fn truncate_trailing_line_break(&mut self) {
-        debug_assert!(self
-            .tree_slice
-            .end_slice()
-            .last_chunk()
-            .ends_with('\n'));
+        debug_assert!(
+            self.tree_slice.end_slice().last_chunk().ends_with('\n')
+        );
 
         self.truncate_last_char();
 

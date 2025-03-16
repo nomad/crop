@@ -1595,10 +1595,9 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
             self.yielded_in_leaf = L::Summary::default();
 
-            let (slice, slice_advance) =
-                if let Some(remainder) = self.remainder() {
-                    remainder
-                } else {
+            let (slice, slice_advance) = match self.remainder() {
+                Some(remainder) => remainder,
+                _ => {
                     let (_, _, empty, empty_summary) =
                         M::remainder(self.end_slice, &self.end_summary);
 
@@ -1620,7 +1619,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                         },
                         L::Summary::default(),
                     )
-                };
+                },
+            };
 
             self.base_remaining += L::BaseMetric::measure(&advance);
 

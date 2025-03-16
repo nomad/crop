@@ -339,7 +339,7 @@ impl<'a> GapSlice<'a> {
                 return (
                     self.left_chunk().as_bytes(),
                     self.right_chunk().as_bytes(),
-                )
+                );
             },
         };
 

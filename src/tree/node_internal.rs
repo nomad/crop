@@ -711,7 +711,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &mut self,
         mut child_offset: usize,
         children: I,
-    ) -> Option<impl ExactSizeIterator<Item = Self>>
+    ) -> Option<impl ExactSizeIterator<Item = Self> + use<I, N, L>>
     where
         I: IntoIterator<Item = Arc<Node<N, L>>>,
         I::IntoIter: ExactSizeIterator,
@@ -737,10 +737,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         );
 
         while self.is_underfilled() {
-            let next = if let Some(next) = children.next() {
-                next
-            } else {
-                last_children.next().unwrap()
+            let next = match children.next() {
+                Some(next) => next,
+                _ => last_children.next().unwrap(),
             };
             self.push(next);
         }

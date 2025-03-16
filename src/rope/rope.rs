@@ -1,11 +1,11 @@
 use alloc::string::String;
 use core::ops::RangeBounds;
 
+use super::RopeSlice;
 use super::gap_buffer::GapBuffer;
 use super::iterators::{Bytes, Chars, Chunks, Lines, RawLines};
 use super::metrics::{ByteMetric, RawLineMetric};
 use super::utils::{panic_messages as panic, *};
-use super::RopeSlice;
 use crate::range_bounds_to_start_end;
 use crate::tree::Tree;
 

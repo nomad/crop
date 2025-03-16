@@ -100,7 +100,7 @@ impl<L: Leaf> Lnode<L> {
         &mut self,
         range: R,
         replace_with: L::Replacement<'_>,
-    ) -> Option<impl ExactSizeIterator<Item = Self>>
+    ) -> Option<impl ExactSizeIterator<Item = Self> + use<M, R, L>>
     where
         M: Metric<L::Summary>,
         R: RangeBounds<M>,

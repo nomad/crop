@@ -2,7 +2,7 @@ mod common;
 
 use common::{LARGE, MEDIUM, SMALL, TINY};
 use criterion::measurement::WallTime;
-use criterion::{criterion_group, criterion_main, BenchmarkGroup, Criterion};
+use criterion::{BenchmarkGroup, Criterion, criterion_group, criterion_main};
 use crop::{Rope, RopeBuilder};
 
 fn bench<F: Fn(&str)>(group: &mut BenchmarkGroup<WallTime>, to_bench: F) {

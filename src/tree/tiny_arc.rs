@@ -6,7 +6,7 @@
 
 use alloc::boxed::Box;
 use core::mem::MaybeUninit;
-use core::ptr::{addr_of_mut, NonNull};
+use core::ptr::{NonNull, addr_of_mut};
 use core::sync::atomic;
 
 /// A tiny `Arc` without weak references.
@@ -39,7 +39,7 @@ impl<T> Arc<T> {
 
     #[inline]
     pub(super) unsafe fn get_mut_unchecked(this: &mut Self) -> &mut T {
-        &mut this.ptr.as_mut().data
+        unsafe { &mut this.ptr.as_mut().data }
     }
 
     #[inline]

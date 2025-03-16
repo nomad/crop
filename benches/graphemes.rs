@@ -1,7 +1,7 @@
 mod common;
 
 use common::{LARGE, MEDIUM, SMALL, TINY};
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use crop::Rope;
 
 fn iter_graphemes(c: &mut Criterion) {

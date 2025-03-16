@@ -166,13 +166,13 @@ pub mod tree;
 
 // These are not part of the public API, we only export them to be able to run
 // doctests.
+pub use rope::{Rope, RopeBuilder, RopeSlice};
 #[doc(hidden)]
 pub use rope::{
     gap_buffer::GapBuffer,
     gap_slice::GapSlice,
     metrics::ChunkSummary,
 };
-pub use rope::{Rope, RopeBuilder, RopeSlice};
 
 #[inline]
 pub(crate) fn range_bounds_to_start_end<T, B>(

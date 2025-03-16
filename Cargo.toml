@@ -1,8 +1,8 @@
 [package]
 name = "crop"
 version = "0.4.2"
-edition = "2021"
-rust-version = "1.65"
+edition = "2024"
+rust-version = "1.85"
 authors = ["Riccardo Mazzarini <me@noib3.dev>"]
 description = "A pretty fast text rope"
 documentation = "https://docs.rs/crop"
@@ -11,7 +11,13 @@ readme = "README.md"
 license = "MIT"
 keywords = ["rope", "tree", "edit", "buffer"]
 categories = ["data-structures", "text-editors", "text-processing"]
-exclude = ["/.github/*", "/examples/**", "/fuzz/**", "/tests/**", "/BENCHMARKS.md"]
+exclude = [
+  "/.github/*",
+  "/examples/**",
+  "/fuzz/**",
+  "/tests/**",
+  "/BENCHMARKS.md",
+]
 
 [package.metadata.docs.rs]
 features = ["graphemes", "simd", "utf16-metric"]

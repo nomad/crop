@@ -1,8 +1,8 @@
 mod common;
 
 use common::{LARGE, MEDIUM, SMALL, TINY};
-use criterion::{criterion_group, criterion_main, Criterion};
-use crop::{iter::*, Rope};
+use criterion::{Criterion, criterion_group, criterion_main};
+use crop::{Rope, iter::*};
 
 #[macro_export]
 macro_rules! iter_bench {

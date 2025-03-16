@@ -598,7 +598,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
 
 #[cfg(test)]
 mod tests {
-    use rand::{thread_rng, Rng};
+    use rand::{Rng, thread_rng};
 
     use super::*;
 

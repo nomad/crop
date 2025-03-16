@@ -182,9 +182,9 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
         if let Some(extras) =
             tree_replace::replace(&mut self.root, range, replace_with)
         {
-            debug_assert!(extras
-                .iter()
-                .all(|n| n.depth() == self.root.depth()));
+            debug_assert!(
+                extras.iter().all(|n| n.depth() == self.root.depth())
+            );
 
             self.root = Arc::new(Node::Internal(Inode::from_nodes(
                 core::iter::once(Arc::clone(self.root())).exact_chain(extras),
@@ -561,9 +561,9 @@ mod tree_replace {
         // Case 1: there are some extra child nodes to insert *after* the child
         // containing the replacement range.
         if let Some(extras) = extras {
-            debug_assert!(extras
-                .iter()
-                .all(|n| n.depth() == inode.depth() - 1));
+            debug_assert!(
+                extras.iter().all(|n| n.depth() == inode.depth() - 1)
+            );
 
             inode.insert_children(child_idx + 1, extras).map(|extras| {
                 extras.map(Node::Internal).map(Arc::new).collect()
@@ -809,7 +809,7 @@ mod tree_replace {
         replace_from: M,
         replace_with: L::Replacement<'_>,
         should_rebalance: &mut bool,
-    ) -> Option<impl ExactSizeIterator<Item = Arc<Node<N, L>>>>
+    ) -> Option<impl ExactSizeIterator<Item = Arc<Node<N, L>>> + use<N, M, L>>
     where
         M: Metric<L::Summary>,
         L: ReplaceableLeaf<M> + Clone,
@@ -818,13 +818,16 @@ mod tree_replace {
             Node::Internal(inode) => inode,
 
             Node::Leaf(leaf) => {
-                if let Some(extra_leaves) =
-                    leaf.replace(replace_from.., replace_with)
-                {
-                    return Some(extra_leaves.map(Node::Leaf).map(Arc::new));
-                } else {
-                    *should_rebalance = leaf.is_underfilled();
-                    return None;
+                match leaf.replace(replace_from.., replace_with) {
+                    Some(extra_leaves) => {
+                        return Some(
+                            extra_leaves.map(Node::Leaf).map(Arc::new),
+                        );
+                    },
+                    _ => {
+                        *should_rebalance = leaf.is_underfilled();
+                        return None;
+                    },
                 }
             },
         };
@@ -968,12 +971,15 @@ mod tree_replace {
 
         if inode.depth() == 1 {
             for child_idx in child_range {
-                if let Some(leaf) = leaves.next() {
-                    debug_assert!(leaf.is_leaf());
-                    inode.swap(child_idx, leaf);
-                } else {
-                    inode.drain(child_idx..end);
-                    return;
+                match leaves.next() {
+                    Some(leaf) => {
+                        debug_assert!(leaf.is_leaf());
+                        inode.swap(child_idx, leaf);
+                    },
+                    _ => {
+                        inode.drain(child_idx..end);
+                        return;
+                    },
                 }
             }
         } else {
@@ -983,50 +989,56 @@ mod tree_replace {
                 TargetDepth::new(leaves.by_ref(), target_depth);
 
             for child_idx in child_range {
-                if let Some(replacement) = replacements.next() {
-                    if replacement.depth() == target_depth
-                        && !replacement.is_underfilled()
-                    {
-                        inode.swap(child_idx, replacement);
-                    } else {
-                        let mut last = replacement;
-
-                        let last =
-                            inode.with_child_mut(child_idx - 1, |previous| {
-                                let previous_child =
-                                    Arc::make_mut(previous).get_internal_mut();
-
-                                if last.depth() == previous_child.depth() {
-                                    debug_assert!(last.is_underfilled());
-
-                                    let l = Arc::make_mut(&mut last)
-                                        .get_internal_mut();
-
-                                    previous_child.balance(l);
-
-                                    (!l.is_empty()).then_some(last)
-                                } else {
-                                    previous_child
-                                        .append_at_depth(last)
-                                        .map(Node::Internal)
-                                        .map(Arc::new)
-                                }
-                            });
-
-                        if let Some(last) = last {
-                            inode.swap(child_idx, last);
-                            inode.drain(child_idx + 1..end);
+                match replacements.next() {
+                    Some(replacement) => {
+                        if replacement.depth() == target_depth
+                            && !replacement.is_underfilled()
+                        {
+                            inode.swap(child_idx, replacement);
                         } else {
-                            inode.drain(child_idx..end);
+                            let mut last = replacement;
+
+                            let last = inode.with_child_mut(
+                                child_idx - 1,
+                                |previous| {
+                                    let previous_child =
+                                        Arc::make_mut(previous)
+                                            .get_internal_mut();
+
+                                    if last.depth() == previous_child.depth() {
+                                        debug_assert!(last.is_underfilled());
+
+                                        let l = Arc::make_mut(&mut last)
+                                            .get_internal_mut();
+
+                                        previous_child.balance(l);
+
+                                        (!l.is_empty()).then_some(last)
+                                    } else {
+                                        previous_child
+                                            .append_at_depth(last)
+                                            .map(Node::Internal)
+                                            .map(Arc::new)
+                                    }
+                                },
+                            );
+
+                            if let Some(last) = last {
+                                inode.swap(child_idx, last);
+                                inode.drain(child_idx + 1..end);
+                            } else {
+                                inode.drain(child_idx..end);
+                            }
+
+                            debug_assert_eq!(0, leaves.len());
+
+                            return;
                         }
-
-                        debug_assert_eq!(0, leaves.len());
-
+                    },
+                    _ => {
+                        inode.drain(child_idx..end);
                         return;
-                    }
-                } else {
-                    inode.drain(child_idx..end);
-                    return;
+                    },
                 }
             }
         }
@@ -1050,12 +1062,15 @@ mod tree_replace {
 
         if inode.depth() == 1 {
             for child_idx in child_range.rev() {
-                if let Some(leaf) = leaves.pop() {
-                    debug_assert!(leaf.is_leaf());
-                    inode.swap(child_idx, leaf);
-                } else {
-                    inode.drain(start..child_idx + 1);
-                    return;
+                match leaves.pop() {
+                    Some(leaf) => {
+                        debug_assert!(leaf.is_leaf());
+                        inode.swap(child_idx, leaf);
+                    },
+                    _ => {
+                        inode.drain(start..child_idx + 1);
+                        return;
+                    },
                 }
             }
         } else {
@@ -1065,55 +1080,58 @@ mod tree_replace {
                 TargetDepthFromBack::new(leaves, target_depth);
 
             for child_idx in child_range.rev() {
-                if let Some(replacement) = replacements.next() {
-                    if replacement.depth() == target_depth
-                        && !replacement.is_underfilled()
-                    {
-                        inode.swap(child_idx, replacement);
-                    } else {
-                        let mut last = replacement;
-
-                        let last =
-                            inode.with_child_mut(child_idx + 1, |next| {
-                                let next_child =
-                                    Arc::make_mut(next).get_internal_mut();
-
-                                if last.depth() == next_child.depth() {
-                                    debug_assert!(last.is_underfilled());
-
-                                    let l = Arc::make_mut(&mut last)
-                                        .get_internal_mut();
-
-                                    l.balance(next_child);
-
-                                    if next_child.is_empty() {
-                                        *next = last;
-                                        None
-                                    } else {
-                                        Some(last)
-                                    }
-                                } else {
-                                    next_child
-                                        .prepend_at_depth(last)
-                                        .map(Node::Internal)
-                                        .map(Arc::new)
-                                }
-                            });
-
-                        if let Some(last) = last {
-                            inode.swap(child_idx, last);
-                            inode.drain(start..child_idx);
+                match replacements.next() {
+                    Some(replacement) => {
+                        if replacement.depth() == target_depth
+                            && !replacement.is_underfilled()
+                        {
+                            inode.swap(child_idx, replacement);
                         } else {
-                            inode.drain(start..child_idx + 1);
+                            let mut last = replacement;
+
+                            let last =
+                                inode.with_child_mut(child_idx + 1, |next| {
+                                    let next_child =
+                                        Arc::make_mut(next).get_internal_mut();
+
+                                    if last.depth() == next_child.depth() {
+                                        debug_assert!(last.is_underfilled());
+
+                                        let l = Arc::make_mut(&mut last)
+                                            .get_internal_mut();
+
+                                        l.balance(next_child);
+
+                                        if next_child.is_empty() {
+                                            *next = last;
+                                            None
+                                        } else {
+                                            Some(last)
+                                        }
+                                    } else {
+                                        next_child
+                                            .prepend_at_depth(last)
+                                            .map(Node::Internal)
+                                            .map(Arc::new)
+                                    }
+                                });
+
+                            if let Some(last) = last {
+                                inode.swap(child_idx, last);
+                                inode.drain(start..child_idx);
+                            } else {
+                                inode.drain(start..child_idx + 1);
+                            }
+
+                            debug_assert_eq!(0, leaves.len());
+
+                            return;
                         }
-
-                        debug_assert_eq!(0, leaves.len());
-
+                    },
+                    _ => {
+                        inode.drain(start..child_idx + 1);
                         return;
-                    }
-                } else {
-                    inode.drain(start..child_idx + 1);
-                    return;
+                    },
                 }
             }
         }

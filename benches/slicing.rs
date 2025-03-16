@@ -1,12 +1,12 @@
 mod common;
 
-use common::{PercentRanges, LARGE, MEDIUM, SMALL, TINY};
+use common::{LARGE, MEDIUM, PercentRanges, SMALL, TINY};
 use criterion::{
-    criterion_group,
-    criterion_main,
     BatchSize,
     Bencher,
     Criterion,
+    criterion_group,
+    criterion_main,
 };
 use crop::Rope;
 
