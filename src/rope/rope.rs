@@ -960,3 +960,25 @@ impl core::cmp::PartialEq<Rope> for alloc::borrow::Cow<'_, str> {
 }
 
 impl core::cmp::Eq for Rope {}
+
+#[cfg(feature = "serde")]
+impl serde::Serialize for Rope {
+    #[inline]
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Rope {
+    #[inline]
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        String::deserialize(deserializer).map(Self::from)
+    }
+}

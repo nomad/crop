@@ -20,12 +20,13 @@ exclude = [
 ]
 
 [package.metadata.docs.rs]
-features = ["graphemes", "simd", "utf16-metric"]
+features = ["graphemes", "serde", "simd", "utf16-metric"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["simd", "std"]
 graphemes = ["unicode-segmentation"]
+serde = ["dep:serde"]
 simd = ["str_indices/simd"]
 utf16-metric = []
 std = []
@@ -38,13 +39,14 @@ dp = ["deep_trees"]
 
 [dependencies]
 str_indices = { version = "0.4.0", default-features = false }
+serde = { version = "1", optional = true }
 unicode-segmentation = { version = "1.10.0", optional = true }
 
 [dev-dependencies]
 criterion = "0.5"
 rand = "0.9"
 ropey = "1.6"
-serde_json = "1.0"
+serde_json = "1"
 
 [lints.rust]
 unexpected_cfgs = { level = "warn", check-cfg = ['cfg(fuzzing)'] }

@@ -68,13 +68,11 @@ impl DataFormat for Json {
     type Serialized = String;
 
     fn serialize_rope(&self, rope: &Rope) -> Self::Serialized {
-        // serde_json::to_string(rope).unwrap()
-        todo!();
+        serde_json::to_string(rope).unwrap()
     }
 
     fn deserialize_rope(&self, serialized: Self::Serialized) -> Rope {
-        // serde_json::from_str(&serialized).unwrap()
-        todo!();
+        serde_json::from_str(&serialized).unwrap()
     }
 }
 
