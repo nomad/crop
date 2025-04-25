@@ -54,7 +54,7 @@ fn byte_slice_0() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn byte_slice_random() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let r = Rope::from(s);
@@ -74,8 +74,8 @@ fn byte_slice_random() {
                 println!("byte ranges: {ranges:?}");
                 assert_eq!(str_slice, rope_slice);
             }
-            start = rng.gen_range(0..=rope_slice.byte_len());
-            end = rng.gen_range(start..=rope_slice.byte_len());
+            start = rng.random_range(0..=rope_slice.byte_len());
+            end = rng.random_range(start..=rope_slice.byte_len());
             str_slice = &str_slice[start..end];
             rope_slice = rope_slice.byte_slice(start..end);
         }
@@ -139,7 +139,7 @@ fn byte_slice_then_line() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn line_slices_random() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let r = Rope::from(s);
@@ -172,8 +172,8 @@ fn line_slices_random() {
 
             assert_eq!(str_slice, rope_slice);
 
-            start = rng.gen_range(0..rope_slice.line_len());
-            end = rng.gen_range(start..rope_slice.line_len());
+            start = rng.random_range(0..rope_slice.line_len());
+            end = rng.random_range(start..rope_slice.line_len());
 
             str_slice =
                 &s[line_offsets[offset + start]..line_offsets[offset + end]];
@@ -189,7 +189,7 @@ fn line_slices_random() {
 /// content while also satisying its invariants.
 #[test]
 fn rope_from_slice() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let slices = if cfg!(miri) {
         ["Hello world", "ƒoo", "bär", "baz", "🗻∈🌏"]
@@ -201,13 +201,13 @@ fn rope_from_slice() {
         let r = Rope::from(s);
 
         for _ in 0..100 {
-            let mut start = rng.gen_range(0..=r.byte_len());
+            let mut start = rng.random_range(0..=r.byte_len());
 
             while !r.is_char_boundary(start) {
                 start += 1;
             }
 
-            let mut end = rng.gen_range(start..=r.byte_len());
+            let mut end = rng.random_range(start..=r.byte_len());
 
             while !r.is_char_boundary(end) {
                 end += 1;

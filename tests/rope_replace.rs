@@ -122,7 +122,7 @@ fn insert_8() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn insert_small_random() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     let mut rope = Rope::new();
     let mut string = String::new();
@@ -141,10 +141,10 @@ fn insert_small_random() {
             "こんいちは、",
             "みんなさん！",
         ] {
-            let mut at = rng.gen_range(0..=rope.byte_len());
+            let mut at = rng.random_range(0..=rope.byte_len());
 
             while !string.is_char_boundary(at) {
-                at = rng.gen_range(0..=rope.byte_len());
+                at = rng.random_range(0..=rope.byte_len());
             }
 
             rope.insert(at, s);
@@ -159,18 +159,18 @@ fn insert_small_random() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn insert_random() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let mut r = Rope::from(s);
         let mut s = s.to_owned();
 
         for _ in 0..10 {
-            let insert_at = rng.gen_range(0..=r.byte_len());
+            let insert_at = rng.random_range(0..=r.byte_len());
 
             let insert = {
-                let start = rng.gen_range(0..=r.byte_len());
-                let end = rng.gen_range(start..=r.byte_len());
+                let start = rng.random_range(0..=r.byte_len());
+                let end = rng.random_range(start..=r.byte_len());
                 s[start..end].to_owned()
             };
 
@@ -272,7 +272,7 @@ fn delete_9() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn delete_random() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let mut r = Rope::from(s);
@@ -280,8 +280,8 @@ fn delete_random() {
 
         for _ in 0..20 {
             let delete_range = {
-                let start = rng.gen_range(0..=r.byte_len());
-                let end = rng.gen_range(start..=r.byte_len());
+                let start = rng.random_range(0..=r.byte_len());
+                let end = rng.random_range(start..=r.byte_len());
                 start..end
             };
 
@@ -324,7 +324,7 @@ fn replace_1() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn replace_random() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let mut r = Rope::from(s);
@@ -332,14 +332,14 @@ fn replace_random() {
 
         for _ in 0..20 {
             let replace_range = {
-                let start = rng.gen_range(0..=r.byte_len());
-                let end = rng.gen_range(start..=r.byte_len());
+                let start = rng.random_range(0..=r.byte_len());
+                let end = rng.random_range(start..=r.byte_len());
                 start..end
             };
 
             let replace_with = {
-                let start = rng.gen_range(0..=r.byte_len());
-                let end = rng.gen_range(start..=r.byte_len());
+                let start = rng.random_range(0..=r.byte_len());
+                let end = rng.random_range(start..=r.byte_len());
                 s[start..end].to_owned()
             };
 

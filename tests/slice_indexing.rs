@@ -10,14 +10,14 @@ use common::{CURSED_LIPSUM, LARGE, MEDIUM, SMALL, TINY};
 #[cfg_attr(miri, ignore)]
 #[test]
 fn byte_random() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let r = Rope::from(s);
 
         for _ in 0..10 {
-            let start = rng.gen_range(0..=r.byte_len());
-            let end = rng.gen_range(start..=r.byte_len());
+            let start = rng.random_range(0..=r.byte_len());
+            let end = rng.random_range(start..=r.byte_len());
 
             let str_slice = &s[start..end];
             let rope_slice = r.byte_slice(start..end);
@@ -40,14 +40,14 @@ fn byte_random() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn is_char_boundary_random() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for s in [CURSED_LIPSUM, TINY, SMALL, MEDIUM, LARGE] {
         let r = Rope::from(s);
 
         for _ in 0..10 {
-            let start = rng.gen_range(0..=r.byte_len());
-            let end = rng.gen_range(start..=r.byte_len());
+            let start = rng.random_range(0..=r.byte_len());
+            let end = rng.random_range(start..=r.byte_len());
 
             if !(s.is_char_boundary(start) && s.is_char_boundary(end)) {
                 continue;
@@ -76,22 +76,22 @@ fn is_char_boundary_random() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn line_of_byte_random() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let crop = Rope::from(s);
         let ropey = ropey::Rope::from(s);
 
         for _ in 0..100 {
-            let start = rng.gen_range(0..crop.byte_len());
-            let end = rng.gen_range(start + 1..=crop.byte_len());
+            let start = rng.random_range(0..crop.byte_len());
+            let end = rng.random_range(start + 1..=crop.byte_len());
             let range = start..end;
 
             let crop_slice = crop.byte_slice(range.clone());
             let ropey_slice = ropey.byte_slice(range.clone());
 
             for _ in 0..10 {
-                let byte_offset = rng.gen_range(0..=crop_slice.byte_len());
+                let byte_offset = rng.random_range(0..=crop_slice.byte_len());
                 let crop_line_offset = crop_slice.line_of_byte(byte_offset);
                 let ropey_line_offset = ropey_slice.byte_to_line(byte_offset);
 
@@ -110,22 +110,22 @@ fn line_of_byte_random() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn byte_of_line_random() {
-    let mut rng = rand::thread_rng();
+    let mut rng = rand::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let crop = Rope::from(s);
         let ropey = ropey::Rope::from(s);
 
         for _ in 0..100 {
-            let start = rng.gen_range(0..crop.byte_len());
-            let end = rng.gen_range(start + 1..=crop.byte_len());
+            let start = rng.random_range(0..crop.byte_len());
+            let end = rng.random_range(start + 1..=crop.byte_len());
             let range = start..end;
 
             let crop_slice = crop.byte_slice(range.clone());
             let ropey_slice = ropey.byte_slice(range.clone());
 
             for _ in 0..10 {
-                let line_offset = rng.gen_range(0..=crop_slice.line_len());
+                let line_offset = rng.random_range(0..=crop_slice.line_len());
                 let crop_byte_offset = crop_slice.byte_of_line(line_offset);
                 let ropey_byte_offset = ropey_slice.line_to_byte(line_offset);
 
