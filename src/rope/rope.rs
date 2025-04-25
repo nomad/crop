@@ -960,3 +960,66 @@ impl core::cmp::PartialEq<Rope> for alloc::borrow::Cow<'_, str> {
 }
 
 impl core::cmp::Eq for Rope {}
+
+#[cfg(feature = "serde")]
+mod serde_impls {
+    use alloc::borrow::Cow;
+
+    use serde::ser::SerializeSeq;
+
+    use super::*;
+    use crate::RopeBuilder;
+
+    impl serde::Serialize for Rope {
+        #[inline]
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            let mut seq = serializer.serialize_seq(None)?;
+            for chunk in self.chunks() {
+                seq.serialize_element(chunk)?;
+            }
+            seq.end()
+        }
+    }
+
+    impl<'de> serde::Deserialize<'de> for Rope {
+        #[inline]
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            struct Visitor;
+
+            impl<'de> serde::de::Visitor<'de> for Visitor {
+                type Value = Rope;
+
+                #[inline]
+                fn expecting(
+                    &self,
+                    formatter: &mut core::fmt::Formatter,
+                ) -> core::fmt::Result {
+                    formatter.write_str("a sequence of chunks")
+                }
+
+                #[inline]
+                fn visit_seq<A>(
+                    self,
+                    mut seq: A,
+                ) -> Result<Self::Value, A::Error>
+                where
+                    A: serde::de::SeqAccess<'de>,
+                {
+                    let mut builder = RopeBuilder::new();
+                    while let Some(chunk) = seq.next_element::<Cow<str>>()? {
+                        builder.append(chunk);
+                    }
+                    Ok(builder.build())
+                }
+            }
+
+            deserializer.deserialize_seq(Visitor)
+        }
+    }
+}

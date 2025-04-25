@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Additions
+
+- added a new `serde` feature that enables the `Serialize` and `Deserialize`
+  implementations for `Rope` ([#27](https://github.com/nomad/crop/pull/27));
+
 ## [0.4.2] - Jan 22 2024
 
 ### Bug fixes
