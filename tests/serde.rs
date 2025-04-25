@@ -13,6 +13,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "small_chunks", ignore)]
     fn ser_de_single_chunk() {
         let mut rope = Rope::new();
         rope.insert(0, "lorem ");
@@ -29,6 +30,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "small_chunks", ignore)]
     fn ser_de_multiple_chunks() {
         let mut rope = Rope::new();
         rope.insert(0, "lorem dolor");
@@ -47,6 +49,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "small_chunks", ignore)]
     fn ser_de_lf() {
         let mut rope = Rope::new();
         rope.insert(0, "lorem\n");
@@ -63,6 +66,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg_attr(feature = "small_chunks", ignore)]
     fn ser_de_crlf() {
         let mut rope = Rope::new();
         rope.insert(0, "lorem\r\n");
