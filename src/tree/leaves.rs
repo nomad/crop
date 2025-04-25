@@ -598,7 +598,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
 
 #[cfg(test)]
 mod tests {
-    use rand::{Rng, thread_rng};
+    use rand::{Rng, rng};
 
     use super::*;
 
@@ -640,12 +640,12 @@ mod tests {
 
     #[test]
     fn leaves_both_ways() {
-        let mut rng = thread_rng();
+        let mut rng = rng();
 
         for n in 1..MAX {
             let tree = Tree::<4, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
-            let i = rng.gen_range(0..=n);
+            let i = rng.random_range(0..=n);
             for j in 0..i {
                 assert_eq!(j, *leaves.next().unwrap().0);
             }
