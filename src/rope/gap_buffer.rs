@@ -1174,8 +1174,9 @@ impl<const MAX_BYTES: usize> AsSlice for GapBuffer<MAX_BYTES> {
 
 impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
     #[inline]
-    fn is_underfilled(&self, summary: &ChunkSummary) -> bool {
-        summary.bytes() < Self::min_bytes()
+    fn is_underfilled(&self) -> bool {
+        self.left_summary.bytes() + self.right_summary.bytes()
+            < Self::min_bytes()
     }
 
     #[inline]

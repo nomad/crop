@@ -33,7 +33,7 @@ impl<T: Summarize + BaseMeasured + AsSlice> Leaf for T {}
 pub trait BalancedLeaf: Leaf + for<'a> From<Self::Slice<'a>> {
     /// Returns whether the leaf node is too small to be on its own and should
     /// be rebalanced with another leaf.
-    fn is_underfilled(&self, summary: &Self::Summary) -> bool;
+    fn is_underfilled(&self) -> bool;
 
     /// Balance two leaves.
     ///

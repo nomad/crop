@@ -66,7 +66,7 @@ impl<L: Leaf> Lnode<L> {
     where
         L: BalancedLeaf,
     {
-        self.value.is_underfilled(self.summary())
+        self.value.is_underfilled()
     }
 
     #[inline]
