@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use super::traits::{BalancedLeaf, Leaf};
-use super::{Arc, Inode, Lnode, Node, Tree};
+use super::{Arc, Inode, Node, Tree};
 
 /// An incremental [`Tree`] builder.
 #[derive(Clone)]
@@ -44,7 +44,7 @@ impl<const ARITY: usize, L: Leaf> TreeBuilder<ARITY, L> {
     pub fn append(&mut self, leaf: L) {
         debug_assert!(self.leaves.len() < ARITY);
 
-        self.leaves.push(Arc::new(Node::Leaf(Lnode::from(leaf))));
+        self.leaves.push(Arc::new(Node::Leaf(leaf)));
 
         if self.leaves.len() < ARITY {
             return;

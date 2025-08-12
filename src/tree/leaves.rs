@@ -105,7 +105,6 @@ impl<const ARITY: usize, L: Leaf> core::iter::FusedIterator
 {
 }
 
-#[derive(Debug)]
 struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](Self::initialize()).
@@ -329,17 +328,17 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 
         if self.next_leaf_idx < self.leaves.len() {
             // All the nodes in `leaves` are guaranteed to be leaf nodes.
-            let lnode = &self.leaves[self.next_leaf_idx].get_leaf();
+            let leaf = &self.leaves[self.next_leaf_idx].get_leaf();
             self.next_leaf_idx += 1;
             self.whole_yielded += 1;
-            Some(lnode.as_slice())
+            Some(leaf.as_slice())
         } else if self.whole_yielded < self.whole_total {
             self.leaves = self.next_bunch();
             // Same as above.
-            let lnode = &self.leaves[0].get_leaf();
+            let leaf = &self.leaves[0].get_leaf();
             self.next_leaf_idx = 1;
             self.whole_yielded += 1;
-            Some(lnode.as_slice())
+            Some(leaf.as_slice())
         } else if self.last_slice.is_some() {
             self.last_slice.take()
         } else {
@@ -348,7 +347,6 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
     }
 }
 
-#[derive(Debug)]
 struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](Self::initialize()).
@@ -578,16 +576,16 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
         if self.last_leaf_idx > 0 {
             self.last_leaf_idx -= 1;
             // All the nodes in `leaves` are guaranteed to be leaf nodes.
-            let lnode = &self.leaves[self.last_leaf_idx].get_leaf();
+            let leaf = &self.leaves[self.last_leaf_idx].get_leaf();
             self.whole_yielded += 1;
-            Some(lnode.as_slice())
+            Some(leaf.as_slice())
         } else if self.whole_yielded < self.whole_total {
             self.leaves = self.previous_bunch();
             self.last_leaf_idx = self.leaves.len() - 1;
             // Same as above.
-            let lnode = &self.leaves[self.last_leaf_idx].get_leaf();
+            let leaf = &self.leaves[self.last_leaf_idx].get_leaf();
             self.whole_yielded += 1;
-            Some(lnode.as_slice())
+            Some(leaf.as_slice())
         } else if self.first_slice.is_some() {
             self.first_slice.take()
         } else {

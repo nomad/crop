@@ -1,16 +1,16 @@
-use super::traits::{BalancedLeaf, Leaf, Metric, SlicingMetric};
-use super::{Arc, Inode, Lnode};
+use super::traits::{BalancedLeaf, Leaf, Metric, SlicingMetric, Summarize};
+use super::{Arc, Inode};
 
 #[derive(Clone)]
 pub(super) enum Node<const N: usize, L: Leaf> {
     Internal(Inode<N, L>),
-    Leaf(Lnode<L>),
+    Leaf(L),
 }
 
 impl<const N: usize, L: Leaf + Default> Default for Node<N, L> {
     #[inline]
     fn default() -> Self {
-        Node::Leaf(Lnode::default())
+        Node::Leaf(L::default())
     }
 }
 
@@ -19,17 +19,13 @@ impl<const N: usize, L: Leaf> core::fmt::Debug for Node<N, L> {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         if !f.alternate() {
             match self {
-                Self::Internal(inode) => {
-                    f.debug_tuple("Internal").field(&inode).finish()
-                },
-                Self::Leaf(leaf) => {
-                    f.debug_tuple("Leaf").field(&leaf).finish()
-                },
+                Self::Internal(inode) => inode.fmt(f),
+                Self::Leaf(leaf) => leaf.fmt(f),
             }
         } else {
             match self {
                 Self::Internal(inode) => write!(f, "{inode:#?}"),
-                Self::Leaf(leaf) => write!(f, "{leaf:#?}"),
+                Self::Leaf(leaf) => write!(f, "{leaf:?}"),
             }
         }
     }
@@ -48,9 +44,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                 }
             },
 
-            Node::Leaf(leaf) => {
-                leaf.assert_invariants();
-            },
+            Node::Leaf(_) => (),
         }
     }
 
@@ -69,7 +63,9 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                 left.balance(right)
             },
 
-            (Node::Leaf(left), Node::Leaf(right)) => left.balance(right),
+            (Node::Leaf(left), Node::Leaf(right)) => {
+                L::balance_leaves(left, right)
+            },
 
             _ => unreachable!(),
         }
@@ -113,13 +109,8 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                 },
 
                 Node::Leaf(leaf) => {
-                    let (_, left_summary) = M1::slice_up_to(
-                        leaf.as_slice(),
-                        up_to - m1,
-                        leaf.summary(),
-                    );
-
-                    return m2 + M2::measure(&left_summary);
+                    let slice = M1::slice_up_to(leaf.as_slice(), up_to - m1);
+                    return m2 + M2::measure(&slice.summarize());
                 },
             }
         }
@@ -134,7 +125,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn get_leaf(&self) -> &Lnode<L> {
+    pub(super) fn get_leaf(&self) -> &L {
         match self {
             Node::Internal(_) => panic!(""),
             Node::Leaf(leaf) => leaf,
@@ -142,7 +133,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn get_leaf_mut(&mut self) -> &mut Lnode<L> {
+    pub(super) fn get_leaf_mut(&mut self) -> &mut L {
         match self {
             Node::Internal(_) => panic!(""),
             Node::Leaf(leaf) => leaf,
@@ -239,7 +230,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     {
         match self {
             Node::Internal(inode) => inode.measure(),
-            Node::Leaf(leaf) => leaf.measure(),
+            Node::Leaf(leaf) => M::measure(&leaf.summarize()),
         }
     }
 
@@ -262,10 +253,10 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn summary(&self) -> &L::Summary {
+    pub(super) fn summary(&self) -> L::Summary {
         match self {
-            Node::Internal(inode) => inode.summary(),
-            Node::Leaf(leaf) => leaf.summary(),
+            Node::Internal(inode) => inode.summary().clone(),
+            Node::Leaf(leaf) => leaf.summarize(),
         }
     }
 }

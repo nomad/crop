@@ -318,7 +318,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             },
 
             (Node::Leaf(first), Node::Leaf(second)) => {
-                first.balance(second);
+                L::balance_leaves(first, second);
 
                 if second.is_empty() {
                     self.leaf_count -= 1;
@@ -389,7 +389,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             },
 
             (Node::Leaf(penultimate), Node::Leaf(last)) => {
-                penultimate.balance(last);
+                L::balance_leaves(penultimate, last);
 
                 if last.is_empty() {
                     self.leaf_count -= 1;
@@ -516,7 +516,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(end <= self.len());
 
         for child in &self.children[start..end] {
-            self.summary -= child.summary();
+            self.summary -= &child.summary();
             self.leaf_count -= child.leaf_count();
         }
 
@@ -564,7 +564,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
         for child in &children[1..] {
             leaf_count += child.leaf_count();
-            summary += child.summary();
+            summary += &child.summary();
         }
 
         Self { children, depth, leaf_count, summary }
@@ -638,7 +638,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert_eq!(child.depth() + 1, self.depth());
 
         self.leaf_count += child.leaf_count();
-        self.summary += child.summary();
+        self.summary += &child.summary();
         self.children.insert(child_offset, child);
     }
 
@@ -885,7 +885,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert_eq!(child.depth() + 1, self.depth());
 
         self.leaf_count += child.leaf_count();
-        self.summary += child.summary();
+        self.summary += &child.summary();
         self.children.push(child);
     }
 
@@ -899,7 +899,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(child_idx < self.len());
         let child = self.children.remove(child_idx);
         self.leaf_count -= child.leaf_count();
-        self.summary -= child.summary();
+        self.summary -= &child.summary();
         child
     }
 
@@ -924,10 +924,10 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert_eq!(new_child.depth() + 1, self.depth());
 
         let to_swap = &self.children[child_idx];
-        self.summary -= to_swap.summary();
+        self.summary -= &to_swap.summary();
         self.leaf_count -= to_swap.leaf_count();
 
-        self.summary += new_child.summary();
+        self.summary += &new_child.summary();
         self.leaf_count += new_child.leaf_count();
         self.children[child_idx] = new_child;
     }
@@ -968,12 +968,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     {
         let child = &mut self.children[child_idx];
 
-        self.summary -= child.summary();
+        self.summary -= &child.summary();
         self.leaf_count -= child.leaf_count();
 
         let ret = fun(child);
 
-        self.summary += child.summary();
+        self.summary += &child.summary();
         self.leaf_count += child.leaf_count();
 
         ret

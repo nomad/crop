@@ -140,7 +140,6 @@
 //!   code unit offsets to and from byte offsets in logarithmic time.
 
 #![cfg_attr(not(any(test, feature = "std")), no_std)]
-#![allow(clippy::explicit_auto_deref)]
 #![allow(clippy::module_inception)]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 #![deny(missing_docs)]
@@ -160,13 +159,12 @@ pub mod iter {
 }
 
 mod rope;
-
 #[doc(hidden)]
 pub mod tree;
 
+pub use rope::{Rope, RopeBuilder, RopeSlice};
 // These are not part of the public API, we only export them to be able to run
 // doctests.
-pub use rope::{Rope, RopeBuilder, RopeSlice};
 #[doc(hidden)]
 pub use rope::{
     gap_buffer::GapBuffer,

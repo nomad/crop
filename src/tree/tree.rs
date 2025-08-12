@@ -40,16 +40,12 @@ impl<const ARITY: usize, L: BalancedLeaf + Clone> From<TreeSlice<'_, ARITY, L>>
         } else if slice.leaf_count() == 1 {
             debug_assert!(slice.root().is_leaf());
 
-            Arc::new(Node::Leaf(Lnode::new(
-                slice.start_slice.into(),
-                slice.summary,
-            )))
+            Arc::new(Node::Leaf(slice.start_slice.into()))
         } else if slice.leaf_count() == 2 {
-            let mut first = Lnode::from(L::from(slice.start_slice));
+            let mut first = L::from(slice.start_slice);
+            let mut second = L::from(slice.end_slice);
 
-            let mut second = Lnode::from(L::from(slice.end_slice));
-
-            first.balance(&mut second);
+            L::balance_leaves(&mut first, &mut second);
 
             let first = Arc::new(Node::Leaf(first));
 
@@ -82,7 +78,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
                 }
             },
 
-            Node::Leaf(leaf) => leaf.assert_invariants(),
+            Node::Leaf(_) => (),
         }
     }
 
@@ -114,8 +110,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
         I: IntoIterator<Item = L>,
         L: Default,
     {
-        let mut leaves =
-            leaves.into_iter().map(Lnode::from).map(Node::Leaf).map(Arc::new);
+        let mut leaves = leaves.into_iter().map(Node::Leaf).map(Arc::new);
 
         let Some(first) = leaves.next() else { return Self::default() };
 
@@ -165,7 +160,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     where
         M: Metric<L::Summary>,
     {
-        M::measure(self.summary())
+        M::measure(&self.summary())
     }
 
     /// Replaces a range of the `Tree` with the given replacement.
@@ -214,7 +209,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     }
 
     #[inline]
-    pub fn summary(&self) -> &L::Summary {
+    pub fn summary(&self) -> L::Summary {
         self.root.summary()
     }
 
@@ -326,7 +321,6 @@ mod from_treeslice {
                         child,
                         start - offset,
                         slice.start_slice,
-                        slice.start_summary.clone(),
                         &mut invalid_first,
                     );
 
@@ -353,7 +347,6 @@ mod from_treeslice {
                         child,
                         end - offset,
                         slice.end_slice,
-                        slice.end_summary.clone(),
                         &mut invalid_last,
                     );
 
@@ -377,7 +370,6 @@ mod from_treeslice {
         node: &Arc<Node<N, L>>,
         take_from: L::BaseMetric,
         start_slice: L::Slice<'_>,
-        start_summary: L::Summary,
         invalid_nodes: &mut usize,
     ) -> Arc<Node<N, L>> {
         match &**node {
@@ -396,7 +388,6 @@ mod from_treeslice {
                             child,
                             take_from - offset,
                             start_slice,
-                            start_summary,
                             invalid_nodes,
                         );
 
@@ -427,13 +418,13 @@ mod from_treeslice {
             },
 
             Node::Leaf(_) => {
-                let lnode = Lnode::new(start_slice.into(), start_summary);
+                let leaf = L::from(start_slice);
 
-                if lnode.is_underfilled() {
+                if leaf.is_underfilled() {
                     *invalid_nodes += 1;
                 }
 
-                Arc::new(Node::Leaf(lnode))
+                Arc::new(Node::Leaf(leaf))
             },
         }
     }
@@ -445,7 +436,6 @@ mod from_treeslice {
         node: &Arc<Node<N, L>>,
         take_up_to: L::BaseMetric,
         end_slice: L::Slice<'_>,
-        end_summary: L::Summary,
         invalid_nodes: &mut usize,
     ) -> Arc<Node<N, L>> {
         match &**node {
@@ -462,7 +452,6 @@ mod from_treeslice {
                             child,
                             take_up_to - offset,
                             end_slice,
-                            end_summary,
                             invalid_nodes,
                         );
 
@@ -490,13 +479,13 @@ mod from_treeslice {
             },
 
             Node::Leaf(_) => {
-                let lnode = Lnode::new(end_slice.into(), end_summary);
+                let leaf = L::from(end_slice);
 
-                if lnode.is_underfilled() {
+                if leaf.is_underfilled() {
                     *invalid_nodes = 1;
                 }
 
-                Arc::new(Node::Leaf(lnode))
+                Arc::new(Node::Leaf(leaf))
             },
         }
     }
@@ -800,7 +789,7 @@ mod tree_replace {
 
     /// Recursively calls itself until it reaches the leaf containing the start
     /// of the replacement range, then uses any extra leaves returned by
-    /// calling [`Lnode::replace()`] to replace the nodes after that leaf, or
+    /// calling [`L::replace()`] to replace the nodes after that leaf, or
     /// removes them if there are no extra leaves.
     #[track_caller]
     #[inline]
@@ -888,7 +877,7 @@ mod tree_replace {
                         let l =
                             Arc::get_mut(&mut last).unwrap().get_leaf_mut();
 
-                        l.balance(leaf);
+                        L::balance_leaves(l, leaf);
 
                         if leaf.is_empty() {
                             core::mem::swap(leaf, l)
@@ -1662,6 +1651,10 @@ mod tests {
     }
 
     impl BaseMeasured for usize {
+        type BaseMetric = LeavesMetric;
+    }
+
+    impl BaseMeasured for UsizeSlice<'_> {
         type BaseMetric = LeavesMetric;
     }
 

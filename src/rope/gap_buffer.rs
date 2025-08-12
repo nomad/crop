@@ -39,7 +39,7 @@ use crate::tree::{
 pub struct GapBuffer<const MAX_BYTES: usize> {
     pub(super) bytes: Box<[u8; MAX_BYTES]>,
     pub(super) left_summary: ChunkSummary,
-    pub(super) len_right: u16,
+    pub(super) right_summary: ChunkSummary,
 }
 
 impl<const MAX_BYTES: usize> core::fmt::Debug for GapBuffer<MAX_BYTES> {
@@ -59,7 +59,7 @@ impl<const MAX_BYTES: usize> Default for GapBuffer<MAX_BYTES> {
         Self {
             bytes: Box::new([0u8; MAX_BYTES]),
             left_summary: ChunkSummary::default(),
-            len_right: 0,
+            right_summary: ChunkSummary::default(),
         }
     }
 }
@@ -100,7 +100,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// end of this buffer, returning the summary of what's been added to this
     /// buffer.
     ///
-    /// Note that it can move less bytes if that offset is not a char boundary
+    /// Note that it can move fewer bytes if that offset is not a char boundary
     /// of the right buffer.
     ///
     /// # Panics
@@ -134,7 +134,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
             let summary = right.summarize_left_chunk_up_to(move_left.len());
 
-            self.append_str(move_left);
+            self.append_str(move_left, summary);
 
             right.remove_up_to(move_left.len(), summary);
 
@@ -147,7 +147,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
             let summary = right.left_summary + ChunkSummary::from(move_left);
 
-            self.append_two(right.left_chunk(), move_left);
+            self.append_two(right.left_chunk(), move_left, summary);
 
             right.remove_up_to(summary.bytes(), summary);
 
@@ -172,21 +172,16 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     ///
     /// let mut right = GapBuffer::<15>::from(", World!");
     ///
-    /// let left_summary = left.summarize();
-    ///
-    /// left.append_other(left_summary, &mut right);
+    /// left.append_other(&mut right);
     ///
     /// assert_eq!(left, "Hello, World!");
     ///
     /// assert_eq!(right, "");
     /// ```
     #[inline]
-    pub fn append_other(&mut self, summary: ChunkSummary, other: &mut Self) {
-        debug_assert_eq!(summary, self.summarize());
-
+    pub fn append_other(&mut self, other: &mut Self) {
         let len_left = self.len_left();
         let len_right = self.len_right();
-        let right_summary = self.right_summary(summary);
 
         // Move this buffer's right chunk after its left chunk.
         self.bytes.copy_within(MAX_BYTES - len_right..MAX_BYTES, len_left);
@@ -199,11 +194,11 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         // Move the other buffer's right chunk to this buffer's right chunk.
         self.bytes[end..].copy_from_slice(other.right_chunk().as_bytes());
 
-        self.left_summary += right_summary;
-        self.len_right = other.len() as u16;
+        self.left_summary += self.right_summary;
+        self.right_summary = other.left_summary + other.right_summary;
 
         other.left_summary = ChunkSummary::new();
-        other.len_right = 0;
+        other.right_summary = ChunkSummary::new();
     }
 
     /// Appends the given string to `self`, shifting the bytes currently in the
@@ -218,29 +213,30 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// # Examples
     ///
     /// ```
-    /// # use crop::GapBuffer;
+    /// # use crop::{GapBuffer, ChunkSummary};
     ///
     /// let mut buffer = GapBuffer::<10>::from("aabb");
     /// assert_eq!(buffer.left_chunk(), "aa");
     /// assert_eq!(buffer.right_chunk(), "bb");
     ///
-    /// buffer.append_str("cc");
+    /// buffer.append_str("cc", ChunkSummary::from("cc"));
     /// assert_eq!(buffer.left_chunk(), "aa");
     /// assert_eq!(buffer.right_chunk(), "bbcc");
     /// ```
     #[inline]
-    pub fn append_str(&mut self, s: &str) {
-        debug_assert!(s.len() <= self.len_gap());
+    pub fn append_str(&mut self, str: &str, str_summary: ChunkSummary) {
+        debug_assert!(str.len() <= self.len_gap());
+        debug_assert_eq!(str_summary, ChunkSummary::from(str));
 
         let start = MAX_BYTES - self.len_right();
 
-        // Shift the second segment to the left.
-        self.bytes.copy_within(start.., start - s.len());
+        // Shift the right chunk to the left.
+        self.bytes.copy_within(start.., start - str.len());
 
         // Append the string.
-        self.bytes[MAX_BYTES - s.len()..].copy_from_slice(s.as_bytes());
+        self.bytes[MAX_BYTES - str.len()..].copy_from_slice(str.as_bytes());
 
-        self.len_right += s.len() as u16;
+        self.right_summary += str_summary;
     }
 
     /// Exactly the same as [`append_str()`](Self::append_str()), except it
@@ -254,18 +250,22 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// # Examples
     ///
     /// ```
-    /// # use crop::GapBuffer;
+    /// # use crop::{GapBuffer, ChunkSummary};
     /// let mut buffer = GapBuffer::<10>::from("aabb");
     ///
-    /// buffer.append_two("cc", "dd");
+    /// buffer.append_two("cc", "dd", ChunkSummary::from("ccdd"));
     /// assert_eq!(buffer.left_chunk(), "aa");
     /// assert_eq!(buffer.right_chunk(), "bbccdd");
     /// ```
     #[inline]
-    pub fn append_two(&mut self, a: &str, b: &str) {
+    pub fn append_two(&mut self, a: &str, b: &str, a_b_summary: ChunkSummary) {
         debug_assert!(a.len() + b.len() <= self.len_gap());
+        debug_assert_eq!(
+            a_b_summary,
+            ChunkSummary::from(a) + ChunkSummary::from(b)
+        );
 
-        // Shift the second chunk to the left.
+        // Shift the right chunk to the left.
         let start = MAX_BYTES - self.len_right();
         self.bytes.copy_within(start.., start - a.len() - b.len());
 
@@ -277,7 +277,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         let range = MAX_BYTES - b.len()..MAX_BYTES;
         self.bytes[range].copy_from_slice(b.as_bytes());
 
-        self.len_right += (a.len() + b.len()) as u16;
+        self.right_summary += a_b_summary;
     }
 
     /// Panics with a nicely formatted error message if the given byte offset
@@ -338,40 +338,38 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
         let mut bytes = Box::new([0u8; MAX_BYTES]);
 
-        let mut summary_left = ChunkSummary::new();
+        let mut left_summary = ChunkSummary::new();
 
         let mut chunks = chunks.iter();
 
         for &chunk in chunks.by_ref() {
-            if summary_left.bytes() + chunk.len() <= to_left {
+            if left_summary.bytes() + chunk.len() <= to_left {
                 let range = {
-                    let start = summary_left.bytes();
+                    let start = left_summary.bytes();
                     let end = start + chunk.len();
                     start..end
                 };
 
                 bytes[range].copy_from_slice(chunk.as_bytes());
 
-                summary_left += ChunkSummary::from(chunk);
+                left_summary += ChunkSummary::from(chunk);
             } else {
                 let (to_first, to_second) = split_adjusted::<true>(
                     chunk,
-                    to_left - summary_left.bytes(),
+                    to_left - left_summary.bytes(),
                 );
 
                 let range = {
-                    let start = summary_left.bytes();
+                    let start = left_summary.bytes();
                     let end = start + to_first.len();
                     start..end
                 };
 
                 bytes[range].copy_from_slice(to_first.as_bytes());
 
-                summary_left += ChunkSummary::from(to_first);
+                left_summary += ChunkSummary::from(to_first);
 
-                let len_right = total_len - summary_left.bytes();
-
-                let mut start = MAX_BYTES - len_right;
+                let mut start = MAX_BYTES - (total_len - left_summary.bytes());
 
                 let range = {
                     let end = start + to_second.len();
@@ -382,6 +380,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
                 start += to_second.len();
 
+                let mut right_summary = ChunkSummary::from(to_second);
+
                 for &segment in chunks {
                     let range = {
                         let end = start + segment.len();
@@ -391,13 +391,11 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                     bytes[range].copy_from_slice(segment.as_bytes());
 
                     start += segment.len();
+
+                    right_summary += ChunkSummary::from(segment);
                 }
 
-                return Self {
-                    bytes,
-                    left_summary: summary_left,
-                    len_right: len_right as u16,
-                };
+                return Self { bytes, left_summary, right_summary };
             }
         }
 
@@ -418,18 +416,12 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// Panics if the byte offset is not a char boundary of if the byte length
     /// of the string is greater than the length of the gap.
     #[inline]
-    pub(super) fn insert(
-        &mut self,
-        insert_at: usize,
-        s: &str,
-        summary: ChunkSummary,
-    ) -> ChunkSummary {
+    pub(super) fn insert(&mut self, insert_at: usize, s: &str) {
         debug_assert!(insert_at <= self.len());
         debug_assert!(self.is_char_boundary(insert_at));
         debug_assert!(s.len() <= self.len_gap());
-        debug_assert_eq!(self.summarize(), summary);
 
-        self.move_gap(insert_at, summary);
+        self.move_gap(insert_at);
 
         debug_assert_eq!(insert_at, self.len_left());
 
@@ -444,8 +436,6 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         let inserted_summary = ChunkSummary::from(s);
 
         self.left_summary += inserted_summary;
-
-        summary + inserted_summary
     }
 
     #[inline]
@@ -503,7 +493,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
     #[inline]
     pub(super) fn len_right(&self) -> usize {
-        self.len_right as _
+        self.right_summary.bytes()
     }
 
     /// The minimum number of bytes this buffer should have to not be
@@ -516,9 +506,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     ///
     /// # Panics
     ///
-    /// Panics if the byte offset is out of bounds, if it's not a char boundary
-    /// or if the number of line breaks in the buffer is not equal to
-    /// `tot_line_breaks`.
+    /// Panics if the byte offset is out of bounds or if it's not a char
+    /// boundary.
     ///
     /// # Examples
     ///
@@ -527,21 +516,18 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// # use crop::tree::Summarize;
     /// let mut buffer = GapBuffer::<10>::from("aaaabbbb");
     ///
-    /// let summary = buffer.summarize();
-    ///
-    /// buffer.move_gap(2, summary);
+    /// buffer.move_gap(2);
     /// assert_eq!(buffer.left_chunk(), "aa");
     /// assert_eq!(buffer.right_chunk(), "aabbbb");
     ///
-    /// buffer.move_gap(6, summary);
+    /// buffer.move_gap(6);
     /// assert_eq!(buffer.left_chunk(), "aaaabb");
     /// assert_eq!(buffer.right_chunk(), "bb");
     /// ```
     #[inline]
-    pub fn move_gap(&mut self, byte_offset: usize, summary: ChunkSummary) {
+    pub fn move_gap(&mut self, byte_offset: usize) {
         debug_assert!(byte_offset <= self.len());
         debug_assert!(self.is_char_boundary(byte_offset));
-        debug_assert_eq!(summary, self.summarize());
 
         let offset = byte_offset;
 
@@ -551,17 +537,15 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         //
         // aa|bb~~~ccc => aa~~~bbccc
         if offset < self.len_left() {
-            let len_left = self.len_left();
-
-            let len_moved = len_left - offset;
-
+            let orig_left_summary = self.left_summary;
             self.left_summary = self.summarize_left_chunk_up_to(offset);
-
-            self.len_right += len_moved as u16;
+            self.right_summary += orig_left_summary - self.left_summary;
 
             let len_right = self.len_right();
-
-            self.bytes.copy_within(offset..len_left, MAX_BYTES - len_right);
+            self.bytes.copy_within(
+                offset..orig_left_summary.bytes(),
+                MAX_BYTES - len_right,
+            );
         }
         // The offset splits the second segment => move all the text before the
         // offset to the end of the first segment.
@@ -570,8 +554,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         else if offset > self.len_left() {
             let len_moved = offset - self.len_left();
 
-            let moved_summary =
-                self.summarize_right_chunk_up_to(len_moved, summary);
+            let moved_summary = self.summarize_right_chunk_up_to(len_moved);
 
             let move_range = {
                 let start = MAX_BYTES - self.len_right();
@@ -580,12 +563,10 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
             };
 
             let len_left = self.len_left();
-
             self.bytes.copy_within(move_range, len_left);
 
             self.left_summary += moved_summary;
-
-            self.len_right -= len_moved as u16;
+            self.right_summary -= moved_summary;
         }
 
         debug_assert_eq!(offset, self.len_left());
@@ -611,24 +592,16 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     ///
     /// let mut right = GapBuffer::<10>::from("World!");
     ///
-    /// let left_summary = left.summarize();
-    ///
-    /// left.move_to_right(2, &mut right, left_summary);
+    /// left.move_to_right(2, &mut right);
     ///
     /// assert_eq!(left, "Hello");
     ///
     /// assert_eq!(right, ", World!");
     /// ```
     #[inline]
-    pub fn move_to_right(
-        &mut self,
-        bytes_to_move: usize,
-        right: &mut Self,
-        summary: ChunkSummary,
-    ) -> ChunkSummary {
+    pub fn move_to_right(&mut self, bytes_to_move: usize, right: &mut Self) {
         debug_assert!(bytes_to_move <= self.len());
         debug_assert!(right.len() + bytes_to_move <= MAX_BYTES);
-        debug_assert_eq!(summary, self.summarize());
 
         if bytes_to_move <= self.len_right() {
             let (_, move_right) = split_adjusted::<true>(
@@ -640,9 +613,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
             right.prepend(move_right, moved_summary);
 
-            self.truncate_from(self.len() - move_right.len(), summary);
-
-            moved_summary
+            self.truncate_from(self.len() - move_right.len());
         } else {
             let (_, move_right) = split_adjusted::<true>(
                 self.left_chunk(),
@@ -651,14 +622,11 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
             let move_right_summary = ChunkSummary::from(move_right);
 
-            let moved_summary =
-                move_right_summary + self.right_summary(summary);
+            let moved_summary = move_right_summary + self.right_summary;
 
             right.prepend_two(move_right, self.right_chunk(), moved_summary);
 
-            self.truncate_from(self.len_left() - move_right.len(), summary);
-
-            moved_summary
+            self.truncate_from(self.len_left() - move_right.len());
         }
     }
 
@@ -667,8 +635,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// # Panics
     ///
     /// Panics if the resulting buffer would have a length greater than
-    /// `MAX_BYTES`, or if the number of line breaks in `s` is not equal to
-    /// `prepended_line_breaks`.
+    /// `MAX_BYTES`, or if the given summary differs from the string's
+    /// `ChunkSummary`.
     ///
     /// # Examples
     ///
@@ -685,18 +653,18 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// assert_eq!(buf, "Hello, World!");
     /// ```
     #[inline]
-    pub fn prepend(&mut self, s: &str, prepended_summary: ChunkSummary) {
-        debug_assert!(s.len() <= self.len_gap());
-        debug_assert_eq!(prepended_summary, ChunkSummary::from(s));
+    pub fn prepend(&mut self, str: &str, str_summary: ChunkSummary) {
+        debug_assert!(str.len() <= self.len_gap());
+        debug_assert_eq!(str_summary, ChunkSummary::from(str));
 
         // Shift the left chunk over.
         let len_left = self.len_left();
-        self.bytes.copy_within(..len_left, s.len());
+        self.bytes.copy_within(..len_left, str.len());
 
         // Prepend the string.
-        self.bytes[..s.len()].copy_from_slice(s.as_bytes());
+        self.bytes[..str.len()].copy_from_slice(str.as_bytes());
 
-        self.left_summary += prepended_summary;
+        self.left_summary += str_summary;
     }
 
     /// Exactly the same as [`prepend`](Self::prepend()), except it
@@ -780,7 +748,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         debug_assert!(byte_offset <= self.len());
         debug_assert!(self.is_char_boundary(byte_offset));
         debug_assert_eq!(
-            self.summarize_range(0..byte_offset, self.summarize()),
+            self.summarize_range(0..byte_offset),
             removed_summary
         );
 
@@ -796,8 +764,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
             self.left_summary -= removed_summary;
         } else {
-            self.len_right -= (byte_offset - self.len_left()) as u16;
-
+            self.right_summary -= removed_summary - self.left_summary;
             self.left_summary = ChunkSummary::new();
         }
     }
@@ -819,8 +786,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// # use crop::GapBuffer;
     /// # use crop::tree::Summarize;
     /// let mut buffer = GapBuffer::<10>::from("foo\nbar");
-    /// let summary = buffer.summarize();
-    /// buffer.replace_non_overflowing(4..7, "baz\r\n", summary);
+    /// buffer.replace_non_overflowing(4..7, "baz\r\n");
     /// assert_eq!(buffer, "foo\nbaz\r\n");
     /// ```
     #[inline]
@@ -828,17 +794,16 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         &mut self,
         Range { start, end }: Range<usize>,
         s: &str,
-        summary: ChunkSummary,
-    ) -> ChunkSummary {
+    ) {
         debug_assert!(start <= end);
         debug_assert!(end <= self.len());
         debug_assert!(self.is_char_boundary(start));
         debug_assert!(self.is_char_boundary(end));
         debug_assert!(self.len() - (end - start) + s.len() <= MAX_BYTES);
 
-        self.move_gap(end, summary);
+        self.move_gap(end);
 
-        let removed_summary = self.summarize_range(start..end, summary);
+        let removed_summary = self.summarize_range(start..end);
 
         let added_summary = ChunkSummary::from(s);
 
@@ -847,24 +812,21 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         self.left_summary -= removed_summary;
 
         self.left_summary += added_summary;
-
-        summary - removed_summary + added_summary
     }
 
     /// Replaces the text in `byte_range` with the string `s`, where the
     /// replaced range is small enough (and the replacement string is big
     /// enough) such that the buffer goes over `MAX_BYTES`.
     ///
-    /// It returns the new summary of this buffer and a vector of buffers
-    /// containing the overflowed contents, all of which are guaranteed to not
-    /// be underfilled.
+    /// It returns a vector of buffers containing the overflowed contents, all
+    /// of which are guaranteed to not be underfilled.
     ///
     /// # Panics
     ///
     /// Panics if the end of the byte range is out of bounds, if either the
-    /// start or the end of the byte range is not a char boundary, if the
+    /// start or the end of the byte range is not a char boundary, or if the
     /// length of the buffer after the replacement would be less than or equal
-    /// to `MAX_BYTES` or if `summary` is not equal to this buffer's summary.
+    /// to `MAX_BYTES`.
     ///
     /// # Examples
     ///
@@ -872,15 +834,12 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// # use crop::GapBuffer;
     /// # use crop::tree::Summarize;
     /// let mut buffer = GapBuffer::<10>::from("foo\nbar");
-    /// let summary = buffer.summarize();
     ///
     /// // Replace the newline with a string that's too long to fit in the
     /// // buffer.
-    /// let (new_summary, extras) =
-    ///     buffer.replace_overflowing(3..4, "foo\nbar\r\nbaz", summary);
+    /// let extras = buffer.replace_overflowing(3..4, "foo\nbar\r\nbaz");
     ///
     /// assert_eq!(buffer, "foo");
-    /// assert_eq!(new_summary, buffer.summarize());
     ///
     /// let mut extras = extras.into_iter();
     /// assert_eq!("foo\nbar\r\nb", extras.next().unwrap());
@@ -892,8 +851,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
         &mut self,
         byte_range: Range<usize>,
         s: &str,
-        summary: ChunkSummary,
-    ) -> (ChunkSummary, Vec<Self>) {
+    ) -> Vec<Self> {
         let Range { start, end } = byte_range;
 
         debug_assert!(start <= end);
@@ -942,12 +900,11 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 Resegmenter::new([right]).collect()
             };
 
-            let summary = self.truncate_from(truncate_from, summary);
+            self.truncate_from(truncate_from);
 
-            let new_summary =
-                self.replace_non_overflowing(start..end, replacement, summary);
+            self.replace_non_overflowing(start..end, replacement);
 
-            (new_summary, extras)
+            extras
         } else if s.len() + (self.len() - end) < Self::min_bytes() {
             let truncate_from;
 
@@ -991,16 +948,16 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
             ])
             .collect();
 
-            let new_summary = self.truncate_from(truncate_from, summary);
+            self.truncate_from(truncate_from);
 
-            (new_summary, extras)
+            extras
         } else {
             let extras =
                 Resegmenter::new([s, extra_left, extra_right]).collect();
 
-            let new_summary = self.truncate_from(start, summary);
+            self.truncate_from(start);
 
-            (new_summary, extras)
+            extras
         }
     }
 
@@ -1014,14 +971,6 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 &self.bytes[MAX_BYTES - self.len_right()..],
             )
         }
-    }
-
-    /// Returns the summary of the right chunk by subtracting the summary of
-    /// the left chunk from the total.
-    #[inline]
-    fn right_summary(&self, summary: ChunkSummary) -> ChunkSummary {
-        debug_assert_eq!(summary, self.summarize());
-        summary - self.left_summary
     }
 
     #[inline]
@@ -1048,9 +997,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     ///
     /// # Panics
     ///
-    /// Panics if the summary is different from the output of
-    /// `self.summarize()` or if either the start or the end of the byte range
-    /// don't lie on a char boundary.
+    /// Panics if either the start or the end of the byte range don't lie on a
+    /// char boundary.
     ///
     /// # Examples
     ///
@@ -1058,14 +1006,13 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// # use crop::GapBuffer;
     /// # use crop::tree::Summarize;
     /// let mut buffer = GapBuffer::<10>::from("foo\nbar\r\n");
-    /// let summary = buffer.summarize();
-    /// assert_eq!(buffer.summarize_range(0..buffer.len(), summary), summary);
+    /// assert_eq!(buffer.summarize_range(0..buffer.len()), buffer.summarize());
     ///
-    /// let s = buffer.summarize_range(0..4, summary);
+    /// let s = buffer.summarize_range(0..4);
     /// assert_eq!(s.bytes(), 4);
     /// assert_eq!(s.line_breaks(), 1);
     ///
-    /// let s = buffer.summarize_range(2..buffer.len(), summary);
+    /// let s = buffer.summarize_range(2..buffer.len());
     /// assert_eq!(s.bytes(), 7);
     /// assert_eq!(s.line_breaks(), 2);
     /// ```
@@ -1073,20 +1020,17 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     pub fn summarize_range(
         &self,
         Range { start, end }: Range<usize>,
-        summary: ChunkSummary,
     ) -> ChunkSummary {
         debug_assert!(start <= end);
         debug_assert!(end <= self.len());
         debug_assert!(self.is_char_boundary(start));
         debug_assert!(self.is_char_boundary(end));
-        debug_assert_eq!(summary, self.summarize());
 
         #[inline(always)]
         fn summarize_range<const MAX_BYTES: usize>(
             buffer: &GapBuffer<MAX_BYTES>,
             mut start: usize,
             mut end: usize,
-            summary: ChunkSummary,
         ) -> ChunkSummary {
             // The whole range is inside the left chunk.
             if end <= buffer.len_left() {
@@ -1098,10 +1042,8 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
                 let left_chunk = &buffer.left_chunk()[start..];
 
                 ChunkSummary::from(left_chunk)
-                    + buffer.summarize_right_chunk_up_to(
-                        end - buffer.len_left(),
-                        summary,
-                    )
+                    + buffer
+                        .summarize_right_chunk_up_to(end - buffer.len_left())
             }
             // The whole range is inside the right chunk.
             else {
@@ -1114,14 +1056,14 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
         // Get the summary by directly summarizing the byte range.
         if end - start <= self.len() / 2 {
-            summarize_range(self, start, end, summary)
+            summarize_range(self, start, end)
         }
         // Get the summary by subtracting the remaining byte ranges from the
         // total.
         else {
-            summary
-                - summarize_range(self, 0, start, summary)
-                - summarize_range(self, end, self.len(), summary)
+            self.left_summary + self.right_summary
+                - summarize_range(self, 0, start)
+                - summarize_range(self, end, self.len())
         }
     }
 
@@ -1136,55 +1078,34 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
     /// Note that the offset is only relative to the right chunk, not to the
     /// whole gap buffer.
     #[inline]
-    fn summarize_right_chunk_up_to(
-        &self,
-        byte_offset: usize,
-        summary: ChunkSummary,
-    ) -> ChunkSummary {
+    fn summarize_right_chunk_up_to(&self, byte_offset: usize) -> ChunkSummary {
         debug_assert!(byte_offset <= self.len_right());
         debug_assert!(self.right_chunk().is_char_boundary(byte_offset));
-        debug_assert_eq!(summary, self.summarize());
 
         if byte_offset <= self.len_right() / 2 {
             ChunkSummary::from(&self.right_chunk()[..byte_offset])
         } else {
-            summary
-                - self.left_summary
+            self.right_summary
                 - ChunkSummary::from(&self.right_chunk()[byte_offset..])
         }
     }
 
-    /// Just like [`truncate_from`](), but it takes the current summary of the
-    /// buffer as an argument and returns the new summary after the truncation.
-    ///
     /// # Panics
     ///
-    /// Panics if `byte_offset` is greater than the length of this buffer, if
-    /// it doesn't lie on a char boundary or if `summary` is different from the
-    /// summary of this buffer.
+    /// Panics if `byte_offset` is greater than the length of this buffer or if
+    /// it doesn't lie on a char boundary.
     #[inline]
-    pub fn truncate_from(
-        &mut self,
-        byte_offset: usize,
-        summary: ChunkSummary,
-    ) -> ChunkSummary {
+    pub fn truncate_from(&mut self, byte_offset: usize) {
         debug_assert!(byte_offset <= self.len());
         debug_assert!(self.is_char_boundary(byte_offset));
-        debug_assert_eq!(summary, self.summarize());
 
         if byte_offset <= self.len_left() {
-            let new_summary = self.summarize_left_chunk_up_to(byte_offset);
-
-            self.left_summary = new_summary;
-
-            self.len_right = 0;
-
-            new_summary
+            self.left_summary = self.summarize_left_chunk_up_to(byte_offset);
+            self.right_summary = ChunkSummary::new();
         } else {
             let offset = byte_offset - self.len_left();
 
-            let new_right_summary =
-                self.summarize_right_chunk_up_to(offset, summary);
+            let new_right_summary = self.summarize_right_chunk_up_to(offset);
 
             let range = {
                 let start = MAX_BYTES - self.len_right();
@@ -1194,9 +1115,7 @@ impl<const MAX_BYTES: usize> GapBuffer<MAX_BYTES> {
 
             self.bytes.copy_within(range, MAX_BYTES - offset);
 
-            self.len_right = offset as u16;
-
-            self.left_summary + new_right_summary
+            self.right_summary = new_right_summary;
         }
     }
 }
@@ -1212,6 +1131,11 @@ impl<const MAX_BYTES: usize> Summarize for GapBuffer<MAX_BYTES> {
 
 impl<const MAX_BYTES: usize> BaseMeasured for GapBuffer<MAX_BYTES> {
     type BaseMetric = ByteMetric;
+
+    #[inline]
+    fn base_measure(&self) -> ByteMetric {
+        ByteMetric(self.left_summary.bytes() + self.right_summary.bytes())
+    }
 }
 
 impl<const MAX_BYTES: usize> From<GapSlice<'_>> for GapBuffer<MAX_BYTES> {
@@ -1228,7 +1152,7 @@ impl<const MAX_BYTES: usize> From<GapSlice<'_>> for GapBuffer<MAX_BYTES> {
         Self {
             bytes,
             left_summary: slice.left_summary,
-            len_right: slice.len_right,
+            right_summary: slice.right_summary,
         }
     }
 }
@@ -1248,58 +1172,41 @@ impl<const MAX_BYTES: usize> AsSlice for GapBuffer<MAX_BYTES> {
         GapSlice {
             bytes,
             left_summary: self.left_summary,
-            len_right: self.len_right,
+            right_summary: self.right_summary,
         }
     }
 }
 
 impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
     #[inline]
-    fn is_underfilled(&self, summary: &ChunkSummary) -> bool {
-        summary.bytes() < Self::min_bytes()
+    fn is_underfilled(&self) -> bool {
+        self.left_summary.bytes() + self.right_summary.bytes()
+            < Self::min_bytes()
     }
 
     #[inline]
-    fn balance_leaves(
-        (left, left_summary): (&mut Self, &mut ChunkSummary),
-        (right, right_summary): (&mut Self, &mut ChunkSummary),
-    ) {
+    fn balance_leaves(left: &mut Self, right: &mut Self) {
         // The two leaves can be combined in a single chunk.
         if left.len() + right.len() <= MAX_BYTES {
-            left.append_other(*left_summary, right);
-            *left_summary += *right_summary;
-            *right_summary = ChunkSummary::new();
-
+            left.append_other(right);
             debug_assert!(right.is_empty());
         }
         // The left side is underfilled => take text from the right side.
         else if left.len() < Self::min_bytes() {
             debug_assert!(right.len() > Self::min_bytes());
-
             let missing_left = Self::min_bytes() - left.len();
-            let moved_left = left.add_from_right(missing_left, right);
-            *left_summary += moved_left;
-            *right_summary -= moved_left;
-
+            left.add_from_right(missing_left, right);
             debug_assert!(left.len() >= Self::chunk_min());
             debug_assert!(right.len() >= Self::chunk_min());
         }
         // The right side is underfilled => take text from the left side.
         else if right.len() < Self::min_bytes() {
             debug_assert!(left.len() > Self::min_bytes());
-
             let missing_right = Self::min_bytes() - right.len();
-            let moved_right =
-                left.move_to_right(missing_right, right, *left_summary);
-            *left_summary -= moved_right;
-            *right_summary += moved_right;
-
+            left.move_to_right(missing_right, right);
             debug_assert!(left.len() >= Self::chunk_min());
             debug_assert!(right.len() >= Self::chunk_min());
         }
-
-        debug_assert_eq!(*left_summary, left.summarize());
-        debug_assert_eq!(*right_summary, right.summarize());
     }
 }
 
@@ -1314,7 +1221,6 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
     #[inline]
     fn replace<R>(
         &mut self,
-        summary: &mut ChunkSummary,
         range: R,
         replacement: &str,
     ) -> Option<Self::ExtraLeaves>
@@ -1330,24 +1236,15 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
         self.assert_char_boundary(end);
 
         if self.len() - (end - start) + replacement.len() <= MAX_BYTES {
-            let new_summary = if end > start {
-                self.replace_non_overflowing(start..end, replacement, *summary)
+            if end > start {
+                self.replace_non_overflowing(start..end, replacement)
             } else {
-                self.insert(start, replacement, *summary)
+                self.insert(start, replacement)
             };
-
-            debug_assert_eq!(new_summary, self.summarize());
-
-            *summary = new_summary;
 
             None
         } else {
-            let (new_summary, extras) =
-                self.replace_overflowing(start..end, replacement, *summary);
-
-            debug_assert_eq!(new_summary, self.summarize());
-
-            *summary = new_summary;
+            let extras = self.replace_overflowing(start..end, replacement);
 
             if cfg!(feature = "small_chunks") {
                 (!extras.is_empty()).then_some(extras.into_iter())
@@ -1359,8 +1256,8 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
 
     #[track_caller]
     #[inline]
-    fn remove_up_to(&mut self, summary: &mut ChunkSummary, up_to: ByteMetric) {
-        self.replace(summary, ..up_to, "");
+    fn remove_up_to(&mut self, up_to: ByteMetric) {
+        self.replace(..up_to, "");
     }
 }
 
@@ -1543,9 +1440,7 @@ mod tests {
         let s = "aaabbb";
         let mut buffer = GapBuffer::<10>::from(s);
 
-        let summary = buffer.summarize();
-
-        buffer.move_gap(2, summary);
+        buffer.move_gap(2);
 
         let offset = 4;
         buffer.remove_up_to(offset, ChunkSummary::from(&s[..offset]));
