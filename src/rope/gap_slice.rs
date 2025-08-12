@@ -1,6 +1,6 @@
-use super::metrics::{ChunkSummary, SummaryUpTo, ToByteOffset};
+use super::metrics::{ByteMetric, ChunkSummary, SummaryUpTo, ToByteOffset};
 use super::utils::{debug_no_quotes, panic_messages as panic};
-use crate::tree::{Metric, Summarize};
+use crate::tree::{BaseMeasured, Metric, Summarize};
 
 /// A slice of a [`GapBuffer`](super::gap_buffer::GapBuffer).
 #[derive(Copy, Clone, Default)]
@@ -330,6 +330,10 @@ impl Summarize for GapSlice<'_> {
     fn summarize(&self) -> Self::Summary {
         self.left_summary + ChunkSummary::from(self.right_chunk())
     }
+}
+
+impl BaseMeasured for GapSlice<'_> {
+    type BaseMetric = ByteMetric;
 }
 
 #[cfg(test)]

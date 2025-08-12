@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use super::traits::{DoubleEndedUnitMetric, Leaf, Metric, UnitMetric};
 use super::tree_slice;
 use super::{Arc, Lnode, Node, Tree, TreeSlice};
-use crate::tree::Summarize;
+use crate::tree::{BaseMeasured, Summarize};
 
 /// An iterator over the units of a metric.
 //
@@ -190,7 +190,6 @@ impl<const ARITY: usize, L: Leaf, M: UnitMetric<L>> core::iter::FusedIterator
 {
 }
 
-#[derive(Debug)]
 struct UnitsForward<'a, const N: usize, L: Leaf, M: Metric<L::Summary>> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](UnitsForward::initialize()).
@@ -573,9 +572,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
         // A previous call to `next_unit_in_leaf()` might've left the start
         // slice empty. If it is we move to the next leaf before continuing.
-        if L::BaseMetric::measure(&self.start_slice.summarize())
-            == L::BaseMetric::zero()
-        {
+        if self.start_slice.is_empty() {
             let leaf_slice = self.next_leaf();
             self.yielded_in_leaf = L::Summary::default();
             self.start_slice = leaf_slice;
@@ -615,9 +612,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
         advance += &summary;
 
-        if L::BaseMetric::measure(&end_slice.summarize())
-            > L::BaseMetric::zero()
-        {
+        if !end_slice.is_empty() {
             summary += &end_slice.summarize();
             leaf_count += 1;
         }
@@ -825,9 +820,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         debug_assert_eq!(self.units_total, self.units_yielded);
         debug_assert!(self.base_total > self.base_yielded);
 
-        if L::BaseMetric::measure(&self.start_slice.summarize())
-            == L::BaseMetric::zero()
-        {
+        if self.start_slice.is_empty() {
             let next_slice = self.next_leaf();
             self.yielded_in_leaf = L::Summary::default();
             self.start_slice = next_slice;
@@ -888,7 +881,6 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     }
 }
 
-#[derive(Debug)]
 struct UnitsBackward<'a, const N: usize, L: Leaf, M: Metric<L::Summary>> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](UnitsBackward::initialize()).
@@ -1234,8 +1226,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     fn first(&mut self) -> (TreeSlice<'a, N, L>, L::Summary) {
         debug_assert!(self.base_remaining > L::BaseMetric::zero());
 
-        let (_, _, end_slice, end_summary, mut advance) =
-            M::last_unit(self.end_slice, &self.end_slice.summarize());
+        let (_, end_slice, mut advance) = M::last_unit(self.end_slice);
 
         // First, check if the current leaf node is the root. If it is we're
         // done.
@@ -1244,7 +1235,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                 TreeSlice {
                     root: self.leaf_node,
                     offset: L::Summary::default(),
-                    summary: end_summary.clone(),
+                    summary: end_slice.summarize(),
                     start_slice: end_slice,
                     end_slice,
                     leaf_count: 1,
@@ -1260,7 +1251,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         // "" as the last unit, with an advance of 1 byte (the newline). Since
         // the `end_slice` of a `TreeSlice` can never be empty we need to go
         // back to the previous leaf.
-        if L::BaseMetric::measure(&end_summary) == L::BaseMetric::zero() {
+        if end_slice.is_empty() {
             let previous_leaf = self.previous_leaf();
 
             self.base_remaining -= L::BaseMetric::measure(&advance);
@@ -1290,7 +1281,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
         advance += &summary;
 
-        summary += &end_summary;
+        summary += &end_slice.summarize();
 
         let start_slice = match self.first_slice.take() {
             Some(slice) => slice,
@@ -1329,14 +1320,9 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         debug_assert!(M::measure(&self.end_slice.summarize()) > M::one());
         debug_assert!(self.units_remaining > M::zero());
 
-        let (rest, rest_summary, slice, summary, advance) =
-            M::last_unit(self.end_slice, &self.end_slice.summarize());
+        let (rest, slice, advance) = M::last_unit(self.end_slice);
 
-        debug_assert!(
-            L::BaseMetric::measure(&rest_summary) > L::BaseMetric::zero()
-        );
-
-        let offset = rest_summary.clone();
+        debug_assert!(!rest.is_empty());
 
         self.yielded_in_leaf += &advance;
         self.end_slice = rest;
@@ -1344,8 +1330,8 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         (
             TreeSlice {
                 root: self.leaf_node,
-                offset,
-                summary,
+                offset: rest.summarize(),
+                summary: slice.summarize(),
                 end_slice: slice,
                 start_slice: slice,
                 leaf_count: 1,
@@ -1505,8 +1491,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     fn previous_unit_in_range(&mut self) -> (TreeSlice<'a, N, L>, L::Summary) {
         debug_assert!(self.units_remaining > M::zero());
 
-        let (_, _, end_slice, end_summary, mut advance) =
-            M::last_unit(self.end_slice, &self.end_slice.summarize());
+        let (_, end_slice, mut advance) = M::last_unit(self.end_slice);
 
         // This edge case can happen when the last unit of `self.end_slice` is
         // empty.
@@ -1515,7 +1500,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         // "" as the last unit, with an advance of 1 byte (the newline). Since
         // the `end_slice` of a `TreeSlice` can never be empty we need to go
         // back to the previous leaf.
-        if L::BaseMetric::measure(&end_summary) == L::BaseMetric::zero() {
+        if end_slice.is_empty() {
             let previous_leaf = self.previous_leaf();
 
             self.base_remaining -= L::BaseMetric::measure(&advance);
@@ -1534,15 +1519,12 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             let (slice, slice_advance) = match self.remainder() {
                 Some(remainder) => remainder,
                 _ => {
-                    let (_, _, empty, empty_summary) = M::remainder(
+                    let (_, _, empty, _) = M::remainder(
                         self.end_slice,
                         &self.end_slice.summarize(),
                     );
 
-                    debug_assert_eq!(
-                        L::BaseMetric::measure(&empty_summary),
-                        L::BaseMetric::zero()
-                    );
+                    debug_assert!(empty.is_empty(),);
 
                     (
                         TreeSlice {
@@ -1550,7 +1532,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                             offset: self.leaf_node.summary().clone(),
                             start_slice: empty,
                             end_slice: empty,
-                            summary: empty_summary,
+                            summary: L::Summary::default(),
                             leaf_count: 1,
                         },
                         L::Summary::default(),
@@ -1570,7 +1552,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
         advance += &summary;
 
-        summary += &end_summary;
+        summary += &end_slice.summarize();
 
         leaf_count += 1;
 
@@ -1597,7 +1579,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         self.yielded_in_leaf = start_summary.clone();
         self.end_slice = rest;
 
-        if L::BaseMetric::measure(&start_summary) > L::BaseMetric::zero() {
+        if !start_slice.is_empty() {
             summary += &start_summary;
             leaf_count += 1;
         }
@@ -1676,7 +1658,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             let (rest, rest_summary, slice, summary) =
                 M::remainder(self.end_slice, &self.end_slice.summarize());
 
-            if L::BaseMetric::measure(&summary) > L::BaseMetric::zero() {
+            if !slice.is_empty() {
                 self.yielded_in_leaf += &summary;
                 self.end_slice = rest;
 

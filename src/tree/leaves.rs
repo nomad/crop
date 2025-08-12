@@ -105,7 +105,6 @@ impl<const ARITY: usize, L: Leaf> core::iter::FusedIterator
 {
 }
 
-#[derive(Debug)]
 struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](Self::initialize()).
@@ -348,7 +347,6 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
     }
 }
 
-#[derive(Debug)]
 struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// Whether `Self` has been initialized by calling
     /// [`initialize`](Self::initialize()).

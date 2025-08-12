@@ -32,9 +32,28 @@ pub trait AsSlice: Summarize {
     fn as_slice(&self) -> Self::Slice<'_>;
 }
 
-pub trait Leaf: Summarize + BaseMeasured + AsSlice {}
+pub trait Leaf:
+    Summarize
+    + BaseMeasured
+    + for<'a> AsSlice<
+        Slice<'a>: BaseMeasured<
+            BaseMetric = <Self as BaseMeasured>::BaseMetric,
+        >,
+    >
+{
+}
 
-impl<T: Summarize + BaseMeasured + AsSlice> Leaf for T {}
+impl<
+    T: Summarize
+        + BaseMeasured
+        + for<'a> AsSlice<
+            Slice<'a>: BaseMeasured<
+                BaseMetric = <Self as BaseMeasured>::BaseMetric,
+            >,
+        >,
+> Leaf for T
+{
+}
 
 pub trait BalancedLeaf: Leaf + for<'a> From<Self::Slice<'a>> {
     /// Returns whether the leaf node is too small to be on its own and should
@@ -118,22 +137,16 @@ pub trait UnitMetric<L: Leaf>: Metric<L::Summary> {
 
 /// Allows iterating backward over the units of this metric.
 pub trait DoubleEndedUnitMetric<L: Leaf>: UnitMetric<L> {
-    /// Returns a
-    /// `(rest_slice, rest_summary, last_slice, last_summary, advance)`
-    /// tuple, where `advance` is equal to `last_summary` **plus** the summary
-    /// of any content between the end of `last_slice` and the end of the
-    /// original `slice`.
+    /// Returns a `(rest_slice, last_slice, advance)` tuple, where `advance` is
+    /// equal to `last_slice`'s summary **plus** the summary of any content
+    /// between the end of `last_slice` and the end of the original `slice`.
     ///
     /// It follows that if `slice == rest_slice ++ last_slice` (where `++`
-    /// denotes concatenation) the `last_summary` and the `advance` should be
-    /// equal.
-    ///
-    /// In any case it must always hold `summary == rest_summary + advance`.
-    #[allow(clippy::type_complexity)]
+    /// denotes concatenation) the `advance` should be equal to `last_slice`'s
+    /// summary.
     fn last_unit<'a>(
         slice: L::Slice<'a>,
-        summary: &L::Summary,
-    ) -> (L::Slice<'a>, L::Summary, L::Slice<'a>, L::Summary, L::Summary);
+    ) -> (L::Slice<'a>, L::Slice<'a>, L::Summary);
 
     /// It's possible for a leaf slice to contain some content that extends
     /// past the end of its last `M`-unit. This is referred to as "the

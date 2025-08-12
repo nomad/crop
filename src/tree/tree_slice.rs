@@ -3,7 +3,6 @@ use core::ops::Range;
 use super::*;
 
 /// An immutable slice of a [`Tree`].
-#[derive(Debug)]
 pub struct TreeSlice<'a, const ARITY: usize, L: Leaf> {
     /// The deepest node that contains all the leaves between (and including)
     /// [`start_slice`](Self::start_slice) and [`end_slice`](Self::end_slice).
@@ -53,16 +52,8 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         match &**self.root {
             Node::Internal(_) => {
                 assert!(self.leaf_count > 1);
-
-                assert!(
-                    L::BaseMetric::measure(&self.start_summary())
-                        > L::BaseMetric::zero()
-                );
-
-                assert!(
-                    L::BaseMetric::measure(&self.end_summary())
-                        > L::BaseMetric::zero()
-                );
+                assert!(!self.start_slice.is_empty());
+                assert!(!self.end_slice.is_empty());
 
                 if self.leaf_count == 2 {
                     assert_eq!(
@@ -609,9 +600,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     let right_summary =
                         leaf.summary().clone() - &start_summary;
 
-                    if L::BaseMetric::measure(&start_summary)
-                        == L::BaseMetric::zero()
-                    {
+                    if start_slice.is_empty() {
                         slice.offset += leaf.summary();
                         *recompute_root = true;
                         return;
@@ -634,14 +623,9 @@ fn build_slice<'a, const N: usize, L, S, E>(
                 // This leaf contains the last slice.
                 let end_slice = E::slice_up_to(leaf.as_slice(), end);
 
-                let end_summary = end_slice.summarize();
+                debug_assert!(!end_slice.is_empty());
 
-                debug_assert!(
-                    L::BaseMetric::measure(&end_summary)
-                        > L::BaseMetric::zero()
-                );
-
-                slice.summary += &end_summary;
+                slice.summary += &end_slice.summarize();
                 slice.end_slice = end_slice;
                 slice.leaf_count += 1;
 

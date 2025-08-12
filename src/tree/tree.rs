@@ -1661,6 +1661,10 @@ mod tests {
         type BaseMetric = LeavesMetric;
     }
 
+    impl BaseMeasured for UsizeSlice<'_> {
+        type BaseMetric = LeavesMetric;
+    }
+
     #[test]
     fn easy() {
         let tree = Tree::<4, usize>::from_leaves(0..20);
