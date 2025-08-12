@@ -403,13 +403,12 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>>
     #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
-        _: &ChunkSummary,
-    ) -> (GapSlice<'a>, ChunkSummary, ChunkSummary, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
         let (first, rest) = chunk.split_at_offset(RawLineMetric(1));
-        (first, first.summarize(), first.summarize(), rest, rest.summarize())
+        (first, rest, first.summarize())
     }
 }
 
@@ -507,19 +506,17 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>> for LineMetric {
     #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
-        summary: &ChunkSummary,
-    ) -> (GapSlice<'a>, ChunkSummary, ChunkSummary, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
-        let (mut first, mut first_summary, advance, rest, rest_summary) =
-            <RawLineMetric as UnitMetric<GapBuffer<MAX_BYTES>>>::first_unit(
-                chunk, summary,
-            );
+        let (mut first, rest, advance) = <RawLineMetric as UnitMetric<
+            GapBuffer<MAX_BYTES>,
+        >>::first_unit(chunk);
 
-        first_summary -= first.truncate_trailing_line_break();
+        first.truncate_trailing_line_break();
 
-        (first, first_summary, advance, rest, rest_summary)
+        (first, rest, advance)
     }
 }
 

@@ -103,22 +103,17 @@ pub trait SlicingMetric<L: Leaf>: Metric<L::Summary> {
 
 /// Allows iterating forward over the units of this metric.
 pub trait UnitMetric<L: Leaf>: Metric<L::Summary> {
-    /// Returns a
-    /// `(first_slice, first_summary, advance, rest_slice, rest_summary)`
-    /// tuple, where `advance` is equal to `first_summary` **plus** the summary
-    /// of any content between the end of `first_slice` and the start of
-    /// `rest_slice` that's not included in neither of them.
+    /// Returns a `(first_slice, rest_slice, advance)` tuple, where `advance`
+    /// is equal to `first_slice`'s summary **plus** the summary of any
+    /// content between the end of `first_slice` and the start of `rest_slice`
+    /// that's not included in either of them.
     ///
     /// It follows that if `slice == first_slice ++ rest_slice` (where `++`
-    /// denotes concatenation) the `first_summary` and the `advance` should be
-    /// equal.
-    ///
-    /// In any case it must always hold `summary == advance + rest_summary`.
-    #[allow(clippy::type_complexity)]
+    /// denotes concatenation), the `advance` should be equal to
+    /// `first_slice`'s summary.
     fn first_unit<'a>(
         slice: L::Slice<'a>,
-        summary: &L::Summary,
-    ) -> (L::Slice<'a>, L::Summary, L::Summary, L::Slice<'a>, L::Summary);
+    ) -> (L::Slice<'a>, L::Slice<'a>, L::Summary);
 }
 
 /// Allows iterating backward over the units of this metric.

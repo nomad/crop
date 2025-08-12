@@ -410,8 +410,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         debug_assert!(M::measure(&self.start_slice.summarize()) > M::zero());
         debug_assert!(self.units_total > self.units_yielded);
 
-        let (slice, summary, advance, rest, _) =
-            M::first_unit(self.start_slice, &self.start_slice.summarize());
+        let (slice, rest, advance) = M::first_unit(self.start_slice);
 
         let offset = self.yielded_in_leaf.clone();
 
@@ -424,7 +423,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                 offset,
                 start_slice: slice,
                 end_slice: slice,
-                summary,
+                summary: slice.summarize(),
                 leaf_count: 1,
             },
             advance,
@@ -609,16 +608,17 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             }
         };
 
-        let (mut end_slice, end_summary, mut advance, rest, _) =
-            M::first_unit(slice, &slice.summarize());
+        let (mut end_slice, rest, mut advance) = M::first_unit(slice);
 
         self.yielded_in_leaf = advance.clone();
         self.start_slice = rest;
 
         advance += &summary;
 
-        if L::BaseMetric::measure(&end_summary) > L::BaseMetric::zero() {
-            summary += &end_summary;
+        if L::BaseMetric::measure(&end_slice.summarize())
+            > L::BaseMetric::zero()
+        {
+            summary += &end_slice.summarize();
             leaf_count += 1;
         }
         // This edge case can happen when the first unit of `slice` is empty.
