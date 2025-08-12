@@ -1,4 +1,4 @@
-use super::traits::{BalancedLeaf, Leaf, Metric, SlicingMetric};
+use super::traits::{BalancedLeaf, Leaf, Metric, SlicingMetric, Summarize};
 use super::{Arc, Inode, Lnode};
 
 #[derive(Clone)]
@@ -113,13 +113,8 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                 },
 
                 Node::Leaf(leaf) => {
-                    let (_, left_summary) = M1::slice_up_to(
-                        leaf.as_slice(),
-                        up_to - m1,
-                        leaf.summary(),
-                    );
-
-                    return m2 + M2::measure(&left_summary);
+                    let slice = M1::slice_up_to(leaf.as_slice(), up_to - m1);
+                    return m2 + M2::measure(&slice.summarize());
                 },
             }
         }

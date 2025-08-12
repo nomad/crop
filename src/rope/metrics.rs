@@ -275,32 +275,22 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
 {
     #[track_caller]
     #[inline]
-    fn slice_up_to<'a>(
-        chunk: GapSlice<'a>,
-        byte_offset: Self,
-        _: &ChunkSummary,
-    ) -> (GapSlice<'a>, ChunkSummary)
+    fn slice_up_to<'a>(chunk: GapSlice<'a>, byte_offset: Self) -> GapSlice<'a>
     where
         'a: 'a,
     {
         chunk.assert_char_boundary(byte_offset.0);
-        let (left, _) = chunk.split_at_offset(byte_offset);
-        (left, left.summarize())
+        chunk.split_at_offset(byte_offset).0
     }
 
     #[track_caller]
     #[inline]
-    fn slice_from<'a>(
-        chunk: GapSlice<'a>,
-        byte_offset: Self,
-        _: &ChunkSummary,
-    ) -> (GapSlice<'a>, ChunkSummary)
+    fn slice_from<'a>(chunk: GapSlice<'a>, byte_offset: Self) -> GapSlice<'a>
     where
         'a: 'a,
     {
         chunk.assert_char_boundary(byte_offset.0);
-        let (_, right) = chunk.split_at_offset(byte_offset);
-        (right, right.summarize())
+        chunk.split_at_offset(byte_offset).1
     }
 }
 
@@ -391,29 +381,19 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     for RawLineMetric
 {
     #[inline]
-    fn slice_up_to<'a>(
-        chunk: GapSlice<'a>,
-        line_offset: Self,
-        _: &ChunkSummary,
-    ) -> (GapSlice<'a>, ChunkSummary)
+    fn slice_up_to<'a>(chunk: GapSlice<'a>, line_offset: Self) -> GapSlice<'a>
     where
         'a: 'a,
     {
-        let (left, _) = chunk.split_at_offset(line_offset);
-        (left, left.summarize())
+        chunk.split_at_offset(line_offset).0
     }
 
     #[inline]
-    fn slice_from<'a>(
-        chunk: GapSlice<'a>,
-        line_offset: Self,
-        _: &ChunkSummary,
-    ) -> (GapSlice<'a>, ChunkSummary)
+    fn slice_from<'a>(chunk: GapSlice<'a>, line_offset: Self) -> GapSlice<'a>
     where
         'a: 'a,
     {
-        let (_, right) = chunk.split_at_offset(line_offset);
-        (right, right.summarize())
+        chunk.split_at_offset(line_offset).1
     }
 }
 
@@ -674,13 +654,11 @@ mod utf16_metric {
         fn slice_up_to<'a>(
             chunk: GapSlice<'a>,
             utf16_code_unit_offset: Self,
-            _: &ChunkSummary,
-        ) -> (GapSlice<'a>, ChunkSummary)
+        ) -> GapSlice<'a>
         where
             'a: 'a,
         {
-            let (left, _) = chunk.split_at_offset(utf16_code_unit_offset);
-            (left, left.summarize())
+            chunk.split_at_offset(utf16_code_unit_offset).0
         }
 
         #[track_caller]
@@ -688,13 +666,11 @@ mod utf16_metric {
         fn slice_from<'a>(
             chunk: GapSlice<'a>,
             utf16_code_unit_offset: Self,
-            _: &ChunkSummary,
-        ) -> (GapSlice<'a>, ChunkSummary)
+        ) -> GapSlice<'a>
         where
             'a: 'a,
         {
-            let (_, right) = chunk.split_at_offset(utf16_code_unit_offset);
-            (right, right.summarize())
+            chunk.split_at_offset(utf16_code_unit_offset).1
         }
     }
 }

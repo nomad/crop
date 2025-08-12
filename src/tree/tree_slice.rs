@@ -595,17 +595,17 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     // so the final slice only spans this single leaf.
                     let start = start - S::measure(&slice.offset);
 
-                    let (right_slice, right_summary) =
-                        S::slice_from(leaf.as_slice(), start, leaf.summary());
+                    let right_slice = S::slice_from(leaf.as_slice(), start);
 
-                    let left_summary = leaf.summary().clone() - &right_summary;
+                    let left_summary =
+                        leaf.summary().clone() - &right_slice.summarize();
 
                     let end = end
                         - E::measure(&slice.offset)
                         - E::measure(&left_summary);
 
-                    let (start_slice, start_summary) =
-                        E::slice_up_to(right_slice, end, &right_summary);
+                    let start_slice = E::slice_up_to(right_slice, end);
+                    let start_summary = start_slice.summarize();
 
                     slice.offset += &left_summary;
                     slice.start_slice = start_slice;
@@ -618,11 +618,12 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     *done = true;
                 } else {
                     // This leaf contains the first slice but not the last.
-                    let (start_slice, start_summary) = S::slice_from(
+                    let start_slice = S::slice_from(
                         leaf.as_slice(),
                         start - S::measure(&slice.offset),
-                        leaf.summary(),
                     );
+
+                    let start_summary = start_slice.summarize();
 
                     let right_summary =
                         leaf.summary().clone() - &start_summary;
@@ -651,8 +652,9 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     - E::measure(&slice.summary);
 
                 // This leaf contains the last slice.
-                let (end_slice, end_summary) =
-                    E::slice_up_to(leaf.as_slice(), end, leaf.summary());
+                let end_slice = E::slice_up_to(leaf.as_slice(), end);
+
+                let end_summary = end_slice.summarize();
 
                 debug_assert!(
                     L::BaseMetric::measure(&end_summary)

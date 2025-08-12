@@ -90,17 +90,9 @@ pub trait Metric<Summary: ?Sized>:
 
 /// Metrics that can be used to slice `Tree`s and `TreeSlice`s.
 pub trait SlicingMetric<L: Leaf>: Metric<L::Summary> {
-    fn slice_up_to<'a>(
-        slice: L::Slice<'a>,
-        up_to: Self,
-        summary: &L::Summary,
-    ) -> (L::Slice<'a>, L::Summary);
+    fn slice_up_to<'a>(slice: L::Slice<'a>, up_to: Self) -> L::Slice<'a>;
 
-    fn slice_from<'a>(
-        slice: L::Slice<'a>,
-        from: Self,
-        summary: &L::Summary,
-    ) -> (L::Slice<'a>, L::Summary);
+    fn slice_from<'a>(slice: L::Slice<'a>, from: Self) -> L::Slice<'a>;
 }
 
 /// Allows iterating forward over the units of this metric.
