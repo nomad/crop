@@ -1,7 +1,6 @@
+mod inode;
 mod leaves;
 mod node;
-mod node_internal;
-mod node_leaf;
 mod tiny_arc;
 mod traits;
 mod tree;
@@ -9,11 +8,10 @@ mod tree_builder;
 mod tree_slice;
 mod units;
 
+use inode::Inode;
 use iter_chain::ExactChain;
 pub use leaves::Leaves;
 use node::Node;
-use node_internal::Inode;
-use node_leaf::Lnode;
 use tiny_arc::Arc;
 pub use traits::*;
 pub use tree::Tree;

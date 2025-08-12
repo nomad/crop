@@ -334,6 +334,11 @@ impl Summarize for GapSlice<'_> {
 
 impl BaseMeasured for GapSlice<'_> {
     type BaseMetric = ByteMetric;
+
+    #[inline]
+    fn base_measure(&self) -> ByteMetric {
+        ByteMetric(self.left_summary.bytes() + self.right_summary.bytes())
+    }
 }
 
 #[cfg(test)]

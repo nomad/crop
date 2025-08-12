@@ -18,9 +18,13 @@ pub trait BaseMeasured: Summarize {
     type BaseMetric: Metric<Self::Summary>;
 
     #[inline]
-    fn is_empty(&self) -> bool {
+    fn base_measure(&self) -> Self::BaseMetric {
         Self::BaseMetric::measure(&self.summarize())
-            == Self::BaseMetric::zero()
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.base_measure() == Self::BaseMetric::zero()
     }
 }
 
@@ -41,6 +45,10 @@ pub trait Leaf:
         >,
     >
 {
+    #[inline]
+    fn measure<M: Metric<Self::Summary>>(&self) -> M {
+        M::measure(&self.summarize())
+    }
 }
 
 impl<

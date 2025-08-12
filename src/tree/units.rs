@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 use super::traits::{DoubleEndedUnitMetric, Leaf, Metric, UnitMetric};
 use super::tree_slice;
-use super::{Arc, Lnode, Node, Tree, TreeSlice};
+use super::{Arc, Node, Tree, TreeSlice};
 use crate::tree::{BaseMeasured, Summarize};
 
 /// An iterator over the units of a metric.
@@ -338,7 +338,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                     match self.first_slice.take() {
                         Some(slice) => {
                             self.yielded_in_leaf =
-                                leaf.summary().clone() - &slice.summarize();
+                                leaf.summarize() - &slice.summarize();
 
                             self.start_slice = slice;
                         },
@@ -460,8 +460,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     #[inline]
     fn next_leaf_with_measure(
         &mut self,
-    ) -> (&'a Lnode<L>, &'a Arc<Node<N, L>>, L::Summary, L::Summary, usize)
-    {
+    ) -> (&'a L, &'a Arc<Node<N, L>>, L::Summary, L::Summary, usize) {
         debug_assert!(self.units_total > self.units_yielded);
 
         let mut before = L::Summary::default();
@@ -478,7 +477,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             let inode = node.get_internal();
 
             for child in &inode.children()[..child_idx] {
-                before += child.summary();
+                before += &child.summary();
             }
 
             for (idx, child) in
@@ -488,7 +487,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                     self.path.push((node, child_idx + 1 + idx));
                     break 'outer;
                 } else {
-                    summary += child.summary();
+                    summary += &child.summary();
                     leaf_count += child.leaf_count();
                 }
             }
@@ -511,7 +510,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                             node = child;
                             continue 'outer;
                         } else {
-                            summary += child.summary();
+                            summary += &child.summary();
                             leaf_count += child.leaf_count();
                         }
                     }
@@ -681,8 +680,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     #[inline]
     fn last_leaf(
         &self,
-    ) -> (&'a Lnode<L>, &'a Arc<Node<N, L>>, L::Summary, L::Summary, usize)
-    {
+    ) -> (&'a L, &'a Arc<Node<N, L>>, L::Summary, L::Summary, usize) {
         // Step 1: find the index of deepest node in the path that fully
         // contains `range`.
 
@@ -740,11 +738,11 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             let inode = node.get_internal();
 
             for child in &inode.children()[..child_idx] {
-                before += child.summary();
+                before += &child.summary();
             }
 
             for child in &inode.children()[child_idx + 1..] {
-                summary += child.summary();
+                summary += &child.summary();
                 leaf_count += child.leaf_count();
             }
         }
@@ -758,8 +756,8 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
         for child in &inode.children()[..child_idx] {
             let child_summary = child.summary();
-            offset += L::BaseMetric::measure(child_summary);
-            before += child_summary;
+            offset += L::BaseMetric::measure(&child_summary);
+            before += &child_summary;
         }
 
         offset += inode.child(child_idx).base_measure();
@@ -776,7 +774,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                 break;
             } else {
                 offset += child_measure;
-                summary += child.summary();
+                summary += &child.summary();
                 leaf_count += child.leaf_count();
             }
         }
@@ -792,7 +790,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                             continue 'outer;
                         } else {
                             offset += child_measure;
-                            summary += child.summary();
+                            summary += &child.summary();
                             leaf_count += child.leaf_count();
                         }
                     }
@@ -1024,7 +1022,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                     match self.last_slice.take() {
                         Some(slice) => {
                             self.yielded_in_leaf =
-                                leaf.summary().clone() - &slice.summarize();
+                                leaf.summarize() - &slice.summarize();
 
                             self.end_slice = slice;
                         },
@@ -1043,7 +1041,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     /// Returns the leaf node before the current `leaf_node`, **without**
     /// checking if there is one in the valid range of this iterator.
     #[inline]
-    fn previous_leaf(&mut self) -> &'a Lnode<L> {
+    fn previous_leaf(&mut self) -> &'a L {
         let mut node = loop {
             let &mut (node, ref mut child_idx) = self.path.last_mut().unwrap();
 
@@ -1090,8 +1088,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     #[inline]
     fn first_leaf(
         &self,
-    ) -> (&'a Lnode<L>, &'a Arc<Node<N, L>>, L::Summary, L::Summary, usize)
-    {
+    ) -> (&'a L, &'a Arc<Node<N, L>>, L::Summary, L::Summary, usize) {
         // Step 1: find the index of deepest node in the path that fully
         // contains `range`.
 
@@ -1145,12 +1142,12 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             let inode = node.get_internal();
 
             for child in &inode.children()[..child_idx] {
-                summary += child.summary();
+                summary += &child.summary();
                 leaf_count += child.leaf_count();
             }
 
             for child in &inode.children()[child_idx + 1..] {
-                after += child.summary();
+                after += &child.summary();
             }
         }
 
@@ -1160,7 +1157,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         let inode = root.get_internal();
 
         for child in &inode.children()[child_idx + 1..] {
-            after += child.summary();
+            after += &child.summary();
         }
 
         // This will be the child of the root node that contains the first
@@ -1176,7 +1173,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
             if offset + child_measure > range.start {
                 for child in children {
-                    summary += child.summary();
+                    summary += &child.summary();
                     leaf_count += child.leaf_count();
                 }
                 node = child;
@@ -1196,7 +1193,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
                         if offset + child_measure > range.start {
                             for child in children {
-                                summary += child.summary();
+                                summary += &child.summary();
                                 leaf_count += child.leaf_count();
                             }
                             node = child;
@@ -1371,8 +1368,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     #[inline]
     fn previous_leaf_with_measure(
         &mut self,
-    ) -> (&'a Lnode<L>, &'a Arc<Node<N, L>>, L::Summary, L::Summary, usize)
-    {
+    ) -> (&'a L, &'a Arc<Node<N, L>>, L::Summary, L::Summary, usize) {
         debug_assert!(self.units_remaining > M::zero());
 
         let mut after = L::Summary::default();
@@ -1389,7 +1385,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             let inode = node.get_internal();
 
             for child in &inode.children()[child_idx + 1..] {
-                after += child.summary();
+                after += &child.summary();
             }
 
             for (idx, child) in
@@ -1399,7 +1395,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                     self.path.push((node, idx));
                     break 'outer;
                 } else {
-                    summary += child.summary();
+                    summary += &child.summary();
                     leaf_count += child.leaf_count();
                 }
             }
@@ -1424,7 +1420,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                             node = child;
                             continue 'outer;
                         } else {
-                            summary += child.summary();
+                            summary += &child.summary();
                             leaf_count += child.leaf_count();
                         }
                     }

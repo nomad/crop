@@ -1131,6 +1131,11 @@ impl<const MAX_BYTES: usize> Summarize for GapBuffer<MAX_BYTES> {
 
 impl<const MAX_BYTES: usize> BaseMeasured for GapBuffer<MAX_BYTES> {
     type BaseMetric = ByteMetric;
+
+    #[inline]
+    fn base_measure(&self) -> ByteMetric {
+        ByteMetric(self.left_summary.bytes() + self.right_summary.bytes())
+    }
 }
 
 impl<const MAX_BYTES: usize> From<GapSlice<'_>> for GapBuffer<MAX_BYTES> {
