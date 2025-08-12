@@ -19,14 +19,8 @@ pub struct TreeSlice<'a, const ARITY: usize, L: Leaf> {
     /// A right sub-slice of the leaf containing the start of the sliced range.
     pub(crate) start_slice: L::Slice<'a>,
 
-    /// [`start_slice`](Self::start_slice)'s summary.
-    pub(crate) start_summary: L::Summary,
-
     /// A left sub-slice of the leaf containing the end of the sliced range.
     pub(crate) end_slice: L::Slice<'a>,
-
-    /// [`end_slice`](Self::end_slice)'s summary.
-    pub(crate) end_summary: L::Summary,
 
     /// The number of leaves spanned by this slice, including the leaves
     /// containing the first and last slices.
@@ -39,8 +33,6 @@ impl<const ARITY: usize, L: Leaf> Clone for TreeSlice<'_, ARITY, L> {
         TreeSlice {
             offset: self.offset.clone(),
             summary: self.summary.clone(),
-            start_summary: self.start_summary.clone(),
-            end_summary: self.end_summary.clone(),
             ..*self
         }
     }
@@ -62,24 +54,20 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
             Node::Internal(_) => {
                 assert!(self.leaf_count > 1);
 
-                assert_eq!(self.start_slice.summarize(), self.start_summary);
-
-                assert_eq!(self.end_slice.summarize(), self.end_summary);
-
                 assert!(
-                    L::BaseMetric::measure(&self.start_summary)
+                    L::BaseMetric::measure(&self.start_summary())
                         > L::BaseMetric::zero()
                 );
 
                 assert!(
-                    L::BaseMetric::measure(&self.end_summary)
+                    L::BaseMetric::measure(&self.end_summary())
                         > L::BaseMetric::zero()
                 );
 
                 if self.leaf_count == 2 {
                     assert_eq!(
                         self.summary,
-                        self.start_summary.clone() + &self.end_summary
+                        self.start_summary() + &self.end_summary()
                     );
                 }
 
@@ -109,8 +97,6 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
 
             Node::Leaf(leaf) => {
                 assert_eq!(1, self.leaf_count);
-                assert_eq!(self.start_summary, self.summary);
-                assert_eq!(self.summary, self.end_summary);
                 assert!(leaf.base_measure() >= self.base_measure());
             },
         }
@@ -146,8 +132,8 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     }
 
     #[inline]
-    pub fn end_summary(&self) -> &L::Summary {
-        &self.end_summary
+    pub fn end_summary(&self) -> L::Summary {
+        self.end_slice.summarize()
     }
 
     /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
@@ -159,11 +145,11 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     {
         debug_assert!(measure <= self.measure::<M>() + M::one());
 
-        if M::measure(&self.start_summary) >= measure {
+        if M::measure(&self.start_summary()) >= measure {
             (self.start_slice, M::zero())
         } else {
             let all_minus_last =
-                M::measure(&self.summary) - M::measure(&self.end_summary);
+                M::measure(&self.summary) - M::measure(&self.end_summary());
 
             if all_minus_last >= measure {
                 let (leaf, mut offset) = self
@@ -206,8 +192,8 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     }
 
     #[inline]
-    pub fn start_summary(&self) -> &L::Summary {
-        &self.start_summary
+    pub fn start_summary(&self) -> L::Summary {
+        self.start_slice.summarize()
     }
 
     #[inline]
@@ -325,9 +311,7 @@ where
             offset: L::Summary::default(),
             summary: L::Summary::default(),
             start_slice: Default::default(),
-            start_summary: L::Summary::default(),
             end_slice: Default::default(),
-            end_summary: L::Summary::default(),
             leaf_count: 0,
         };
 
@@ -605,14 +589,11 @@ fn build_slice<'a, const N: usize, L, S, E>(
                         - E::measure(&left_summary);
 
                     let start_slice = E::slice_up_to(right_slice, end);
-                    let start_summary = start_slice.summarize();
 
                     slice.offset += &left_summary;
+                    slice.summary = start_slice.summarize();
                     slice.start_slice = start_slice;
-                    slice.start_summary = start_summary.clone();
                     slice.end_slice = start_slice;
-                    slice.end_summary = start_summary.clone();
-                    slice.summary = start_summary;
                     slice.leaf_count = 1;
 
                     *done = true;
@@ -639,7 +620,6 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     slice.offset += &right_summary;
                     slice.summary += &start_summary;
                     slice.start_slice = start_slice;
-                    slice.start_summary = start_summary;
                     slice.leaf_count = 1;
 
                     *found_start_slice = true;
@@ -663,7 +643,6 @@ fn build_slice<'a, const N: usize, L, S, E>(
 
                 slice.summary += &end_summary;
                 slice.end_slice = end_slice;
-                slice.end_summary = end_summary;
                 slice.leaf_count += 1;
 
                 *done = true;

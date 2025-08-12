@@ -16,6 +16,12 @@ pub trait Summarize: Debug {
 
 pub trait BaseMeasured: Summarize {
     type BaseMetric: Metric<Self::Summary>;
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        Self::BaseMetric::measure(&self.summarize())
+            == Self::BaseMetric::zero()
+    }
 }
 
 pub trait AsSlice: Summarize {

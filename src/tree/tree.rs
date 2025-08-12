@@ -326,7 +326,6 @@ mod from_treeslice {
                         child,
                         start - offset,
                         slice.start_slice,
-                        slice.start_summary.clone(),
                         &mut invalid_first,
                     );
 
@@ -353,7 +352,6 @@ mod from_treeslice {
                         child,
                         end - offset,
                         slice.end_slice,
-                        slice.end_summary.clone(),
                         &mut invalid_last,
                     );
 
@@ -377,7 +375,6 @@ mod from_treeslice {
         node: &Arc<Node<N, L>>,
         take_from: L::BaseMetric,
         start_slice: L::Slice<'_>,
-        start_summary: L::Summary,
         invalid_nodes: &mut usize,
     ) -> Arc<Node<N, L>> {
         match &**node {
@@ -396,7 +393,6 @@ mod from_treeslice {
                             child,
                             take_from - offset,
                             start_slice,
-                            start_summary,
                             invalid_nodes,
                         );
 
@@ -427,7 +423,8 @@ mod from_treeslice {
             },
 
             Node::Leaf(_) => {
-                let lnode = Lnode::new(start_slice.into(), start_summary);
+                let lnode =
+                    Lnode::new(start_slice.into(), start_slice.summarize());
 
                 if lnode.is_underfilled() {
                     *invalid_nodes += 1;
@@ -445,7 +442,6 @@ mod from_treeslice {
         node: &Arc<Node<N, L>>,
         take_up_to: L::BaseMetric,
         end_slice: L::Slice<'_>,
-        end_summary: L::Summary,
         invalid_nodes: &mut usize,
     ) -> Arc<Node<N, L>> {
         match &**node {
@@ -462,7 +458,6 @@ mod from_treeslice {
                             child,
                             take_up_to - offset,
                             end_slice,
-                            end_summary,
                             invalid_nodes,
                         );
 
@@ -490,7 +485,8 @@ mod from_treeslice {
             },
 
             Node::Leaf(_) => {
-                let lnode = Lnode::new(end_slice.into(), end_summary);
+                let lnode =
+                    Lnode::new(end_slice.into(), end_slice.summarize());
 
                 if lnode.is_underfilled() {
                     *invalid_nodes = 1;

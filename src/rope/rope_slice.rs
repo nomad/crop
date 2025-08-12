@@ -588,7 +588,7 @@ impl<'a> RopeSlice<'a> {
         let slice = &mut self.tree_slice;
 
         // The last slice only contains one byte so we have to re-slice.
-        if slice.end_summary.bytes() == 1 {
+        if slice.end_summary().bytes() == 1 {
             *self = self.byte_slice(..self.byte_len() - 1);
         }
         // The last slice contains more than 2 bytes so we can just mutate
@@ -596,13 +596,10 @@ impl<'a> RopeSlice<'a> {
         else {
             let last = &mut slice.end_slice;
 
-            let removed_summary = last.truncate_last_char();
-            slice.end_summary -= removed_summary;
-            slice.summary -= removed_summary;
+            slice.summary -= last.truncate_last_char();
 
             if slice.leaf_count() == 1 {
                 slice.start_slice = slice.end_slice;
-                slice.start_summary = slice.end_summary;
             }
         }
     }
