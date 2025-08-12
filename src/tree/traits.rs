@@ -56,14 +56,13 @@ pub trait ReplaceableLeaf<M: Metric<Self::Summary>>: BalancedLeaf {
     /// assumed to not be underfilled.
     fn replace<R>(
         &mut self,
-        summary: &mut Self::Summary,
         range: R,
         replace_with: Self::Replacement<'_>,
     ) -> Option<Self::ExtraLeaves>
     where
         R: RangeBounds<M>;
 
-    fn remove_up_to(&mut self, summary: &mut Self::Summary, up_to: M);
+    fn remove_up_to(&mut self, up_to: M);
 }
 
 pub trait Metric<Summary: ?Sized>:

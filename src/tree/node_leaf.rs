@@ -90,7 +90,8 @@ impl<L: Leaf> Lnode<L> {
         M: Metric<L::Summary>,
         L: ReplaceableLeaf<M>,
     {
-        self.value.remove_up_to(&mut self.summary, up_to);
+        self.value.remove_up_to(up_to);
+        self.summary = self.value.summarize();
     }
 
     #[track_caller]
@@ -105,9 +106,9 @@ impl<L: Leaf> Lnode<L> {
         R: RangeBounds<M>,
         L: ReplaceableLeaf<M>,
     {
-        self.value
-            .replace(&mut self.summary, range, replace_with)
-            .map(|extra_leaves| extra_leaves.map(Self::from))
+        let extras = self.value.replace(range, replace_with);
+        self.summary = self.value.summarize();
+        extras.map(|extra_leaves| extra_leaves.map(Self::from))
     }
 
     #[inline]

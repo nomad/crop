@@ -1216,7 +1216,6 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
     #[inline]
     fn replace<R>(
         &mut self,
-        summary: &mut ChunkSummary,
         range: R,
         replacement: &str,
     ) -> Option<Self::ExtraLeaves>
@@ -1231,34 +1230,29 @@ impl<const MAX_BYTES: usize> ReplaceableLeaf<ByteMetric>
         self.assert_char_boundary(start);
         self.assert_char_boundary(end);
 
-        let extras =
-            if self.len() - (end - start) + replacement.len() <= MAX_BYTES {
-                if end > start {
-                    self.replace_non_overflowing(start..end, replacement)
-                } else {
-                    self.insert(start, replacement)
-                };
-
-                None
+        if self.len() - (end - start) + replacement.len() <= MAX_BYTES {
+            if end > start {
+                self.replace_non_overflowing(start..end, replacement)
             } else {
-                let extras = self.replace_overflowing(start..end, replacement);
-
-                if cfg!(feature = "small_chunks") {
-                    (!extras.is_empty()).then_some(extras.into_iter())
-                } else {
-                    Some(extras.into_iter())
-                }
+                self.insert(start, replacement)
             };
 
-        *summary = self.summarize();
+            None
+        } else {
+            let extras = self.replace_overflowing(start..end, replacement);
 
-        extras
+            if cfg!(feature = "small_chunks") {
+                (!extras.is_empty()).then_some(extras.into_iter())
+            } else {
+                Some(extras.into_iter())
+            }
+        }
     }
 
     #[track_caller]
     #[inline]
-    fn remove_up_to(&mut self, summary: &mut ChunkSummary, up_to: ByteMetric) {
-        self.replace(summary, ..up_to, "");
+    fn remove_up_to(&mut self, up_to: ByteMetric) {
+        self.replace(..up_to, "");
     }
 }
 
