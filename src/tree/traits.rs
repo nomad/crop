@@ -39,10 +39,7 @@ pub trait BalancedLeaf: Leaf + for<'a> From<Self::Slice<'a>> {
     ///
     /// The `right` leaf can be left empty if the two leaves can be combined
     /// into a single one.
-    fn balance_leaves(
-        left: (&mut Self, &mut Self::Summary),
-        right: (&mut Self, &mut Self::Summary),
-    );
+    fn balance_leaves(left: &mut Self, right: &mut Self);
 }
 
 pub trait ReplaceableLeaf<M: Metric<Self::Summary>>: BalancedLeaf {

@@ -1179,10 +1179,7 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
     }
 
     #[inline]
-    fn balance_leaves(
-        (left, left_summary): (&mut Self, &mut ChunkSummary),
-        (right, right_summary): (&mut Self, &mut ChunkSummary),
-    ) {
+    fn balance_leaves(left: &mut Self, right: &mut Self) {
         // The two leaves can be combined in a single chunk.
         if left.len() + right.len() <= MAX_BYTES {
             left.append_other(right);
@@ -1204,9 +1201,6 @@ impl<const MAX_BYTES: usize> BalancedLeaf for GapBuffer<MAX_BYTES> {
             debug_assert!(left.len() >= Self::chunk_min());
             debug_assert!(right.len() >= Self::chunk_min());
         }
-
-        *left_summary = left.summarize();
-        *right_summary = right.summarize();
     }
 }
 

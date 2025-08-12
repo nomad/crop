@@ -51,10 +51,9 @@ impl<L: Leaf> Lnode<L> {
     where
         L: BalancedLeaf,
     {
-        L::balance_leaves(
-            (&mut self.value, &mut self.summary),
-            (&mut other.value, &mut other.summary),
-        )
+        L::balance_leaves(&mut self.value, &mut other.value);
+        self.summary = self.value.summarize();
+        other.summary = other.value.summarize();
     }
 
     #[inline]
