@@ -627,7 +627,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             if leaf_count == 1 {
                 root = previous_leaf;
 
-                offset = root.summary().clone() - &summary;
+                offset = root.summary() - &summary;
 
                 end_slice = start_slice;
             } else {
@@ -1292,7 +1292,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         summary += &start_summary;
 
         let offset =
-            root.summary().clone() - &after - &self.yielded_in_leaf - &advance;
+            root.summary() - &after - &self.yielded_in_leaf - &advance;
 
         (
             TreeSlice {
@@ -1522,7 +1522,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                     (
                         TreeSlice {
                             root: self.leaf_node,
-                            offset: self.leaf_node.summary().clone(),
+                            offset: self.leaf_node.summary(),
                             start_slice: empty,
                             end_slice: empty,
                             summary: L::Summary::default(),
@@ -1568,7 +1568,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         advance += &start_summary;
 
         let mut offset =
-            root.summary().clone() - &after - &self.yielded_in_leaf - &advance;
+            root.summary() - &after - &self.yielded_in_leaf - &advance;
 
         self.yielded_in_leaf = start_summary.clone();
         self.end_slice = rest;
