@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use super::{Arc, Inode, Leaf, Metric, Node, Tree, TreeSlice};
+use super::{Arc, Inode, Leaf, LeafSlice, Metric, Node, Tree, TreeSlice};
 
 /// An iterator over the leaves of `Tree`s and `TreeSlice`s.
 //
@@ -12,22 +12,12 @@ pub struct Leaves<'a, const ARITY: usize, L: Leaf> {
 
     /// Iterates over the leaves from back to front.
     backward: LeavesBackward<'a, ARITY, L>,
-
-    /// The number of leaves that have been yielded so far.
-    leaves_yielded: usize,
-
-    /// The total number of leaves this iterator will yield.
-    leaves_total: usize,
 }
 
 impl<const ARITY: usize, L: Leaf> Clone for Leaves<'_, ARITY, L> {
     #[inline]
     fn clone(&self) -> Self {
-        Self {
-            forward: self.forward.clone(),
-            backward: self.backward.clone(),
-            ..*self
-        }
+        Self { forward: self.forward.clone(), backward: self.backward.clone() }
     }
 }
 
@@ -39,8 +29,6 @@ impl<'a, const ARITY: usize, L: Leaf> From<&'a Tree<ARITY, L>>
         Self {
             forward: LeavesForward::from(tree),
             backward: LeavesBackward::from(tree),
-            leaves_yielded: 0,
-            leaves_total: tree.leaf_count(),
         }
     }
 }
@@ -53,8 +41,6 @@ impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
         Self {
             forward: LeavesForward::from(slice),
             backward: LeavesBackward::from(slice),
-            leaves_yielded: 0,
-            leaves_total: slice.leaf_count(),
         }
     }
 }
@@ -64,18 +50,11 @@ impl<'a, const ARITY: usize, L: Leaf> Iterator for Leaves<'a, ARITY, L> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.leaves_yielded == self.leaves_total {
+        if self.measure_yielded() == self.measure_total() {
             None
         } else {
-            self.leaves_yielded += 1;
             self.forward.next()
         }
-    }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let exact = self.len();
-        (exact, Some(exact))
     }
 }
 
@@ -84,19 +63,11 @@ impl<const ARITY: usize, L: Leaf> DoubleEndedIterator
 {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.leaves_yielded == self.leaves_total {
+        if self.measure_yielded() == self.measure_total() {
             None
         } else {
-            self.leaves_yielded += 1;
             self.backward.previous()
         }
-    }
-}
-
-impl<const ARITY: usize, L: Leaf> ExactSizeIterator for Leaves<'_, ARITY, L> {
-    #[inline]
-    fn len(&self) -> usize {
-        self.leaves_total - self.leaves_yielded
     }
 }
 
@@ -105,11 +76,26 @@ impl<const ARITY: usize, L: Leaf> core::iter::FusedIterator
 {
 }
 
-struct LeavesForward<'a, const N: usize, L: Leaf> {
-    /// Whether `Self` has been initialized by calling
-    /// [`initialize`](Self::initialize()).
-    is_initialized: bool,
+impl<const ARITY: usize, L: Leaf> Leaves<'_, ARITY, L> {
+    /// Returns the total base measure of all the leaves in the tree or slice
+    /// being iterated over.
+    #[inline]
+    fn measure_total(&self) -> L::BaseMetric {
+        debug_assert_eq!(
+            self.forward.measure_total,
+            self.backward.measure_total
+        );
+        self.forward.measure_total
+    }
 
+    /// Returns the base measure of all the leaf slices yielded so far.
+    #[inline]
+    fn measure_yielded(&self) -> L::BaseMetric {
+        self.forward.measure_yielded + self.backward.measure_yielded
+    }
+}
+
+struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// The root of the `Tree` or `TreeSlice` we're iterating over.
     root: &'a Node<N, L>,
 
@@ -138,13 +124,12 @@ struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// iterating over a `Tree`.
     base_offset: L::BaseMetric,
 
-    /// The number of whole leaf slices yielded so far. All leaf slices are
-    /// considered whole except for the first and last leaf slices of
-    /// `TreeSlice`s.
-    whole_yielded: usize,
+    /// The total base measure of all the leaves in the tree or slice being
+    /// iterated over.
+    measure_total: L::BaseMetric,
 
-    /// The number of whole leaf slices this iterator will yield.
-    whole_total: usize,
+    /// The base measure of all the leaf slices yielded so far.
+    measure_yielded: L::BaseMetric,
 }
 
 impl<const N: usize, L: Leaf> Clone for LeavesForward<'_, N, L> {
@@ -160,7 +145,6 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
     #[inline]
     fn from(tree: &'a Tree<N, L>) -> LeavesForward<'a, N, L> {
         Self {
-            is_initialized: false,
             base_offset: L::BaseMetric::zero(),
             first_slice: None,
             last_slice: None,
@@ -168,10 +152,8 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
             path: Vec::with_capacity(tree.root().depth().saturating_sub(1)),
             leaves: &[],
             next_leaf_idx: 0,
-            // NOTE: `whole_yielded` starts off as 1 because `Self::next()`
-            // doesn't increase this counter the first time it's called.
-            whole_yielded: 1,
-            whole_total: tree.root().leaf_count(),
+            measure_yielded: L::BaseMetric::zero(),
+            measure_total: tree.base_measure(),
         }
     }
 }
@@ -182,7 +164,6 @@ impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
     #[inline]
     fn from(slice: &TreeSlice<'a, ARITY, L>) -> LeavesForward<'a, ARITY, L> {
         Self {
-            is_initialized: false,
             base_offset: L::BaseMetric::measure(&slice.offset),
             first_slice: Some(slice.start_slice),
             last_slice: Some(slice.end_slice),
@@ -190,26 +171,57 @@ impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
             path: Vec::with_capacity(slice.root().depth().saturating_sub(1)),
             leaves: &[],
             next_leaf_idx: 0,
-            whole_yielded: 0,
-            whole_total: slice.leaf_count().saturating_sub(2),
+            measure_yielded: L::BaseMetric::zero(),
+            measure_total: slice.base_measure(),
         }
     }
 }
 
 impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
-    #[allow(clippy::type_complexity)]
+    #[inline]
+    fn advance_to_next_bunch(&mut self) {
+        let mut inode = loop {
+            let &mut (inode, ref mut visited) = self.path.last_mut().unwrap();
+
+            *visited += 1;
+
+            if *visited == inode.len() {
+                self.path.pop();
+            } else {
+                let inode = inode.child(*visited);
+
+                // The last internal node in `path` is always *2* levels above
+                // a leaf, so all its children are internal nodes 1 level above
+                // a leaf.
+                break inode.get_internal();
+            }
+        };
+
+        loop {
+            match &**inode.first() {
+                Node::Internal(i) => {
+                    self.path.push((inode, 0));
+                    inode = i;
+                },
+
+                Node::Leaf(_) => {
+                    self.leaves = inode.children();
+                    self.next_leaf_idx = 0;
+                    return;
+                },
+            }
+        }
+    }
+
     #[inline]
     fn initialize(&mut self) -> (L::Slice<'a>, &'a [Arc<Node<N, L>>]) {
-        debug_assert!(!self.is_initialized);
-
-        self.is_initialized = true;
+        debug_assert!(self.measure_yielded.is_zero());
 
         let mut inode = match self.root {
             Node::Internal(inode) => inode,
 
             Node::Leaf(leaf) => {
                 let first = self.first_slice.take().unwrap_or(leaf.as_slice());
-
                 return (first, &[]);
             },
         };
@@ -243,76 +255,26 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                     unreachable!();
                 },
 
-                Node::Leaf(_) => {
-                    for (idx, leaf) in inode
-                        .children()
-                        .iter()
-                        .map(|n| {
-                            // The first child is a leaf node, so all its
-                            // siblings are leaf nodes as well.
-                            n.get_leaf()
-                        })
-                        .enumerate()
-                    {
-                        offset += leaf.base_measure();
+                Node::Leaf(first) => {
+                    return match self.first_slice.take() {
+                        Some(first_slice) => {
+                            // The index of the first slice in the parent.
+                            let first_slice_idx = inode
+                                .children()
+                                .iter()
+                                .take_while(|child| {
+                                    offset += child.base_measure();
+                                    offset <= self.base_offset
+                                })
+                                .count();
 
-                        if offset > self.base_offset {
-                            let first = self
-                                .first_slice
-                                .take()
-                                .unwrap_or(leaf.as_slice());
-
-                            let n = core::cmp::min(
-                                inode.len() - idx - 1,
-                                self.whole_total - self.whole_yielded,
-                            );
-
-                            return (
-                                first,
-                                &inode.children()[idx + 1..(idx + 1 + n)],
-                            );
-                        }
-                    }
-
-                    unreachable!();
-                },
-            }
-        }
-    }
-
-    #[inline]
-    fn next_bunch(&mut self) -> &'a [Arc<Node<N, L>>] {
-        let mut inode = loop {
-            let &mut (inode, ref mut visited) = self.path.last_mut().unwrap();
-
-            *visited += 1;
-
-            if *visited == inode.len() {
-                self.path.pop();
-            } else {
-                let inode = inode.child(*visited);
-
-                // The last internal node in `path` is always *2* levels above
-                // a leaf, so all its children are internal nodes 1 level above
-                // a leaf.
-                break inode.get_internal();
-            }
-        };
-
-        loop {
-            match &**inode.first() {
-                Node::Internal(i) => {
-                    self.path.push((inode, 0));
-                    inode = i;
-                },
-
-                Node::Leaf(_) => {
-                    let n = core::cmp::min(
-                        inode.len(),
-                        self.whole_total - self.whole_yielded,
-                    );
-
-                    return &inode.children()[..n];
+                            (
+                                first_slice,
+                                &inode.children()[first_slice_idx + 1..],
+                            )
+                        },
+                        None => (first.as_slice(), &inode.children()[1..]),
+                    };
                 },
             }
         }
@@ -320,38 +282,37 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 
     #[inline]
     fn next(&mut self) -> Option<L::Slice<'a>> {
-        if !self.is_initialized {
-            let (first, first_bunch) = self.initialize();
-            self.leaves = first_bunch;
+        if self.measure_yielded == self.measure_total {
+            return None;
+        }
+
+        if self.measure_yielded.is_zero() {
+            let (first, rest) = self.initialize();
+            self.measure_yielded = first.base_measure();
+            self.leaves = rest;
             return Some(first);
         }
 
-        if self.next_leaf_idx < self.leaves.len() {
-            // All the nodes in `leaves` are guaranteed to be leaf nodes.
-            let leaf = &self.leaves[self.next_leaf_idx].get_leaf();
-            self.next_leaf_idx += 1;
-            self.whole_yielded += 1;
-            Some(leaf.as_slice())
-        } else if self.whole_yielded < self.whole_total {
-            self.leaves = self.next_bunch();
-            // Same as above.
-            let leaf = &self.leaves[0].get_leaf();
-            self.next_leaf_idx = 1;
-            self.whole_yielded += 1;
-            Some(leaf.as_slice())
-        } else if self.last_slice.is_some() {
+        if self.next_leaf_idx == self.leaves.len() {
+            self.advance_to_next_bunch();
+        }
+
+        let next_leaf = &self.leaves[self.next_leaf_idx].get_leaf();
+        self.next_leaf_idx += 1;
+        self.measure_yielded += next_leaf.base_measure();
+
+        // If we're iterating over a `TreeSlice`, make sure we're not yielding
+        // past its end_slice.
+        if self.measure_yielded > self.measure_total {
+            self.measure_yielded = self.measure_total;
             self.last_slice.take()
         } else {
-            None
+            Some(next_leaf.as_slice())
         }
     }
 }
 
 struct LeavesBackward<'a, const N: usize, L: Leaf> {
-    /// Whether `Self` has been initialized by calling
-    /// [`initialize`](Self::initialize()).
-    is_initialized: bool,
-
     /// The root of the `Tree` or `TreeSlice` we're iterating over.
     root: &'a Node<N, L>,
 
@@ -381,13 +342,12 @@ struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// iterating over a `Tree`.
     base_offset: L::BaseMetric,
 
-    /// The number of whole leaf slices yielded so far. All leaf slices are
-    /// considered whole except for the first and last leaf slices of
-    /// `TreeSlice`s.
-    whole_yielded: usize,
+    /// The total base measure of all the leaves in the tree or slice being
+    /// iterated over.
+    measure_total: L::BaseMetric,
 
-    /// The number of whole leaf slices this iterator will yield.
-    whole_total: usize,
+    /// The base measure of all the leaf slices yielded so far.
+    measure_yielded: L::BaseMetric,
 }
 
 impl<const N: usize, L: Leaf> Clone for LeavesBackward<'_, N, L> {
@@ -403,7 +363,6 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
     #[inline]
     fn from(tree: &'a Tree<N, L>) -> LeavesBackward<'a, N, L> {
         Self {
-            is_initialized: false,
             base_offset: L::BaseMetric::zero(),
             first_slice: None,
             last_slice: None,
@@ -411,10 +370,8 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
             path: Vec::with_capacity(tree.root().depth().saturating_sub(1)),
             leaves: &[],
             last_leaf_idx: 0,
-            // NOTE: `whole_yielded` starts off as 1 because `Self::previous()`
-            // doesn't increase this counter the first time it's called.
-            whole_yielded: 1,
-            whole_total: tree.root().leaf_count(),
+            measure_yielded: L::BaseMetric::zero(),
+            measure_total: tree.base_measure(),
         }
     }
 }
@@ -429,7 +386,6 @@ impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
             - slice.base_measure();
 
         Self {
-            is_initialized: false,
             base_offset,
             first_slice: Some(slice.start_slice),
             last_slice: Some(slice.end_slice),
@@ -437,27 +393,58 @@ impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
             path: Vec::with_capacity(slice.root().depth().saturating_sub(1)),
             leaves: &[],
             last_leaf_idx: 0,
-            whole_yielded: 0,
-            whole_total: slice.leaf_count().saturating_sub(2),
+            measure_yielded: L::BaseMetric::zero(),
+            measure_total: slice.base_measure(),
         }
     }
 }
 
 impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
-    #[allow(clippy::type_complexity)]
     #[inline]
-    fn initialize(&mut self) -> (L::Slice<'a>, &'a [Arc<Node<N, L>>]) {
-        debug_assert!(!self.is_initialized);
+    fn advance_to_previous_bunch(&mut self) {
+        let mut inode = loop {
+            let &mut (inode, ref mut visited) = self.path.last_mut().unwrap();
 
-        self.is_initialized = true;
+            if *visited == 0 {
+                self.path.pop();
+            } else {
+                *visited -= 1;
+
+                let inode = inode.child(*visited);
+
+                // The last internal node in `path` is always *2* levels above
+                // a leaf, so all its children are internal nodes 1 level above
+                // a leaf.
+                break inode.get_internal();
+            }
+        };
+
+        loop {
+            match &**inode.last() {
+                Node::Internal(i) => {
+                    self.path.push((inode, inode.len() - 1));
+                    inode = i;
+                },
+
+                Node::Leaf(_) => {
+                    self.leaves = inode.children();
+                    self.last_leaf_idx = inode.len();
+                    return;
+                },
+            }
+        }
+    }
+
+    #[inline]
+    fn initialize(&mut self) -> (&'a [Arc<Node<N, L>>], L::Slice<'a>) {
+        debug_assert!(self.measure_yielded.is_zero());
 
         let mut inode = match self.root {
             Node::Internal(inode) => inode,
 
             Node::Leaf(leaf) => {
                 let last = self.last_slice.take().unwrap_or(leaf.as_slice());
-
-                return (last, &[]);
+                return (&[], last);
             },
         };
 
@@ -491,74 +478,29 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
                     unreachable!();
                 },
 
-                Node::Leaf(_) => {
-                    for (idx, leaf) in inode
-                        .children()
-                        .iter()
-                        .map(|n| {
-                            // The last child is a leaf node, so all its
-                            // siblings are leaf nodes as well.
-                            n.get_leaf()
-                        })
-                        .enumerate()
-                        .rev()
-                    {
-                        offset += leaf.base_measure();
+                Node::Leaf(last) => {
+                    return match self.last_slice.take() {
+                        Some(last_slice) => {
+                            // The index of the last slice in the parent.
+                            let last_slice_idx = inode.len()
+                                - 1
+                                - inode
+                                    .children()
+                                    .iter()
+                                    .rev()
+                                    .take_while(|child| {
+                                        offset += child.base_measure();
+                                        offset <= self.base_offset
+                                    })
+                                    .count();
 
-                        if offset > self.base_offset {
-                            let last = self
-                                .last_slice
-                                .take()
-                                .unwrap_or(leaf.as_slice());
-
-                            let n = core::cmp::min(
-                                idx,
-                                self.whole_total - self.whole_yielded,
-                            );
-
-                            return (last, &inode.children()[(idx - n)..idx]);
-                        }
-                    }
-
-                    unreachable!();
-                },
-            }
-        }
-    }
-
-    #[inline]
-    fn previous_bunch(&mut self) -> &'a [Arc<Node<N, L>>] {
-        let mut inode = loop {
-            let &mut (inode, ref mut visited) = self.path.last_mut().unwrap();
-
-            if *visited == 0 {
-                self.path.pop();
-            } else {
-                *visited -= 1;
-
-                let inode = inode.child(*visited);
-
-                // The last internal node in `path` is always *2* levels above
-                // a leaf, so all its children are internal nodes 1 level above
-                // a leaf.
-                break inode.get_internal();
-            }
-        };
-
-        loop {
-            match &**inode.last() {
-                Node::Internal(i) => {
-                    self.path.push((inode, inode.len() - 1));
-                    inode = i;
-                },
-
-                Node::Leaf(_) => {
-                    let n = core::cmp::min(
-                        inode.len(),
-                        self.whole_total - self.whole_yielded,
-                    );
-
-                    return &inode.children()[(inode.len() - n)..];
+                            (&inode.children()[..last_slice_idx], last_slice)
+                        },
+                        None => (
+                            &inode.children()[..inode.len() - 1],
+                            last.as_slice(),
+                        ),
+                    };
                 },
             }
         }
@@ -566,30 +508,33 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
 
     #[inline]
     fn previous(&mut self) -> Option<L::Slice<'a>> {
-        if !self.is_initialized {
-            let (last, last_bunch) = self.initialize();
-            self.leaves = last_bunch;
-            self.last_leaf_idx = self.leaves.len();
+        if self.measure_yielded == self.measure_total {
+            return None;
+        }
+
+        if self.measure_yielded.is_zero() {
+            let (rest, last) = self.initialize();
+            self.measure_yielded = last.base_measure();
+            self.leaves = rest;
+            self.last_leaf_idx = rest.len();
             return Some(last);
         }
 
-        if self.last_leaf_idx > 0 {
-            self.last_leaf_idx -= 1;
-            // All the nodes in `leaves` are guaranteed to be leaf nodes.
-            let leaf = &self.leaves[self.last_leaf_idx].get_leaf();
-            self.whole_yielded += 1;
-            Some(leaf.as_slice())
-        } else if self.whole_yielded < self.whole_total {
-            self.leaves = self.previous_bunch();
-            self.last_leaf_idx = self.leaves.len() - 1;
-            // Same as above.
-            let leaf = &self.leaves[self.last_leaf_idx].get_leaf();
-            self.whole_yielded += 1;
-            Some(leaf.as_slice())
-        } else if self.first_slice.is_some() {
+        if self.last_leaf_idx == 0 {
+            self.advance_to_previous_bunch();
+        }
+
+        self.last_leaf_idx -= 1;
+        let next_leaf = &self.leaves[self.last_leaf_idx].get_leaf();
+        self.measure_yielded += next_leaf.base_measure();
+
+        // If we're iterating over a `TreeSlice`, make sure we're not yielding
+        // past its start_slice.
+        if self.measure_yielded > self.measure_total {
+            self.measure_yielded = self.measure_total;
             self.first_slice.take()
         } else {
-            None
+            Some(next_leaf.as_slice())
         }
     }
 }
@@ -608,10 +553,9 @@ mod tests {
             let tree = Tree::<4, usize>::from_leaves(0..n);
             let mut leaves = tree.leaves();
             let mut i = 0;
-            while let Some(leaf) = leaves.next() {
+            for leaf in leaves.by_ref() {
                 assert_eq!(i, *leaf.0);
                 i += 1;
-                assert_eq!(n - i, leaves.len());
             }
             assert_eq!(i, n);
             assert_eq!(None, leaves.next());
@@ -628,7 +572,6 @@ mod tests {
             while let Some(leaf) = leaves.next_back() {
                 i -= 1;
                 assert_eq!(i, *leaf.0);
-                assert_eq!(i, leaves.len());
             }
             assert_eq!(i, 0);
             assert_eq!(None, leaves.next_back());

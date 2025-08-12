@@ -16,7 +16,7 @@ use tiny_arc::Arc;
 pub use traits::*;
 pub use tree::Tree;
 pub use tree_builder::TreeBuilder;
-pub use tree_slice::TreeSlice;
+pub use tree_slice::{SliceLeafCount, TreeSlice};
 pub use units::Units;
 
 mod iter_chain {

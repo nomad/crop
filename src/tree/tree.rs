@@ -142,11 +142,6 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
         self.root.leaf_at_measure(measure)
     }
 
-    #[inline]
-    pub fn leaf_count(&self) -> usize {
-        self.root.leaf_count()
-    }
-
     /// Returns an iterator over the leaves of this `Tree`.
     #[inline]
     pub fn leaves(&self) -> Leaves<'_, ARITY, L> {
