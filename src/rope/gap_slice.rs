@@ -345,11 +345,6 @@ impl<'a> GapSlice<'a> {
 
         self.bytes.split_at(offset)
     }
-
-    #[inline]
-    fn summarize_right_chunk(&self) -> ChunkSummary {
-        ChunkSummary::from(self.right_chunk())
-    }
 }
 
 impl Summarize for GapSlice<'_> {
@@ -357,7 +352,7 @@ impl Summarize for GapSlice<'_> {
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        self.left_summary + self.summarize_right_chunk()
+        self.left_summary + ChunkSummary::from(self.right_chunk())
     }
 }
 
