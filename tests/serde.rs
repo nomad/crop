@@ -81,4 +81,22 @@ mod tests {
             ],
         );
     }
+
+    #[test]
+    fn ser_de_bincode() {
+        let mut rope = Rope::new();
+        rope.insert(0, "lorem dolor");
+        rope.insert(6, "ipsuma ");
+        rope.delete(11..12);
+
+        let config = bincode::config::standard();
+
+        let serialized = bincode::serde::encode_to_vec(&rope, config).unwrap();
+
+        let (deserialized, _) =
+            bincode::serde::decode_from_slice::<Rope, _>(&serialized, config)
+                .unwrap();
+
+        assert_eq!(rope, deserialized);
+    }
 }
