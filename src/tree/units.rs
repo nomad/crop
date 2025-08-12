@@ -1519,10 +1519,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             let (slice, slice_advance) = match self.remainder() {
                 Some(remainder) => remainder,
                 _ => {
-                    let (_, _, empty, _) = M::remainder(
-                        self.end_slice,
-                        &self.end_slice.summarize(),
-                    );
+                    let (_, empty) = M::remainder(self.end_slice);
 
                     debug_assert!(empty.is_empty(),);
 
@@ -1568,8 +1565,9 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             }
         };
 
-        let (rest, _, mut start_slice, start_summary) =
-            M::remainder(slice, &slice.summarize());
+        let (rest, mut start_slice) = M::remainder(slice);
+
+        let start_summary = start_slice.summarize();
 
         advance += &start_summary;
 
@@ -1655,8 +1653,9 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         debug_assert!(self.base_remaining > L::BaseMetric::zero());
 
         if M::measure(&self.end_slice.summarize()) > M::zero() {
-            let (rest, rest_summary, slice, summary) =
-                M::remainder(self.end_slice, &self.end_slice.summarize());
+            let (rest, slice) = M::remainder(self.end_slice);
+
+            let summary = slice.summarize();
 
             if !slice.is_empty() {
                 self.yielded_in_leaf += &summary;
@@ -1665,7 +1664,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                 Some((
                     TreeSlice {
                         root: self.leaf_node,
-                        offset: rest_summary,
+                        offset: rest.summarize(),
                         start_slice: slice,
                         end_slice: slice,
                         summary: summary.clone(),

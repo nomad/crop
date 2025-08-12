@@ -152,17 +152,12 @@ pub trait DoubleEndedUnitMetric<L: Leaf>: UnitMetric<L> {
     /// past the end of its last `M`-unit. This is referred to as "the
     /// remainder of the leaf divided by `M`".
     ///
-    /// Returns a `(rest_slice, rest_summary, remainder, remainder_summary)`
-    /// tuple. Note that unlike [`last_unit`](Self::last_unit()), this function
-    /// does not allow an `advance` to be returned. Instead `rest_slice` and
-    /// `remainder` should always concatenate up the original `slice` and their
-    /// summaries should sum up to the original `summary`.
+    /// Returns a `(rest_slice, remainder)` tuple. Note that unlike
+    /// [`last_unit`](Self::last_unit()), this function does not allow an
+    /// `advance` to be returned. Instead `rest_slice` and `remainder` should
+    /// always concatenate up the original `slice`.
     ///
     /// The remainder can be empty if the last `M`-unit coincides with the end
     /// of the leaf slice.
-    #[allow(clippy::type_complexity)]
-    fn remainder<'a>(
-        slice: L::Slice<'a>,
-        summary: &L::Summary,
-    ) -> (L::Slice<'a>, L::Summary, L::Slice<'a>, L::Summary);
+    fn remainder<'a>(slice: L::Slice<'a>) -> (L::Slice<'a>, L::Slice<'a>);
 }

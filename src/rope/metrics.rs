@@ -431,21 +431,18 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
     }
 
     #[inline]
-    fn remainder<'a>(
-        chunk: GapSlice<'a>,
-        summary: &ChunkSummary,
-    ) -> (GapSlice<'a>, ChunkSummary, GapSlice<'a>, ChunkSummary)
+    fn remainder<'a>(chunk: GapSlice<'a>) -> (GapSlice<'a>, GapSlice<'a>)
     where
         'a: 'a,
     {
         if chunk.has_trailing_newline() {
-            (chunk, *summary, GapSlice::empty(), ChunkSummary::new())
+            (chunk, GapSlice::empty())
         } else {
             let (rest, last, _) = <Self as DoubleEndedUnitMetric<
                 GapBuffer<MAX_BYTES>,
             >>::last_unit(chunk);
 
-            (rest, rest.summarize(), last, last.summarize())
+            (rest, last)
         }
     }
 }
@@ -539,14 +536,11 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
     }
 
     #[inline]
-    fn remainder<'a>(
-        chunk: GapSlice<'a>,
-        summary: &ChunkSummary,
-    ) -> (GapSlice<'a>, ChunkSummary, GapSlice<'a>, ChunkSummary)
+    fn remainder<'a>(chunk: GapSlice<'a>) -> (GapSlice<'a>, GapSlice<'a>)
     where
         'a: 'a,
     {
-        <RawLineMetric as DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>>::remainder(chunk, summary)
+        <RawLineMetric as DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>>::remainder(chunk)
     }
 }
 
