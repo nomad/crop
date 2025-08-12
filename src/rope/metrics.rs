@@ -2,7 +2,13 @@ use core::ops::{Add, AddAssign, Sub, SubAssign};
 
 use super::gap_buffer::GapBuffer;
 use super::gap_slice::GapSlice;
-use crate::tree::{DoubleEndedUnitMetric, Metric, SlicingMetric, UnitMetric};
+use crate::tree::{
+    DoubleEndedUnitMetric,
+    Metric,
+    SlicingMetric,
+    Summarize,
+    UnitMetric,
+};
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
 #[doc(hidden)]
@@ -272,15 +278,14 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     fn slice_up_to<'a>(
         chunk: GapSlice<'a>,
         byte_offset: Self,
-        &summary: &ChunkSummary,
+        _: &ChunkSummary,
     ) -> (GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
         chunk.assert_char_boundary(byte_offset.0);
-
-        let (left, _) = chunk.split_at_offset(byte_offset, summary);
-        left
+        let (left, _) = chunk.split_at_offset(byte_offset);
+        (left, left.summarize())
     }
 
     #[track_caller]
@@ -288,15 +293,14 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     fn slice_from<'a>(
         chunk: GapSlice<'a>,
         byte_offset: Self,
-        &summary: &ChunkSummary,
+        _: &ChunkSummary,
     ) -> (GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
         chunk.assert_char_boundary(byte_offset.0);
-
-        let (_, right) = chunk.split_at_offset(byte_offset, summary);
-        right
+        let (_, right) = chunk.split_at_offset(byte_offset);
+        (right, right.summarize())
     }
 }
 
@@ -390,26 +394,26 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     fn slice_up_to<'a>(
         chunk: GapSlice<'a>,
         line_offset: Self,
-        &summary: &ChunkSummary,
+        _: &ChunkSummary,
     ) -> (GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
-        let (left, _) = chunk.split_at_offset(line_offset, summary);
-        left
+        let (left, _) = chunk.split_at_offset(line_offset);
+        (left, left.summarize())
     }
 
     #[inline]
     fn slice_from<'a>(
         chunk: GapSlice<'a>,
         line_offset: Self,
-        &summary: &ChunkSummary,
+        _: &ChunkSummary,
     ) -> (GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
-        let (_, right) = chunk.split_at_offset(line_offset, summary);
-        right
+        let (_, right) = chunk.split_at_offset(line_offset);
+        (right, right.summarize())
     }
 }
 
@@ -419,15 +423,13 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>>
     #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
-        &summary: &ChunkSummary,
+        _: &ChunkSummary,
     ) -> (GapSlice<'a>, ChunkSummary, ChunkSummary, GapSlice<'a>, ChunkSummary)
     where
         'a: 'a,
     {
-        let ((first, first_summary), (rest, rest_summary)) =
-            chunk.split_at_offset(RawLineMetric(1), summary);
-
-        (first, first_summary, first_summary, rest, rest_summary)
+        let (first, rest) = chunk.split_at_offset(RawLineMetric(1));
+        (first, first.summarize(), first.summarize(), rest, rest.summarize())
     }
 }
 
@@ -437,18 +439,17 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
     #[inline]
     fn last_unit<'a>(
         slice: GapSlice<'a>,
-        &summary: &ChunkSummary,
+        _: &ChunkSummary,
     ) -> (GapSlice<'a>, ChunkSummary, GapSlice<'a>, ChunkSummary, ChunkSummary)
     where
         'a: 'a,
     {
-        let split_offset =
-            summary.line_breaks - (slice.has_trailing_newline() as usize);
+        let split_offset = slice.summarize().line_breaks
+            - (slice.has_trailing_newline() as usize);
 
-        let ((rest, rest_summary), (last, last_summary)) =
-            slice.split_at_offset(RawLineMetric(split_offset), summary);
+        let (rest, last) = slice.split_at_offset(RawLineMetric(split_offset));
 
-        (rest, rest_summary, last, last_summary, last_summary)
+        (rest, rest.summarize(), last, last.summarize(), last.summarize())
     }
 
     #[inline]
@@ -536,7 +537,7 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>> for LineMetric {
                 chunk, summary,
             );
 
-        first_summary = first.truncate_trailing_line_break(first_summary);
+        first_summary -= first.truncate_trailing_line_break();
 
         (first, first_summary, advance, rest, rest_summary)
     }
@@ -556,7 +557,7 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
         let (rest, rest_summary, mut last, mut last_summary, advance) =
             <RawLineMetric as DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>>::last_unit(chunk, summary);
 
-        last_summary = last.truncate_trailing_line_break(last_summary);
+        last_summary -= last.truncate_trailing_line_break();
 
         (rest, rest_summary, last, last_summary, advance)
     }
@@ -673,14 +674,13 @@ mod utf16_metric {
         fn slice_up_to<'a>(
             chunk: GapSlice<'a>,
             utf16_code_unit_offset: Self,
-            &summary: &ChunkSummary,
+            _: &ChunkSummary,
         ) -> (GapSlice<'a>, ChunkSummary)
         where
             'a: 'a,
         {
-            let (left, _) =
-                chunk.split_at_offset(utf16_code_unit_offset, summary);
-            left
+            let (left, _) = chunk.split_at_offset(utf16_code_unit_offset);
+            (left, left.summarize())
         }
 
         #[track_caller]
@@ -688,14 +688,13 @@ mod utf16_metric {
         fn slice_from<'a>(
             chunk: GapSlice<'a>,
             utf16_code_unit_offset: Self,
-            &summary: &ChunkSummary,
+            _: &ChunkSummary,
         ) -> (GapSlice<'a>, ChunkSummary)
         where
             'a: 'a,
         {
-            let (_, right) =
-                chunk.split_at_offset(utf16_code_unit_offset, summary);
-            right
+            let (_, right) = chunk.split_at_offset(utf16_code_unit_offset);
+            (right, right.summarize())
         }
     }
 }

@@ -596,13 +596,9 @@ impl<'a> RopeSlice<'a> {
         else {
             let last = &mut slice.end_slice;
 
-            slice.summary -= slice.end_summary;
-
-            let new_end_summary = last.truncate_last_char(slice.end_summary);
-
-            slice.end_summary = new_end_summary;
-
-            slice.summary += slice.end_summary;
+            let removed_summary = last.truncate_last_char();
+            slice.end_summary -= removed_summary;
+            slice.summary -= removed_summary;
 
             if slice.leaf_count() == 1 {
                 slice.start_slice = slice.end_slice;
