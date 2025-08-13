@@ -164,7 +164,7 @@ impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
     #[inline]
     fn from(slice: &TreeSlice<'a, ARITY, L>) -> LeavesForward<'a, ARITY, L> {
         Self {
-            base_offset: L::BaseMetric::measure(&slice.offset),
+            base_offset: slice.offset,
             first_slice: Some(slice.start_slice),
             last_slice: Some(slice.end_slice),
             root: &**slice.root(),
@@ -381,9 +381,8 @@ impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
 {
     #[inline]
     fn from(slice: &TreeSlice<'a, ARITY, L>) -> LeavesBackward<'a, ARITY, L> {
-        let base_offset = slice.root().base_measure()
-            - L::BaseMetric::measure(&slice.offset)
-            - slice.base_measure();
+        let base_offset =
+            slice.root().base_measure() - slice.offset - slice.base_measure();
 
         Self {
             base_offset,

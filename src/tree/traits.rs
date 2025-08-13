@@ -17,6 +17,11 @@ pub trait Summary:
     type Leaf: Leaf<Summary = Self>;
 
     #[inline]
+    fn base_measure(&self) -> <Self::Leaf as Leaf>::BaseMetric {
+        self.measure()
+    }
+
+    #[inline]
     fn measure<M: Metric<Self>>(&self) -> M {
         M::measure(self)
     }

@@ -303,7 +303,7 @@ mod from_treeslice {
         // node.
         let mut children = slice.root().get_internal().children().iter();
 
-        let start = L::BaseMetric::measure(&slice.offset);
+        let start = slice.offset;
 
         for child in children.by_ref() {
             let this = child.base_measure();

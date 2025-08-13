@@ -9,9 +9,9 @@ pub struct TreeSlice<'a, const ARITY: usize, L: Leaf> {
     /// [`start_slice`](Self::start_slice) and [`end_slice`](Self::end_slice).
     pub(super) root: &'a Arc<Node<ARITY, L>>,
 
-    /// The summary of the subtree under [`root`](Self::root) up to the start
-    /// of the [`start_slice`](Self::start_slice).
-    pub(super) offset: L::Summary,
+    /// The base length of the subtree under [`root`](Self::root) up to the
+    /// start of the [`start_slice`](Self::start_slice).
+    pub(super) offset: L::BaseMetric,
 
     /// The total summary of this slice.
     pub(crate) summary: L::Summary,
@@ -73,7 +73,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
                 // deepest node that contains both.
 
                 let (root, remove_offset) = {
-                    let start = L::BaseMetric::measure(&self.offset);
+                    let start = self.offset;
                     deepest_node_containing_base_range(
                         self.root,
                         start,
@@ -86,10 +86,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
 
                 assert!(Arc::ptr_eq(self.root, root));
                 assert_eq!(self.root.depth(), root.depth());
-                assert_eq!(
-                    L::BaseMetric::measure(&remove_offset),
-                    L::BaseMetric::zero()
-                );
+                assert!(remove_offset.is_zero());
             },
 
             Node::Leaf(leaf) => {
@@ -117,7 +114,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         if up_to == M1::zero() {
             M2::zero()
         } else {
-            self.root.convert_measure_from_offset(self.offset.measure(), up_to)
+            self.root.convert_measure_from_offset(self.offset, up_to)
         }
     }
 
@@ -142,10 +139,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
                 M::measure(&self.summary) - self.end_slice.measure::<M>();
 
             if all_minus_last >= measure {
-                self.root.leaf_at_measure_from_offset(
-                    self.offset.measure(),
-                    measure,
-                )
+                self.root.leaf_at_measure_from_offset(self.offset, measure)
             } else {
                 (self.end_slice, all_minus_last)
             }
@@ -213,14 +207,14 @@ where
         if range.end < self.measure::<M>() + M::one() {
             Self::slice_node_at_offset(
                 self.root,
-                self.offset.measure(),
+                self.offset,
                 range.start,
                 range.end,
             )
         } else {
             Self::slice_node_at_offset(
                 self.root,
-                self.offset.measure(),
+                self.offset,
                 range.start,
                 self.base_measure(),
             )
@@ -279,7 +273,7 @@ where
 
         let mut slice = Self {
             root,
-            offset: L::Summary::default(),
+            offset: L::BaseMetric::zero(),
             summary: L::Summary::default(),
             start_slice: Default::default(),
             end_slice: Default::default(),
@@ -298,7 +292,7 @@ where
         );
 
         if recompute_root {
-            let start = L::BaseMetric::measure(&slice.offset);
+            let start = slice.offset;
 
             let (root, offset) = deepest_node_containing_base_range(
                 slice.root,
@@ -401,48 +395,42 @@ where
 /// should always be zero), resulting in a potentially deeper node than the one
 /// returned by [`deepest_node_containing_range`].
 ///
-/// Also returns the summary between the input `node` and the returned node.
+/// Also returns the base length between the input `node` and the returned node.
 #[inline]
 pub(super) fn deepest_node_containing_base_range<const N: usize, L>(
     mut node: &Arc<Node<N, L>>,
     mut start: L::BaseMetric,
     mut end: L::BaseMetric,
-) -> (&Arc<Node<N, L>>, L::Summary)
+) -> (&Arc<Node<N, L>>, L::BaseMetric)
 where
     L: Leaf,
 {
-    let mut offset = L::Summary::default();
+    let mut offset = L::BaseMetric::zero();
 
     'outer: loop {
         match &**node {
             Node::Internal(inode) => {
-                let mut measured = L::Summary::default();
+                let mut measured = L::BaseMetric::zero();
 
                 for child in inode.children() {
-                    let child_summary = child.summary();
+                    let child_len = child.base_measure();
 
-                    let contains_start_slice =
-                        L::BaseMetric::measure(&measured)
-                            + L::BaseMetric::measure(&child_summary)
-                            > start;
+                    let contains_start_slice = measured + child_len > start;
 
                     if contains_start_slice {
-                        let contains_end_slice =
-                            L::BaseMetric::measure(&measured)
-                                + L::BaseMetric::measure(&child_summary)
-                                >= end;
+                        let contains_end_slice = measured + child_len >= end;
 
                         if contains_end_slice {
                             node = child;
-                            start -= L::BaseMetric::measure(&measured);
-                            end -= L::BaseMetric::measure(&measured);
+                            start -= measured;
+                            end -= measured;
                             offset += measured;
                             continue 'outer;
                         } else {
                             return (node, offset);
                         }
                     } else {
-                        measured += child_summary;
+                        measured += child_len;
                     }
                 }
 
