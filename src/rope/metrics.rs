@@ -273,6 +273,16 @@ impl Metric<ChunkSummary> for ByteMetric {
     fn measure(summary: &ChunkSummary) -> Self {
         Self(summary.bytes)
     }
+
+    #[inline]
+    fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
+        Self(gap_buffer.left_summary.bytes + gap_buffer.right_summary.bytes)
+    }
+
+    #[inline]
+    fn measure_slice(gap_slice: &GapSlice) -> Self {
+        Self(gap_slice.left_summary.bytes + gap_slice.right_summary.bytes)
+    }
 }
 
 impl SlicingMetric<GapBuffer> for ByteMetric {
@@ -377,6 +387,22 @@ impl Metric<ChunkSummary> for RawLineMetric {
     #[inline]
     fn measure(summary: &ChunkSummary) -> Self {
         Self(summary.line_breaks)
+    }
+
+    #[inline]
+    fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
+        Self(
+            gap_buffer.left_summary.line_breaks
+                + gap_buffer.right_summary.line_breaks,
+        )
+    }
+
+    #[inline]
+    fn measure_slice(gap_slice: &GapSlice) -> Self {
+        Self(
+            gap_slice.left_summary.line_breaks
+                + gap_slice.right_summary.line_breaks,
+        )
     }
 }
 
@@ -492,6 +518,16 @@ impl Metric<ChunkSummary> for LineMetric {
     #[inline]
     fn measure(summary: &ChunkSummary) -> Self {
         Self(summary.line_breaks)
+    }
+
+    #[inline]
+    fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
+        Self(RawLineMetric::measure_leaf(gap_buffer).0)
+    }
+
+    #[inline]
+    fn measure_slice(gap_slice: &GapSlice) -> Self {
+        Self(RawLineMetric::measure_slice(gap_slice).0)
     }
 }
 
@@ -628,6 +664,22 @@ mod utf16_metric {
         #[inline]
         fn measure(summary: &ChunkSummary) -> Self {
             Self(summary.utf16_code_units)
+        }
+
+        #[inline]
+        fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
+            Self(
+                gap_buffer.left_summary.utf16_code_units
+                    + gap_buffer.right_summary.utf16_code_units,
+            )
+        }
+
+        #[inline]
+        fn measure_slice(gap_slice: &GapSlice) -> Self {
+            Self(
+                gap_slice.left_summary.utf16_code_units
+                    + gap_slice.right_summary.utf16_code_units,
+            )
         }
     }
 
