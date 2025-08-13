@@ -115,10 +115,10 @@ pub trait Metric<S: Summary>:
     Debug
     + Copy
     + Ord
-    + Add<Self, Output = Self>
-    + Sub<Self, Output = Self>
-    + AddAssign<Self>
-    + SubAssign<Self>
+    + Add<Output = Self>
+    + AddAssign
+    + Sub<Output = Self>
+    + SubAssign
 {
     /// The identity element of this metric with respect to addition.
     ///
