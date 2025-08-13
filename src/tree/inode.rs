@@ -560,7 +560,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         let depth = children[0].depth() + 1;
 
         let mut leaf_count = children[0].leaf_count();
-        let mut summary = children[0].summary().clone();
+        let mut summary = children[0].summary();
 
         for child in &children[1..] {
             leaf_count += child.leaf_count();

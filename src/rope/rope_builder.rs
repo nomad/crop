@@ -21,8 +21,8 @@ pub struct RopeBuilder {
 /// buffer because it's faster to do it only once before passing the buffer to
 /// the `TreeBuilder`.
 #[inline]
-fn gap_buffer_push_with_remainder<'a, const MAX_BYTES: usize>(
-    buffer: &mut GapBuffer<MAX_BYTES>,
+fn gap_buffer_push_with_remainder<'a>(
+    buffer: &mut GapBuffer,
     buffer_len_left: &mut usize,
     s: &'a str,
 ) -> Option<&'a str> {
@@ -30,7 +30,7 @@ fn gap_buffer_push_with_remainder<'a, const MAX_BYTES: usize>(
 
     let len_left = *buffer_len_left;
 
-    let space_left = MAX_BYTES - len_left;
+    let space_left = GapBuffer::max_bytes() - len_left;
 
     let (push, rest) = split_adjusted::<false>(s, space_left);
 

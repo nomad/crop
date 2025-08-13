@@ -15,22 +15,12 @@ const ARITY: usize = 4;
 #[cfg(not(any(test, fuzzing, feature = "arity_4")))]
 const ARITY: usize = 16;
 
-#[cfg(any(test, feature = "small_chunks"))]
-const CHUNK_MAX_BYTES: usize = 4;
-
-// With 4-byte chunks, fuzzing is unbearably slow.
-#[cfg(fuzzing)]
-const CHUNK_MAX_BYTES: usize = 16;
-
-#[cfg(not(any(test, fuzzing, feature = "small_chunks")))]
-const CHUNK_MAX_BYTES: usize = 2048;
-
-pub(super) type RopeChunk = GapBuffer<CHUNK_MAX_BYTES>;
+pub(super) type RopeChunk = GapBuffer;
 
 /// A UTF-8 text rope.
 #[derive(Clone, Default)]
 pub struct Rope {
-    pub(super) tree: Tree<{ Self::arity() }, RopeChunk>,
+    pub(super) tree: Tree<{ Self::arity() }, GapBuffer>,
     pub(super) has_trailing_newline: bool,
 }
 
@@ -53,11 +43,11 @@ impl Rope {
 
         for chunk in leaves {
             assert!(
-                chunk.len() >= RopeChunk::chunk_min(),
+                chunk.len() >= GapBuffer::chunk_min(),
                 "The chunk {:?} was supposed to contain at least {} bytes \
                  but actually contains {}",
                 chunk,
-                RopeChunk::chunk_min(),
+                GapBuffer::chunk_min(),
                 chunk.len()
             );
 
@@ -853,7 +843,7 @@ impl From<&str> for Rope {
         Rope {
             has_trailing_newline: s.ends_with('\n'),
             tree: Tree::from_leaves(
-                RopeChunk::segmenter(s).map(RopeChunk::from),
+                GapBuffer::segmenter(s).map(GapBuffer::from),
             ),
         }
     }

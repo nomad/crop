@@ -1,6 +1,7 @@
-use super::metrics::{ByteMetric, ChunkSummary, SummaryUpTo, ToByteOffset};
+use super::gap_buffer::GapBuffer;
+use super::metrics::{ChunkSummary, SummaryUpTo, ToByteOffset};
 use super::utils::{debug_no_quotes, panic_messages as panic};
-use crate::tree::{BaseMeasured, Metric, Summarize};
+use crate::tree::{LeafSlice, Metric};
 
 /// A slice of a [`GapBuffer`](super::gap_buffer::GapBuffer).
 #[derive(Copy, Clone, Default)]
@@ -242,7 +243,7 @@ impl<'a> GapSlice<'a> {
     where
         M: Metric<ChunkSummary> + ToByteOffset + SummaryUpTo,
     {
-        debug_assert!(offset <= M::measure(&self.summarize()));
+        debug_assert!(offset <= self.measure::<M>());
 
         if offset <= self.left_measure::<M>() {
             let byte_offset: usize = offset.to_byte_offset(self.left_chunk());
@@ -323,46 +324,37 @@ impl<'a> GapSlice<'a> {
     }
 }
 
-impl Summarize for GapSlice<'_> {
-    type Summary = ChunkSummary;
+impl<'a> LeafSlice<'a> for GapSlice<'a> {
+    type Leaf = GapBuffer;
 
     #[inline]
-    fn summarize(&self) -> Self::Summary {
-        self.left_summary + ChunkSummary::from(self.right_chunk())
+    fn summarize(&self) -> ChunkSummary {
+        self.right_summary + self.left_summary
     }
 }
 
-impl BaseMeasured for GapSlice<'_> {
-    type BaseMetric = ByteMetric;
-
-    #[inline]
-    fn base_measure(&self) -> ByteMetric {
-        ByteMetric(self.left_summary.bytes() + self.right_summary.bytes())
-    }
-}
-
-#[cfg(test)]
+#[cfg(all(test, feature = "small_chunks"))]
 mod tests {
     use crate::rope::gap_buffer::GapBuffer;
-    use crate::tree::AsSlice;
+    use crate::tree::Leaf;
 
     #[test]
     fn debug_slice() {
-        let buffer = GapBuffer::<10>::from("Hello");
-        assert_eq!("\"He~~~~~llo\"", format!("{:?}", buffer.as_slice()));
+        let buffer = GapBuffer::from("Hi");
+        assert_eq!("\"H~~i\"", format!("{:?}", buffer.as_slice()));
     }
 
     #[test]
     fn truncate_trailing_crlf() {
-        let buffer = GapBuffer::<5>::from("bar\r\n");
+        let buffer = GapBuffer::from("ba\r\n");
         let mut slice = buffer.as_slice();
         slice.truncate_trailing_line_break();
-        assert_eq!("bar", slice);
+        assert_eq!("ba", slice);
     }
 
     #[test]
     fn truncate_trailing_lf() {
-        let buffer = GapBuffer::<5>::from("bar\n");
+        let buffer = GapBuffer::from("bar\n");
         let mut slice = buffer.as_slice();
         slice.truncate_trailing_line_break();
         assert_eq!("bar", slice);
