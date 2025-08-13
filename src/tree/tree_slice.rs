@@ -247,7 +247,7 @@ where
         E: SlicingMetric<L>,
     {
         debug_assert!(S::zero() <= start);
-        debug_assert!(end <= root.measure::<E>());
+        debug_assert!(end <= root.measure::<E>() + E::one());
 
         let (root, start, end) =
             deepest_node_containing_range(root, start, end);
