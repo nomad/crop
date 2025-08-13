@@ -1,9 +1,14 @@
 use alloc::vec::Vec;
 
-use super::traits::{DoubleEndedUnitMetric, Leaf, Metric, UnitMetric};
+use super::traits::{
+    DoubleEndedUnitMetric,
+    Leaf,
+    LeafSlice,
+    Metric,
+    UnitMetric,
+};
 use super::tree_slice;
 use super::{Arc, Node, Tree, TreeSlice};
-use crate::tree::{BaseMeasured, Summarize};
 
 /// An iterator over the units of a metric.
 //
@@ -106,7 +111,7 @@ impl<'a, const ARITY: usize, L: Leaf, M: UnitMetric<L>> Iterator
         }
 
         let (tree_slice, advance) =
-            if M::measure(&iter.start_slice.summarize()) > M::zero() {
+            if iter.start_slice.measure::<M>() > M::zero() {
                 iter.next_unit_in_leaf()
             } else if iter.units_total > iter.units_yielded {
                 iter.next_unit_in_range()
@@ -166,7 +171,7 @@ impl<const ARITY: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
         #[rustfmt::skip]
         let (tree_slice, advance) =
-            if M::measure(&iter.end_slice.summarize()) > M::one() {
+            if iter.end_slice.measure::<M>() > M::one() {
                 iter.previous_unit_in_leaf()
             } else if iter.units_remaining > M::one() {
                 iter.previous_unit_in_range()
@@ -406,7 +411,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     /// least `M::one()`.
     #[inline]
     fn next_unit_in_leaf(&mut self) -> (TreeSlice<'a, N, L>, L::Summary) {
-        debug_assert!(M::measure(&self.start_slice.summarize()) > M::zero());
+        debug_assert_ne!(self.start_slice.measure::<M>(), M::zero());
         debug_assert!(self.units_total > self.units_yielded);
 
         let (slice, rest, advance) = M::first_unit(self.start_slice);
@@ -566,7 +571,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
     /// it's not the remainder.
     #[inline]
     fn next_unit_in_range(&mut self) -> (TreeSlice<'a, N, L>, L::Summary) {
-        debug_assert_eq!(M::measure(&self.start_slice.summarize()), M::zero());
+        debug_assert_eq!(self.start_slice.measure::<M>(), M::zero());
         debug_assert!(self.units_total > self.units_yielded);
 
         // A previous call to `next_unit_in_leaf()` might've left the start
@@ -576,7 +581,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             self.yielded_in_leaf = L::Summary::default();
             self.start_slice = leaf_slice;
 
-            if M::measure(&self.start_slice.summarize()) > M::zero() {
+            if self.start_slice.measure::<M>() > M::zero() {
                 return self.next_unit_in_leaf();
             }
         }
@@ -826,7 +831,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
         // First, check if the leaf node is the root. If it is we're done.
         if self.base_total - self.base_yielded
-            == L::BaseMetric::measure(&self.start_slice.summarize())
+            == self.start_slice.base_measure()
         {
             let summary = self.start_slice.summarize();
 
@@ -1314,7 +1319,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     /// to contain at least 2 `M`-units.
     #[inline]
     fn previous_unit_in_leaf(&mut self) -> (TreeSlice<'a, N, L>, L::Summary) {
-        debug_assert!(M::measure(&self.end_slice.summarize()) > M::one());
+        debug_assert!(self.end_slice.measure::<M>() > M::one());
         debug_assert!(self.units_remaining > M::zero());
 
         let (rest, slice, advance) = M::last_unit(self.end_slice);
@@ -1648,7 +1653,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
     fn remainder(&mut self) -> Option<(TreeSlice<'a, N, L>, L::Summary)> {
         debug_assert!(self.base_remaining > L::BaseMetric::zero());
 
-        if M::measure(&self.end_slice.summarize()) > M::zero() {
+        if self.end_slice.measure::<M>() > M::zero() {
             let (rest, slice) = M::remainder(self.end_slice);
 
             let summary = slice.summarize();

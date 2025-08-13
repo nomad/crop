@@ -1,66 +1,73 @@
 use core::fmt::Debug;
 use core::ops::{Add, AddAssign, RangeBounds, Sub, SubAssign};
 
-pub trait Summarize: Debug {
-    type Summary: Debug
-        + Default
-        + Clone
-        + for<'a> Add<&'a Self::Summary, Output = Self::Summary>
-        + for<'a> Sub<&'a Self::Summary, Output = Self::Summary>
-        + for<'a> AddAssign<&'a Self::Summary>
-        + for<'a> SubAssign<&'a Self::Summary>
-        + PartialEq<Self::Summary>;
-
-    fn summarize(&self) -> Self::Summary;
+pub trait Summary:
+    Debug
+    + Default
+    + Clone
+    + Add<Self, Output = Self>
+    + for<'a> Add<&'a Self, Output = Self>
+    + for<'a> AddAssign<&'a Self>
+    + Sub<Self, Output = Self>
+    + for<'a> Sub<&'a Self, Output = Self>
+    + for<'a> SubAssign<&'a Self>
+    + PartialEq
+{
+    /// The leaf type this summary is for.
+    type Leaf: Leaf<Summary = Self>;
 }
 
-pub trait BaseMeasured: Summarize {
+pub trait Leaf: Debug + Sized {
     type BaseMetric: Metric<Self::Summary>;
+
+    type Slice<'a>: LeafSlice<'a, Leaf = Self>
+    where
+        Self: 'a;
+
+    type Summary: Summary<Leaf = Self>;
+
+    fn as_slice(&self) -> Self::Slice<'_>;
+
+    fn summarize(&self) -> Self::Summary;
 
     #[inline]
     fn base_measure(&self) -> Self::BaseMetric {
-        Self::BaseMetric::measure(&self.summarize())
+        self.measure::<Self::BaseMetric>()
     }
 
     #[inline]
     fn is_empty(&self) -> bool {
-        self.base_measure() == Self::BaseMetric::zero()
+        self.base_measure().is_zero()
     }
-}
 
-pub trait AsSlice: Summarize {
-    type Slice<'a>: Copy + Summarize<Summary = Self::Summary>
-    where
-        Self: 'a;
-
-    fn as_slice(&self) -> Self::Slice<'_>;
-}
-
-pub trait Leaf:
-    Summarize
-    + BaseMeasured
-    + for<'a> AsSlice<
-        Slice<'a>: BaseMeasured<
-            BaseMetric = <Self as BaseMeasured>::BaseMetric,
-        >,
-    >
-{
     #[inline]
     fn measure<M: Metric<Self::Summary>>(&self) -> M {
-        M::measure(&self.summarize())
+        M::measure_leaf(self)
     }
 }
 
-impl<
-    T: Summarize
-        + BaseMeasured
-        + for<'a> AsSlice<
-            Slice<'a>: BaseMeasured<
-                BaseMetric = <Self as BaseMeasured>::BaseMetric,
-            >,
-        >,
-> Leaf for T
+pub trait LeafSlice<'a>: Copy
+where
+    Self: 'a,
 {
+    type Leaf: Leaf<Slice<'a> = Self>;
+
+    fn summarize(&self) -> <Self::Leaf as Leaf>::Summary;
+
+    #[inline]
+    fn base_measure(&self) -> <Self::Leaf as Leaf>::BaseMetric {
+        self.measure()
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.base_measure().is_zero()
+    }
+
+    #[inline]
+    fn measure<M: Metric<<Self::Leaf as Leaf>::Summary>>(&self) -> M {
+        M::measure_slice(self)
+    }
 }
 
 pub trait BalancedLeaf: Leaf + for<'a> From<Self::Slice<'a>> {
@@ -98,7 +105,7 @@ pub trait ReplaceableLeaf<M: Metric<Self::Summary>>: BalancedLeaf {
     fn remove_up_to(&mut self, up_to: M);
 }
 
-pub trait Metric<Summary: ?Sized>:
+pub trait Metric<S: Summary>:
     Debug
     + Copy
     + Ord
@@ -117,8 +124,23 @@ pub trait Metric<Summary: ?Sized>:
     /// measure.
     fn one() -> Self;
 
-    /// Returns the measure of the summary according to this metric.
-    fn measure(summary: &Summary) -> Self;
+    /// Returns the measure of the leaf's summary according to this metric.
+    fn measure(summary: &S) -> Self;
+
+    #[inline]
+    fn is_zero(self) -> bool {
+        self == Self::zero()
+    }
+
+    #[inline]
+    fn measure_leaf(leaf: &S::Leaf) -> Self {
+        Self::measure(&leaf.summarize())
+    }
+
+    #[inline]
+    fn measure_slice(leaf_slice: &<S::Leaf as Leaf>::Slice<'_>) -> Self {
+        Self::measure(&leaf_slice.summarize())
+    }
 }
 
 /// Metrics that can be used to slice `Tree`s and `TreeSlice`s.

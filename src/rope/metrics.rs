@@ -4,9 +4,10 @@ use super::gap_buffer::GapBuffer;
 use super::gap_slice::GapSlice;
 use crate::tree::{
     DoubleEndedUnitMetric,
+    LeafSlice,
     Metric,
     SlicingMetric,
-    Summarize,
+    Summary,
     UnitMetric,
 };
 
@@ -65,6 +66,10 @@ impl ChunkSummary {
     pub fn utf16_code_units(&self) -> usize {
         self.utf16_code_units
     }
+}
+
+impl Summary for ChunkSummary {
+    type Leaf = GapBuffer;
 }
 
 impl Add<Self> for ChunkSummary {
@@ -270,9 +275,7 @@ impl Metric<ChunkSummary> for ByteMetric {
     }
 }
 
-impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
-    for ByteMetric
-{
+impl SlicingMetric<GapBuffer> for ByteMetric {
     #[track_caller]
     #[inline]
     fn slice_up_to<'a>(chunk: GapSlice<'a>, byte_offset: Self) -> GapSlice<'a>
@@ -377,9 +380,7 @@ impl Metric<ChunkSummary> for RawLineMetric {
     }
 }
 
-impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
-    for RawLineMetric
-{
+impl SlicingMetric<GapBuffer> for RawLineMetric {
     #[inline]
     fn slice_up_to<'a>(chunk: GapSlice<'a>, line_offset: Self) -> GapSlice<'a>
     where
@@ -397,9 +398,7 @@ impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
     }
 }
 
-impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>>
-    for RawLineMetric
-{
+impl UnitMetric<GapBuffer> for RawLineMetric {
     #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
@@ -412,9 +411,7 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>>
     }
 }
 
-impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
-    for RawLineMetric
-{
+impl DoubleEndedUnitMetric<GapBuffer> for RawLineMetric {
     #[inline]
     fn last_unit<'a>(
         slice: GapSlice<'a>,
@@ -438,9 +435,8 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
         if chunk.has_trailing_newline() {
             (chunk, GapSlice::empty())
         } else {
-            let (rest, last, _) = <Self as DoubleEndedUnitMetric<
-                GapBuffer<MAX_BYTES>,
-            >>::last_unit(chunk);
+            let (rest, last, _) =
+                <Self as DoubleEndedUnitMetric<GapBuffer>>::last_unit(chunk);
 
             (rest, last)
         }
@@ -499,7 +495,7 @@ impl Metric<ChunkSummary> for LineMetric {
     }
 }
 
-impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>> for LineMetric {
+impl UnitMetric<GapBuffer> for LineMetric {
     #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
@@ -507,9 +503,8 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>> for LineMetric {
     where
         'a: 'a,
     {
-        let (mut first, rest, first_summary) = <RawLineMetric as UnitMetric<
-            GapBuffer<MAX_BYTES>,
-        >>::first_unit(chunk);
+        let (mut first, rest, first_summary) =
+            <RawLineMetric as UnitMetric<GapBuffer>>::first_unit(chunk);
 
         first.truncate_trailing_line_break();
 
@@ -517,9 +512,7 @@ impl<const MAX_BYTES: usize> UnitMetric<GapBuffer<MAX_BYTES>> for LineMetric {
     }
 }
 
-impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
-    for LineMetric
-{
+impl DoubleEndedUnitMetric<GapBuffer> for LineMetric {
     #[inline]
     fn last_unit<'a>(
         chunk: GapSlice<'a>,
@@ -528,7 +521,9 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
         'a: 'a,
     {
         let (rest, mut last, last_summary) =
-            <RawLineMetric as DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>>::last_unit(chunk);
+            <RawLineMetric as DoubleEndedUnitMetric<GapBuffer>>::last_unit(
+                chunk,
+            );
 
         last.truncate_trailing_line_break();
 
@@ -540,7 +535,7 @@ impl<const MAX_BYTES: usize> DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>
     where
         'a: 'a,
     {
-        <RawLineMetric as DoubleEndedUnitMetric<GapBuffer<MAX_BYTES>>>::remainder(chunk)
+        <RawLineMetric as DoubleEndedUnitMetric<GapBuffer>>::remainder(chunk)
     }
 }
 
@@ -636,9 +631,7 @@ mod utf16_metric {
         }
     }
 
-    impl<const MAX_BYTES: usize> SlicingMetric<GapBuffer<MAX_BYTES>>
-        for Utf16Metric
-    {
+    impl SlicingMetric<GapBuffer> for Utf16Metric {
         #[track_caller]
         #[inline]
         fn slice_up_to<'a>(

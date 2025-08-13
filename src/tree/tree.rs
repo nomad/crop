@@ -1558,54 +1558,85 @@ mod tests {
     use super::*;
 
     #[derive(Copy, Clone, Default, Debug, Eq, PartialEq)]
-    pub struct Count {
+    pub struct UsizeSummary {
         count: usize,
         leaves: usize,
     }
 
-    impl Add<&Self> for Count {
+    impl Add<Self> for UsizeSummary {
         type Output = Self;
 
         #[inline]
-        fn add(self, rhs: &Self) -> Self {
-            Count {
-                count: self.count + rhs.count,
-                leaves: self.leaves + rhs.leaves,
-            }
+        fn add(mut self, rhs: Self) -> Self {
+            self += &rhs;
+            self
         }
     }
 
-    impl Sub<&Self> for Count {
+    impl Add<&Self> for UsizeSummary {
         type Output = Self;
 
         #[inline]
-        fn sub(self, rhs: &Self) -> Self {
-            Count {
-                count: self.count - rhs.count,
-                leaves: self.leaves - rhs.leaves,
-            }
+        fn add(mut self, rhs: &Self) -> Self {
+            self += rhs;
+            self
         }
     }
 
-    impl AddAssign<&Self> for Count {
+    impl AddAssign<&Self> for UsizeSummary {
         fn add_assign(&mut self, rhs: &Self) {
             self.count += rhs.count;
             self.leaves += rhs.leaves;
         }
     }
 
-    impl SubAssign<&Self> for Count {
+    impl Sub<Self> for UsizeSummary {
+        type Output = Self;
+
+        #[inline]
+        fn sub(mut self, rhs: Self) -> Self {
+            self -= &rhs;
+            self
+        }
+    }
+
+    impl Sub<&Self> for UsizeSummary {
+        type Output = Self;
+
+        #[inline]
+        fn sub(mut self, rhs: &Self) -> Self {
+            self -= rhs;
+            self
+        }
+    }
+
+    impl SubAssign<&Self> for UsizeSummary {
         fn sub_assign(&mut self, rhs: &Self) {
             self.count -= rhs.count;
             self.leaves -= rhs.leaves;
         }
     }
 
-    impl Summarize for usize {
-        type Summary = Count;
+    impl Summary for UsizeSummary {
+        type Leaf = usize;
+    }
+
+    impl Leaf for usize {
+        type BaseMetric = LeavesMetric;
+
+        type Slice<'a>
+            = UsizeSlice<'a>
+        where
+            Self: 'a;
+
+        type Summary = UsizeSummary;
+
+        fn as_slice(&self) -> Self::Slice<'_> {
+            UsizeSlice(self)
+        }
 
         fn summarize(&self) -> Self::Summary {
-            Count { count: *self, leaves: 1 }
+            UsizeSummary { count: *self, leaves: 1 }
         }
     }
 
@@ -1620,23 +1651,7 @@ mod tests {
         }
     }
 
-    impl Summarize for UsizeSlice<'_> {
-        type Summary = Count;
-
-        fn summarize(&self) -> Self::Summary {
-            self.0.summarize()
-        }
-    }
-
-    impl AsSlice for usize {
-        type Slice<'a> = UsizeSlice<'a>;
-
-        fn as_slice(&self) -> UsizeSlice<'_> {
-            UsizeSlice(self)
-        }
-    }
-
-    impl Metric<Count> for LeavesMetric {
+    impl Metric<UsizeSummary> for LeavesMetric {
         fn zero() -> Self {
             0
         }
@@ -1645,17 +1660,17 @@ mod tests {
             1
         }
 
-        fn measure(count: &Count) -> Self {
-            count.leaves
+        fn measure(summary: &UsizeSummary) -> Self {
+            summary.leaves
         }
     }
 
-    impl BaseMeasured for usize {
-        type BaseMetric = LeavesMetric;
-    }
+    impl<'a> LeafSlice<'a> for UsizeSlice<'a> {
+        type Leaf = usize;
 
-    impl BaseMeasured for UsizeSlice<'_> {
-        type BaseMetric = LeavesMetric;
+        fn summarize(&self) -> UsizeSummary {
+            self.0.summarize()
+        }
     }
 
     #[test]
