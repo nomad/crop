@@ -1,9 +1,18 @@
 #![allow(dead_code)]
 
+use rand::SeedableRng;
+
 pub const TINY: &str = include_str!("tiny.txt");
 pub const SMALL: &str = include_str!("small.txt");
 pub const MEDIUM: &str = include_str!("medium.txt");
 pub const LARGE: &str = include_str!("large.txt");
+
+pub fn rng() -> impl rand::Rng {
+    let rng = rand_chacha::ChaChaRng::from_os_rng();
+    let seed = rng.get_seed();
+    println!("Seed: {seed:?}");
+    rng
+}
 
 /// A cursed version of a lorem ipsum paragraph taken from [this online
 /// tool][1] with mixed line breaks (LF and CRLF).

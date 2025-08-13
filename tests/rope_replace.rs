@@ -122,7 +122,7 @@ fn insert_8() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn insert_small_random() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     let mut rope = Rope::new();
     let mut string = String::new();
@@ -159,7 +159,7 @@ fn insert_small_random() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn insert_random() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let mut r = Rope::from(s);
@@ -272,7 +272,7 @@ fn delete_9() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn delete_random() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let mut r = Rope::from(s);
@@ -324,7 +324,7 @@ fn replace_1() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn replace_random() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let mut r = Rope::from(s);
