@@ -1,3 +1,4 @@
+use core::cmp::Ordering;
 use core::ops::Range;
 
 use super::*;
@@ -20,10 +21,14 @@ pub struct TreeSlice<'a, const ARITY: usize, L: Leaf> {
 
     /// A left sub-slice of the leaf containing the end of the sliced range.
     pub(crate) end_slice: L::Slice<'a>,
+}
 
-    /// The number of leaves spanned by this slice, including the leaves
-    /// containing the first and last slices.
-    pub(super) leaf_count: usize,
+/// The number of leaves spanned by a [`TreeSlice`].
+#[derive(Debug)]
+pub enum SliceLeafCount {
+    One,
+    Two,
+    ThreeOrMore,
 }
 
 impl<const ARITY: usize, L: Leaf> Clone for TreeSlice<'_, ARITY, L> {
@@ -51,11 +56,11 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     pub fn assert_invariants(&self) {
         match &**self.root {
             Node::Internal(_) => {
-                assert!(self.leaf_count > 1);
+                assert!(self.leaf_count() > 1);
                 assert!(!self.start_slice.is_empty());
                 assert!(!self.end_slice.is_empty());
 
-                if self.leaf_count == 2 {
+                if self.leaf_count() == 2 {
                     assert_eq!(
                         self.summary,
                         self.start_summary() + &self.end_summary()
@@ -87,7 +92,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
             },
 
             Node::Leaf(leaf) => {
-                assert_eq!(1, self.leaf_count);
+                assert_eq!(self.leaf_count(), 1);
                 assert!(leaf.base_measure() >= self.base_measure());
             },
         }
@@ -155,8 +160,17 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     }
 
     #[inline]
-    pub fn leaf_count(&self) -> usize {
-        self.leaf_count
+    pub fn leaf_count(&self) -> SliceLeafCount {
+        if self.root.is_leaf() {
+            SliceLeafCount::One
+        } else if self.start_slice.base_measure()
+            + self.end_slice.base_measure()
+            == self.base_measure()
+        {
+            SliceLeafCount::Two
+        } else {
+            SliceLeafCount::ThreeOrMore
+        }
     }
 
     #[inline]
@@ -303,7 +317,6 @@ where
             summary: L::Summary::default(),
             start_slice: Default::default(),
             end_slice: Default::default(),
-            leaf_count: 0,
         };
 
         let mut recompute_root = false;
@@ -340,6 +353,35 @@ where
         M: Metric<L::Summary>,
     {
         Units::from(self)
+    }
+}
+
+impl PartialEq<usize> for SliceLeafCount {
+    #[inline]
+    fn eq(&self, other: &usize) -> bool {
+        self.partial_cmp(other) == Some(Ordering::Equal)
+    }
+}
+
+impl PartialOrd<usize> for SliceLeafCount {
+    #[inline]
+    fn partial_cmp(&self, &other: &usize) -> Option<Ordering> {
+        match self {
+            SliceLeafCount::One => Some(1.cmp(&other)),
+            SliceLeafCount::Two => Some(2.cmp(&other)),
+            SliceLeafCount::ThreeOrMore => {
+                (other < 3).then_some(Ordering::Greater)
+            },
+        }
+    }
+
+    #[inline]
+    fn ge(&self, &other: &usize) -> bool {
+        if other == 3 {
+            matches!(self, Self::ThreeOrMore)
+        } else {
+            self.partial_cmp(&other).is_some_and(Ordering::is_ge)
+        }
     }
 }
 
@@ -539,7 +581,6 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     // This is a node fully contained between the starting and
                     // the ending slices.
                     slice.summary += &child_summary;
-                    slice.leaf_count += child.leaf_count();
                 }
             }
         },
@@ -585,7 +626,6 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     slice.summary = start_slice.summarize();
                     slice.start_slice = start_slice;
                     slice.end_slice = start_slice;
-                    slice.leaf_count = 1;
 
                     *done = true;
                 } else {
@@ -608,7 +648,6 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     slice.offset += &right_summary;
                     slice.summary += &start_summary;
                     slice.start_slice = start_slice;
-                    slice.leaf_count = 1;
 
                     *found_start_slice = true;
                 }
@@ -626,7 +665,6 @@ fn build_slice<'a, const N: usize, L, S, E>(
 
                 slice.summary += &end_slice.summarize();
                 slice.end_slice = end_slice;
-                slice.leaf_count += 1;
 
                 *done = true;
             }

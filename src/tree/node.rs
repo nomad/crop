@@ -216,14 +216,6 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn leaf_count(&self) -> usize {
-        match self {
-            Node::Internal(inode) => inode.leaf_count(),
-            Node::Leaf(_) => 1,
-        }
-    }
-
-    #[inline]
     pub(super) fn measure<M>(&self) -> M
     where
         M: Metric<L::Summary>,

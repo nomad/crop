@@ -37,7 +37,7 @@ impl Rope {
 
         let leaves = self.tree.leaves();
 
-        if leaves.len() == 1 {
+        if leaves.clone().count() == 1 {
             return;
         }
 

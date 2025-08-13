@@ -65,12 +65,6 @@ impl<'a> Iterator for Chunks<'a> {
             }
         }
     }
-
-    #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        let exact = self.leaves.len();
-        (exact, Some(exact * 2))
-    }
 }
 
 impl DoubleEndedIterator for Chunks<'_> {
