@@ -56,6 +56,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     pub fn assert_invariants(&self) {
         match &**self.root {
             Node::Internal(_) => {
+                assert!(self.leaf_count() > 1);
                 assert!(!self.start_slice.is_empty());
                 assert!(!self.end_slice.is_empty());
 
