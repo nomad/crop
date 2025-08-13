@@ -1568,13 +1568,9 @@ mod tests {
         }
     }
 
-    impl Add<&Self> for UsizeSummary {
-        type Output = Self;
-
-        #[inline]
-        fn add(mut self, rhs: &Self) -> Self {
-            self += rhs;
-            self
+    impl AddAssign<Self> for UsizeSummary {
+        fn add_assign(&mut self, rhs: Self) {
+            *self += &rhs;
         }
     }
 
@@ -1590,8 +1586,15 @@ mod tests {
 
         #[inline]
         fn sub(mut self, rhs: Self) -> Self {
-            self -= &rhs;
+            self -= rhs;
             self
+        }
+    }
+
+    impl SubAssign<Self> for UsizeSummary {
+        fn sub_assign(&mut self, rhs: Self) {
+            self.count -= rhs.count;
+            self.leaves -= rhs.leaves;
         }
     }
 
@@ -1600,15 +1603,8 @@ mod tests {
 
         #[inline]
         fn sub(mut self, rhs: &Self) -> Self {
-            self -= rhs;
+            self -= *rhs;
             self
-        }
-    }
-
-    impl SubAssign<&Self> for UsizeSummary {
-        fn sub_assign(&mut self, rhs: &Self) {
-            self.count -= rhs.count;
-            self.leaves -= rhs.leaves;
         }
     }
 

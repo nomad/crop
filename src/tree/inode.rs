@@ -491,7 +491,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(end <= self.len());
 
         for child in &self.children[start..end] {
-            self.summary -= &child.summary();
+            self.summary -= child.summary();
         }
 
         self.children.drain(start..end)
@@ -535,7 +535,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         let mut summary = children[0].summary();
 
         for child in &children[1..] {
-            summary += &child.summary();
+            summary += child.summary();
         }
 
         Self { children, depth, summary }
@@ -608,7 +608,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(!self.is_full());
         debug_assert_eq!(child.depth() + 1, self.depth());
 
-        self.summary += &child.summary();
+        self.summary += child.summary();
         self.children.insert(child_offset, child);
     }
 
@@ -849,7 +849,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(!self.is_full());
         debug_assert_eq!(child.depth() + 1, self.depth());
 
-        self.summary += &child.summary();
+        self.summary += child.summary();
         self.children.push(child);
     }
 
@@ -862,7 +862,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     pub(super) fn remove(&mut self, child_idx: usize) -> Arc<Node<N, L>> {
         debug_assert!(child_idx < self.len());
         let child = self.children.remove(child_idx);
-        self.summary -= &child.summary();
+        self.summary -= child.summary();
         child
     }
 
@@ -887,9 +887,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert_eq!(new_child.depth() + 1, self.depth());
 
         let to_swap = &self.children[child_idx];
-        self.summary -= &to_swap.summary();
+        self.summary -= to_swap.summary();
 
-        self.summary += &new_child.summary();
+        self.summary += new_child.summary();
         self.children[child_idx] = new_child;
     }
 
@@ -929,11 +929,11 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     {
         let child = &mut self.children[child_idx];
 
-        self.summary -= &child.summary();
+        self.summary -= child.summary();
 
         let ret = fun(child);
 
-        self.summary += &child.summary();
+        self.summary += child.summary();
 
         ret
     }

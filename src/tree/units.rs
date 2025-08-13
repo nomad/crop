@@ -343,7 +343,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                     match self.first_slice.take() {
                         Some(slice) => {
                             self.yielded_in_leaf =
-                                leaf.summarize() - &slice.summarize();
+                                leaf.summarize() - slice.summarize();
 
                             self.start_slice = slice;
                         },
@@ -479,7 +479,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             let inode = node.get_internal();
 
             for child in &inode.children()[..child_idx] {
-                before += &child.summary();
+                before += child.summary();
             }
 
             for (idx, child) in
@@ -489,7 +489,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                     self.path.push((node, child_idx + 1 + idx));
                     break 'outer;
                 } else {
-                    summary += &child.summary();
+                    summary += child.summary();
                 }
             }
         }
@@ -511,7 +511,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                             node = child;
                             continue 'outer;
                         } else {
-                            summary += &child.summary();
+                            summary += child.summary();
                         }
                     }
 
@@ -591,7 +591,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             L::BaseMetric::measure(&summary) == L::BaseMetric::zero();
 
         offset += &self.yielded_in_leaf;
-        summary += &start_summary;
+        summary += start_summary;
 
         let slice = {
             let contains_last_slice = self.base_yielded
@@ -614,7 +614,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         advance += &summary;
 
         if !end_slice.is_empty() {
-            summary += &end_slice.summarize();
+            summary += end_slice.summarize();
         }
         // This edge case can happen when the first unit of `slice` is empty.
         //
@@ -641,7 +641,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
                 root = new_root;
 
-                offset -= &remove_offset;
+                offset -= remove_offset;
 
                 // `previous_leaf` is guaranteed to be a leaf node by
                 // `Self::previous_leaf()`.
@@ -726,11 +726,11 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             let inode = node.get_internal();
 
             for child in &inode.children()[..child_idx] {
-                before += &child.summary();
+                before += child.summary();
             }
 
             for child in &inode.children()[child_idx + 1..] {
-                summary += &child.summary();
+                summary += child.summary();
             }
         }
 
@@ -744,7 +744,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         for child in &inode.children()[..child_idx] {
             let child_summary = child.summary();
             offset += L::BaseMetric::measure(&child_summary);
-            before += &child_summary;
+            before += child_summary;
         }
 
         offset += inode.child(child_idx).base_measure();
@@ -761,7 +761,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                 break;
             } else {
                 offset += child_measure;
-                summary += &child.summary();
+                summary += child.summary();
             }
         }
 
@@ -776,7 +776,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
                             continue 'outer;
                         } else {
                             offset += child_measure;
-                            summary += &child.summary();
+                            summary += child.summary();
                         }
                     }
 
@@ -831,22 +831,31 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
         let start_slice = self.start_slice;
 
-        let (last_leaf, root, before, mut summary) = self.last_leaf();
+        let (last_leaf, root, mut before, mut summary) = self.last_leaf();
 
-        summary += &start_slice.summarize();
+        summary += start_slice.summarize();
 
         let end_slice = match self.last_slice.take() {
             Some(slice) => slice,
             None => last_leaf.as_slice(),
         };
 
-        summary += &end_slice.summarize();
+        summary += end_slice.summarize();
 
-        let offset = before + &self.yielded_in_leaf;
+        before += &self.yielded_in_leaf;
 
         let advance = summary.clone();
 
-        (TreeSlice { root, offset, summary, start_slice, end_slice }, advance)
+        (
+            TreeSlice {
+                root,
+                offset: before,
+                summary,
+                start_slice,
+                end_slice,
+            },
+            advance,
+        )
     }
 }
 
@@ -993,7 +1002,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                     match self.last_slice.take() {
                         Some(slice) => {
                             self.yielded_in_leaf =
-                                leaf.summarize() - &slice.summarize();
+                                leaf.summarize() - slice.summarize();
 
                             self.end_slice = slice;
                         },
@@ -1112,11 +1121,11 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             let inode = node.get_internal();
 
             for child in &inode.children()[..child_idx] {
-                summary += &child.summary();
+                summary += child.summary();
             }
 
             for child in &inode.children()[child_idx + 1..] {
-                after += &child.summary();
+                after += child.summary();
             }
         }
 
@@ -1126,7 +1135,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         let inode = root.get_internal();
 
         for child in &inode.children()[child_idx + 1..] {
-            after += &child.summary();
+            after += child.summary();
         }
 
         // This will be the child of the root node that contains the first
@@ -1142,7 +1151,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
             if offset + child_measure > range.start {
                 for child in children {
-                    summary += &child.summary();
+                    summary += child.summary();
                 }
                 node = child;
                 break;
@@ -1161,7 +1170,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
                         if offset + child_measure > range.start {
                             for child in children {
-                                summary += &child.summary();
+                                summary += child.summary();
                             }
                             node = child;
                             continue 'outer;
@@ -1234,7 +1243,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
             self.base_remaining += L::BaseMetric::measure(&advance);
 
-            advance += &first_advance;
+            advance += first_advance;
 
             return (first, advance);
         };
@@ -1243,7 +1252,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
         advance += &summary;
 
-        summary += &end_slice.summarize();
+        summary += end_slice.summarize();
 
         let start_slice = match self.first_slice.take() {
             Some(slice) => slice,
@@ -1254,10 +1263,9 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
         advance += &start_summary;
 
-        summary += &start_summary;
+        summary += start_summary;
 
-        let offset =
-            root.summary() - &after - &self.yielded_in_leaf - &advance;
+        let offset = root.summary() - after - &self.yielded_in_leaf - &advance;
 
         (TreeSlice { root, offset, start_slice, end_slice, summary }, advance)
     }
@@ -1335,7 +1343,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
             let inode = node.get_internal();
 
             for child in &inode.children()[child_idx + 1..] {
-                after += &child.summary();
+                after += child.summary();
             }
 
             for (idx, child) in
@@ -1345,7 +1353,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                     self.path.push((node, idx));
                     break 'outer;
                 } else {
-                    summary += &child.summary();
+                    summary += child.summary();
                 }
             }
         }
@@ -1369,7 +1377,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                             node = child;
                             continue 'outer;
                         } else {
-                            summary += &child.summary();
+                            summary += child.summary();
                         }
                     }
 
@@ -1482,7 +1490,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
             self.base_remaining += L::BaseMetric::measure(&advance);
 
-            advance += &slice_advance;
+            advance += slice_advance;
 
             return (slice, advance);
         }
@@ -1495,7 +1503,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
         advance += &summary;
 
-        summary += &end_slice.summarize();
+        summary += end_slice.summarize();
 
         let slice = {
             let contains_first_slice = L::BaseMetric::measure(&advance)
@@ -1516,13 +1524,13 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         advance += &start_summary;
 
         let mut offset =
-            root.summary() - &after - &self.yielded_in_leaf - &advance;
+            root.summary() - after - &self.yielded_in_leaf - &advance;
 
         self.yielded_in_leaf = start_summary.clone();
         self.end_slice = rest;
 
         if !start_slice.is_empty() {
-            summary += &start_summary;
+            summary += start_summary;
         }
         // This edge case can happen when the remainder of `slice` is empty.
         //
@@ -1548,7 +1556,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
 
                 root = new_root;
 
-                offset -= &remove_offset;
+                offset -= remove_offset;
 
                 // `next_leaf` is guaranteed to be a leaf node by
                 // `Self::next_leaf()`.

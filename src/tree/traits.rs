@@ -6,11 +6,11 @@ pub trait Summary:
     + Default
     + Clone
     + Add<Self, Output = Self>
-    + for<'a> Add<&'a Self, Output = Self>
+    + AddAssign<Self>
     + for<'a> AddAssign<&'a Self>
     + Sub<Self, Output = Self>
+    + SubAssign<Self>
     + for<'a> Sub<&'a Self, Output = Self>
-    + for<'a> SubAssign<&'a Self>
     + PartialEq
 {
     /// The leaf type this summary is for.

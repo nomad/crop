@@ -82,36 +82,6 @@ impl Add<Self> for ChunkSummary {
     }
 }
 
-impl Sub<Self> for ChunkSummary {
-    type Output = Self;
-
-    #[inline]
-    fn sub(mut self, rhs: Self) -> Self {
-        self -= rhs;
-        self
-    }
-}
-
-impl Add<&Self> for ChunkSummary {
-    type Output = Self;
-
-    #[inline]
-    fn add(mut self, rhs: &Self) -> Self {
-        self += rhs;
-        self
-    }
-}
-
-impl Sub<&Self> for ChunkSummary {
-    type Output = Self;
-
-    #[inline]
-    fn sub(mut self, rhs: &Self) -> Self {
-        self -= rhs;
-        self
-    }
-}
-
 impl AddAssign<Self> for ChunkSummary {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
@@ -121,6 +91,23 @@ impl AddAssign<Self> for ChunkSummary {
         {
             self.utf16_code_units += rhs.utf16_code_units;
         }
+    }
+}
+
+impl AddAssign<&Self> for ChunkSummary {
+    #[inline]
+    fn add_assign(&mut self, rhs: &Self) {
+        *self += *rhs;
+    }
+}
+
+impl Sub<Self> for ChunkSummary {
+    type Output = Self;
+
+    #[inline]
+    fn sub(mut self, rhs: Self) -> Self {
+        self -= rhs;
+        self
     }
 }
 
@@ -136,17 +123,13 @@ impl SubAssign<Self> for ChunkSummary {
     }
 }
 
-impl AddAssign<&Self> for ChunkSummary {
-    #[inline]
-    fn add_assign(&mut self, rhs: &Self) {
-        *self += *rhs;
-    }
-}
+impl Sub<&Self> for ChunkSummary {
+    type Output = Self;
 
-impl SubAssign<&Self> for ChunkSummary {
     #[inline]
-    fn sub_assign(&mut self, rhs: &Self) {
-        *self -= *rhs;
+    fn sub(mut self, rhs: &Self) -> Self {
+        self -= *rhs;
+        self
     }
 }
 

@@ -63,7 +63,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
                 if self.leaf_count() == 2 {
                     assert_eq!(
                         self.summary,
-                        self.start_summary() + &self.end_summary()
+                        self.start_summary() + self.end_summary()
                     );
                 }
 
@@ -341,7 +341,7 @@ where
             );
 
             slice.root = root;
-            slice.offset -= &offset;
+            slice.offset -= offset;
         }
 
         slice
@@ -425,7 +425,7 @@ where
                             return (node, start, end);
                         }
                     } else {
-                        measured += &child_summary;
+                        measured += child_summary;
                     }
                 }
 
@@ -478,13 +478,13 @@ where
                             node = child;
                             start -= L::BaseMetric::measure(&measured);
                             end -= L::BaseMetric::measure(&measured);
-                            offset += &measured;
+                            offset += measured;
                             continue 'outer;
                         } else {
                             return (node, offset);
                         }
                     } else {
-                        measured += &child_summary;
+                        measured += child_summary;
                     }
                 }
 
@@ -558,7 +558,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                         );
                     } else {
                         // This child comes before the starting leaf.
-                        slice.offset += &child_summary;
+                        slice.offset += child_summary;
                     }
                 } else if E::measure(&slice.offset)
                     + E::measure(&slice.summary)
@@ -580,7 +580,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                 } else {
                     // This is a node fully contained between the starting and
                     // the ending slices.
-                    slice.summary += &child_summary;
+                    slice.summary += child_summary;
                 }
             }
         },
@@ -614,7 +614,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     let right_slice = S::slice_from(leaf.as_slice(), start);
 
                     let left_summary =
-                        leaf.summarize() - &right_slice.summarize();
+                        leaf.summarize() - right_slice.summarize();
 
                     let end = end
                         - E::measure(&slice.offset)
@@ -622,7 +622,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
 
                     let start_slice = E::slice_up_to(right_slice, end);
 
-                    slice.offset += &left_summary;
+                    slice.offset += left_summary;
                     slice.summary = start_slice.summarize();
                     slice.start_slice = start_slice;
                     slice.end_slice = start_slice;
@@ -640,13 +640,13 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     let right_summary = leaf.summarize() - &start_summary;
 
                     if start_slice.is_empty() {
-                        slice.offset += &leaf.summarize();
+                        slice.offset += leaf.summarize();
                         *recompute_root = true;
                         return;
                     }
 
-                    slice.offset += &right_summary;
-                    slice.summary += &start_summary;
+                    slice.offset += right_summary;
+                    slice.summary += start_summary;
                     slice.start_slice = start_slice;
 
                     *found_start_slice = true;
@@ -663,7 +663,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
 
                 debug_assert!(!end_slice.is_empty());
 
-                slice.summary += &end_slice.summarize();
+                slice.summary += end_slice.summarize();
                 slice.end_slice = end_slice;
 
                 *done = true;
