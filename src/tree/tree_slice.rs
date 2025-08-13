@@ -63,7 +63,8 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
                 if self.leaf_count() == 2 {
                     assert_eq!(
                         self.summary,
-                        self.start_summary() + self.end_summary()
+                        self.start_slice.summarize()
+                            + self.end_slice.summarize()
                     );
                 }
 
@@ -127,11 +128,6 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         self.end_slice
     }
 
-    #[inline]
-    pub fn end_summary(&self) -> L::Summary {
-        self.end_slice.summarize()
-    }
-
     /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
     /// plus the `M`-measure of all the leaves before it.
     #[inline]
@@ -141,11 +137,11 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     {
         debug_assert!(measure <= self.measure::<M>() + M::one());
 
-        if M::measure(&self.start_summary()) >= measure {
+        if self.start_slice.measure::<M>() >= measure {
             (self.start_slice, M::zero())
         } else {
             let all_minus_last =
-                M::measure(&self.summary) - M::measure(&self.end_summary());
+                M::measure(&self.summary) - self.end_slice.measure::<M>();
 
             if all_minus_last >= measure {
                 let (leaf, mut offset) = self
@@ -194,11 +190,6 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     #[inline]
     pub fn start_slice(&self) -> L::Slice<'a> {
         self.start_slice
-    }
-
-    #[inline]
-    pub fn start_summary(&self) -> L::Summary {
-        self.start_slice.summarize()
     }
 
     #[inline]

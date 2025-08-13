@@ -7,7 +7,7 @@ use super::metrics::{ByteMetric, RawLineMetric};
 use super::rope::RopeChunk;
 use super::utils::{panic_messages as panic, *};
 use crate::range_bounds_to_start_end;
-use crate::tree::TreeSlice;
+use crate::tree::{LeafSlice, TreeSlice};
 
 /// An immutable slice of a [`Rope`](crate::Rope).
 #[derive(Copy, Clone)]
@@ -588,7 +588,7 @@ impl<'a> RopeSlice<'a> {
         let slice = &mut self.tree_slice;
 
         // The last slice only contains one byte so we have to re-slice.
-        if slice.end_summary().bytes() == 1 {
+        if slice.end_slice.base_measure() == ByteMetric(1) {
             *self = self.byte_slice(..self.byte_len() - 1);
         }
         // The last slice contains more than 2 bytes so we can just mutate
