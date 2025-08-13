@@ -128,18 +128,20 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     {
         debug_assert!(measure <= self.measure::<M>() + M::one());
 
-        if self.start_slice.measure::<M>() >= measure {
-            (self.start_slice, M::zero())
-        } else {
-            let all_minus_last =
-                self.summary.measure::<M>() - self.end_slice.measure::<M>();
+        let len_start_slice = self.start_slice.measure::<M>();
 
-            if all_minus_last >= measure {
-                self.root.leaf_at_measure_from_offset(self.offset, measure)
-            } else {
-                (self.end_slice, all_minus_last)
-            }
+        if measure <= len_start_slice {
+            return (self.start_slice, M::zero());
         }
+
+        let len_total_minus_end =
+            self.measure::<M>() - self.end_slice.measure::<M>();
+
+        if len_total_minus_end <= measure {
+            return (self.end_slice, len_total_minus_end);
+        }
+
+        self.root.leaf_at_measure_from_offset(self.offset, measure)
     }
 
     #[inline]
@@ -166,7 +168,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     where
         M: Metric<L::Summary>,
     {
-        M::measure(self.summary())
+        self.summary.measure::<M>()
     }
 
     #[inline]

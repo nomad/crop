@@ -76,7 +76,6 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         self.measure::<L::BaseMetric>()
     }
 
-    #[track_caller]
     #[inline]
     pub(super) fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
@@ -116,7 +115,6 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
-    #[track_caller]
     #[inline]
     pub(super) fn convert_measure_from_offset<M1, M2>(
         &self,
