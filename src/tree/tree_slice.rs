@@ -204,30 +204,7 @@ where
 {
     #[track_caller]
     #[inline]
-    pub(super) fn from_range_in_root<M>(
-        root: &'a Arc<Node<ARITY, L>>,
-        range: Range<M>,
-    ) -> Self
-    where
-        M: SlicingMetric<L>,
-        L::BaseMetric: SlicingMetric<L>,
-    {
-        debug_assert!(M::zero() <= range.start);
-        debug_assert!(range.start <= range.end);
-        debug_assert!(range.end <= root.measure::<M>() + M::one());
-
-        if range.end <= root.measure::<M>() {
-            Self::slice_impl(root, range.start, range.end)
-        } else if range.start <= root.measure::<M>() {
-            Self::slice_impl(root, range.start, root.base_measure())
-        } else {
-            Self::slice_impl(root, root.base_measure(), root.base_measure())
-        }
-    }
-
-    #[track_caller]
-    #[inline]
-    pub fn slice<M>(self, mut range: Range<M>) -> Self
+    pub fn slice<M>(self, range: Range<M>) -> Self
     where
         M: SlicingMetric<L>,
         L::BaseMetric: SlicingMetric<L>,
@@ -236,43 +213,29 @@ where
         debug_assert!(range.start <= range.end);
         debug_assert!(range.end <= self.measure::<M>() + M::one());
 
-        match (
-            range.start > M::zero(),
-            range.end < self.measure::<M>() + M::one(),
-        ) {
-            (true, true) => {
-                range.start += M::measure(&self.offset);
-                range.end += M::measure(&self.offset);
-                Self::from_range_in_root(self.root, range)
-            },
-
-            (true, false) if range.start < self.measure::<M>() + M::one() => {
-                let start = M::measure(&self.offset) + range.start;
-                let end =
-                    L::BaseMetric::measure(&self.offset) + self.base_measure();
-                Self::slice_impl(self.root, start, end)
-            },
-
-            (true, false) => {
-                let start =
-                    L::BaseMetric::measure(&self.offset) + self.base_measure();
-                let end = start;
-                Self::slice_impl(self.root, start, end)
-            },
-
-            (false, true) if range.end > M::zero() => {
-                let start = L::BaseMetric::measure(&self.offset);
-                let end = M::measure(&self.offset) + range.end;
-                Self::slice_impl(self.root, start, end)
-            },
-
-            (false, true) => {
-                let start = L::BaseMetric::measure(&self.offset);
-                Self::slice_impl(self.root, start, start)
-            },
-
-            (false, false) => self,
+        if range.end < self.measure::<M>() + M::one() {
+            Self::slice_node_at_offset(
+                self.root,
+                self.offset.measure(),
+                range.start,
+                range.end,
+            )
+        } else {
+            Self::slice_node_at_offset(
+                self.root,
+                self.offset.measure(),
+                range.start,
+                self.base_measure(),
+            )
         }
+    }
+
+    #[inline]
+    pub fn units<M>(&self) -> Units<'a, ARITY, L, M>
+    where
+        M: Metric<L::Summary>,
+    {
+        Units::from(self)
     }
 
     /// Returns the `TreeSlice` obtained by slicing `root` between `start` and
@@ -287,8 +250,23 @@ where
     /// condition is not met.
     #[track_caller]
     #[inline]
-    fn slice_impl<S, E>(
+    pub(super) fn slice_node<S, E>(
         root: &'a Arc<Node<ARITY, L>>,
+        start: S,
+        end: E,
+    ) -> Self
+    where
+        S: SlicingMetric<L>,
+        E: SlicingMetric<L>,
+    {
+        Self::slice_node_at_offset(root, L::BaseMetric::zero(), start, end)
+    }
+
+    #[track_caller]
+    #[inline]
+    fn slice_node_at_offset<S, E>(
+        root: &'a Arc<Node<ARITY, L>>,
+        _offset: L::BaseMetric,
         start: S,
         end: E,
     ) -> Self
@@ -336,14 +314,6 @@ where
         }
 
         slice
-    }
-
-    #[inline]
-    pub fn units<M>(&self) -> Units<'a, ARITY, L, M>
-    where
-        M: Metric<L::Summary>,
-    {
-        Units::from(self)
     }
 }
 

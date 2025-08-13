@@ -200,7 +200,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
         debug_assert!(range.start <= range.end);
         debug_assert!(range.end <= self.measure::<M>() + M::one());
 
-        TreeSlice::from_range_in_root(&self.root, range)
+        TreeSlice::slice_node(&self.root, range.start, range.end)
     }
 
     #[inline]
