@@ -52,7 +52,7 @@ pub trait Leaf: Debug + Sized {
     }
 }
 
-pub trait LeafSlice<'a>: Copy
+pub trait LeafSlice<'a>: Copy + Debug
 where
     Self: 'a,
 {

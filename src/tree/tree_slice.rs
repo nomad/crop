@@ -246,21 +246,6 @@ where
         S: SlicingMetric<L>,
         E: SlicingMetric<L>,
     {
-        Self::slice_node_at_offset(root, L::BaseMetric::zero(), start, end)
-    }
-
-    #[track_caller]
-    #[inline]
-    fn slice_node_at_offset<S, E>(
-        root: &'a Arc<Node<ARITY, L>>,
-        _offset: L::BaseMetric,
-        start: S,
-        end: E,
-    ) -> Self
-    where
-        S: SlicingMetric<L>,
-        E: SlicingMetric<L>,
-    {
         debug_assert!(S::zero() <= start);
         debug_assert!(end <= root.measure::<E>());
 
@@ -303,6 +288,21 @@ where
         }
 
         slice
+    }
+
+    #[track_caller]
+    #[inline]
+    fn slice_node_at_offset<S, E>(
+        _root: &'a Arc<Node<ARITY, L>>,
+        _offset: L::BaseMetric,
+        _start: S,
+        _end: E,
+    ) -> Self
+    where
+        S: SlicingMetric<L>,
+        E: SlicingMetric<L>,
+    {
+        todo!();
     }
 }
 
@@ -514,7 +514,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     + child_summary.measure::<E>()
                     >= end
                 {
-                    // This child contains the ending leaf somewhere in its
+                    // This child contains the ending slice somewhere in its
                     // subtree. Run this function again with this child as the
                     // node.
                     build_slice(
@@ -529,7 +529,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                         done,
                     );
                 } else {
-                    // This is a node fully contained between the starting and
+                    // This node is fully contained between the starting and
                     // the ending slices.
                     slice.summary += child_summary;
                 }
@@ -596,9 +596,11 @@ fn build_slice<'a, const N: usize, L, S, E>(
 
                     slice.offset +=
                         leaf.base_measure() - start_summary.base_measure();
+                    *end_offset +=
+                        leaf.measure::<E>() - start_summary.measure::<E>();
+
                     slice.summary += start_summary;
                     slice.start_slice = start_slice;
-
                     *found_start_slice = true;
                 }
             } else {
