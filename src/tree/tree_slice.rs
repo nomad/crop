@@ -270,7 +270,7 @@ where
         let mut slice = Self {
             root,
             offset: L::BaseMetric::zero(),
-            summary: L::Summary::default(),
+            summary: L::Summary::empty(),
             start_slice: Default::default(),
             end_slice: Default::default(),
         };
@@ -352,7 +352,7 @@ where
     'outer: loop {
         match &**node {
             Node::Internal(inode) => {
-                let mut measured = L::Summary::default();
+                let mut measured = L::Summary::empty();
 
                 for child in inode.children() {
                     let child_summary = child.summary();

@@ -451,7 +451,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         debug_assert!(self.units_total > self.units_yielded);
 
         let mut before = L::BaseMetric::zero();
-        let mut summary = L::Summary::default();
+        let mut summary = L::Summary::empty();
 
         // Step 1: pop nodes off the path until we find a node with some
         // `M`-units that we haven't yielded yet.
@@ -703,7 +703,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
         // root, increasing `before` and `summary` as you go.
 
         let mut before = L::BaseMetric::zero();
-        let mut summary = L::Summary::default();
+        let mut summary = L::Summary::empty();
 
         for &(node, child_idx) in &self.path[root_idx + 1..] {
             // Every node in the path is an internal node.
@@ -1089,7 +1089,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         // root, increasing `after` and `summary` as you go.
 
         let mut after = L::BaseMetric::zero();
-        let mut summary = L::Summary::default();
+        let mut summary = L::Summary::empty();
 
         for &(node, child_idx) in &self.path[root_idx + 1..] {
             // Every node in the path is an internal node.
@@ -1309,7 +1309,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
         debug_assert!(self.units_remaining > M::zero());
 
         let mut after = L::BaseMetric::zero();
-        let mut summary = L::Summary::default();
+        let mut summary = L::Summary::empty();
 
         // Step 1: pop nodes off the path until we find a node with some
         // `M`-units that we haven't yielded yet.
@@ -1461,7 +1461,7 @@ impl<'a, const N: usize, L: Leaf, M: DoubleEndedUnitMetric<L>>
                             offset: self.leaf_node.base_measure(),
                             start_slice: empty,
                             end_slice: empty,
-                            summary: L::Summary::default(),
+                            summary: L::Summary::empty(),
                         },
                         L::BaseMetric::zero(),
                     )

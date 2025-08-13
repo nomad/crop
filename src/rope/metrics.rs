@@ -70,6 +70,11 @@ impl ChunkSummary {
 
 impl Summary for ChunkSummary {
     type Leaf = GapBuffer;
+
+    #[inline]
+    fn empty() -> Self {
+        Self::default()
+    }
 }
 
 impl Add<Self> for ChunkSummary {

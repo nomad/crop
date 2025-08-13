@@ -1574,6 +1574,11 @@ mod tests {
 
     impl Summary for UsizeSummary {
         type Leaf = usize;
+
+        #[inline]
+        fn empty() -> Self {
+            UsizeSummary { count: 0, leaves: 0 }
+        }
     }
 
     impl Leaf for usize {

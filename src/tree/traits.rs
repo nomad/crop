@@ -1,11 +1,11 @@
 use core::fmt::Debug;
 use core::ops::{Add, AddAssign, RangeBounds, Sub, SubAssign};
 
-pub trait Summary:
-    Debug + Default + Clone + AddAssign<Self> + SubAssign<Self>
-{
+pub trait Summary: Debug + Clone + AddAssign + SubAssign {
     /// The leaf type this summary is for.
     type Leaf: Leaf<Summary = Self>;
+
+    fn empty() -> Self;
 
     #[inline]
     fn base_measure(&self) -> <Self::Leaf as Leaf>::BaseMetric {

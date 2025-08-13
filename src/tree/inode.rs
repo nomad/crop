@@ -502,7 +502,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         Self {
             children: Vec::with_capacity(N),
             depth: 1,
-            summary: Default::default(),
+            summary: L::Summary::empty(),
         }
     }
 
