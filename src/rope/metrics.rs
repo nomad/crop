@@ -411,12 +411,12 @@ impl UnitMetric<GapBuffer> for RawLineMetric {
     #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
-    ) -> (GapSlice<'a>, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, GapSlice<'a>, ByteMetric)
     where
         'a: 'a,
     {
         let (first, rest) = chunk.split_at_offset(RawLineMetric(1));
-        (first, rest, first.summarize())
+        (first, rest, first.measure())
     }
 }
 
@@ -424,7 +424,7 @@ impl DoubleEndedUnitMetric<GapBuffer> for RawLineMetric {
     #[inline]
     fn last_unit<'a>(
         slice: GapSlice<'a>,
-    ) -> (GapSlice<'a>, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, GapSlice<'a>, ByteMetric)
     where
         'a: 'a,
     {
@@ -433,7 +433,7 @@ impl DoubleEndedUnitMetric<GapBuffer> for RawLineMetric {
 
         let (rest, last) = slice.split_at_offset(RawLineMetric(split_offset));
 
-        (rest, last, last.summarize())
+        (rest, last, last.measure())
     }
 
     #[inline]
@@ -518,16 +518,16 @@ impl UnitMetric<GapBuffer> for LineMetric {
     #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
-    ) -> (GapSlice<'a>, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, GapSlice<'a>, ByteMetric)
     where
         'a: 'a,
     {
-        let (mut first, rest, first_summary) =
+        let (mut first, rest, first_byte_len) =
             <RawLineMetric as UnitMetric<GapBuffer>>::first_unit(chunk);
 
         first.truncate_trailing_line_break();
 
-        (first, rest, first_summary)
+        (first, rest, first_byte_len)
     }
 }
 
@@ -535,18 +535,18 @@ impl DoubleEndedUnitMetric<GapBuffer> for LineMetric {
     #[inline]
     fn last_unit<'a>(
         chunk: GapSlice<'a>,
-    ) -> (GapSlice<'a>, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, GapSlice<'a>, ByteMetric)
     where
         'a: 'a,
     {
-        let (rest, mut last, last_summary) =
+        let (rest, mut last, last_byte_len) =
             <RawLineMetric as DoubleEndedUnitMetric<GapBuffer>>::last_unit(
                 chunk,
             );
 
         last.truncate_trailing_line_break();
 
-        (rest, last, last_summary)
+        (rest, last, last_byte_len)
     }
 
     #[inline]

@@ -15,6 +15,11 @@ pub trait Summary:
 {
     /// The leaf type this summary is for.
     type Leaf: Leaf<Summary = Self>;
+
+    #[inline]
+    fn measure<M: Metric<Self>>(&self) -> M {
+        M::measure(self)
+    }
 }
 
 pub trait Leaf: Debug + Sized {
@@ -162,7 +167,7 @@ pub trait UnitMetric<L: Leaf>: Metric<L::Summary> {
     /// `first_slice`'s summary.
     fn first_unit<'a>(
         slice: L::Slice<'a>,
-    ) -> (L::Slice<'a>, L::Slice<'a>, L::Summary);
+    ) -> (L::Slice<'a>, L::Slice<'a>, L::BaseMetric);
 }
 
 /// Allows iterating backward over the units of this metric.
@@ -176,7 +181,7 @@ pub trait DoubleEndedUnitMetric<L: Leaf>: UnitMetric<L> {
     /// summary.
     fn last_unit<'a>(
         slice: L::Slice<'a>,
-    ) -> (L::Slice<'a>, L::Slice<'a>, L::Summary);
+    ) -> (L::Slice<'a>, L::Slice<'a>, L::BaseMetric);
 
     /// It's possible for a leaf slice to contain some content that extends
     /// past the end of its last `M`-unit. This is referred to as "the
