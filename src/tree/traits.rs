@@ -2,7 +2,7 @@ use core::fmt::Debug;
 use core::ops::{Add, AddAssign, RangeBounds, Sub, SubAssign};
 
 pub trait Summary:
-    Debug + Default + Clone + AddAssign<Self> + SubAssign<Self> + PartialEq
+    Debug + Default + Clone + AddAssign<Self> + SubAssign<Self>
 {
     /// The leaf type this summary is for.
     type Leaf: Leaf<Summary = Self>;
@@ -10,6 +10,11 @@ pub trait Summary:
     #[inline]
     fn base_measure(&self) -> <Self::Leaf as Leaf>::BaseMetric {
         self.measure()
+    }
+
+    #[inline]
+    fn is_empty(&self) -> bool {
+        self.base_measure().is_zero()
     }
 
     #[inline]

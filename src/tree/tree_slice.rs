@@ -548,7 +548,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                 >= end;
 
             if !*found_start_slice {
-                debug_assert_eq!(L::Summary::default(), slice.summary);
+                debug_assert!(slice.summary.is_empty());
 
                 debug_assert!({
                     // If we haven't yet found the first slice this leaf must
