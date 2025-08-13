@@ -155,7 +155,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     where
         M: Metric<L::Summary>,
     {
-        M::measure(&self.summary())
+        self.root.measure::<M>()
     }
 
     /// Replaces a range of the `Tree` with the given replacement.

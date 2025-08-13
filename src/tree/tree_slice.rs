@@ -73,7 +73,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
                     deepest_node_containing_base_range(
                         self.root,
                         start,
-                        start + L::BaseMetric::measure(&self.summary),
+                        start + self.summary.base_measure(),
                     )
                 };
 
@@ -132,7 +132,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
             (self.start_slice, M::zero())
         } else {
             let all_minus_last =
-                M::measure(&self.summary) - self.end_slice.measure::<M>();
+                self.summary.measure::<M>() - self.end_slice.measure::<M>();
 
             if all_minus_last >= measure {
                 self.root.leaf_at_measure_from_offset(self.offset, measure)
@@ -295,7 +295,7 @@ where
             let (root, offset) = deepest_node_containing_base_range(
                 slice.root,
                 start,
-                start + L::BaseMetric::measure(&slice.summary),
+                start + slice.summary.base_measure(),
             );
 
             slice.root = root;
@@ -357,19 +357,19 @@ where
                 for child in inode.children() {
                     let child_summary = child.summary();
 
-                    let contains_start_slice = S::measure(&measured)
-                        + S::measure(&child_summary)
+                    let contains_start_slice = measured.measure::<S>()
+                        + child_summary.measure::<S>()
                         >= start;
 
                     if contains_start_slice {
-                        let contains_end_slice = E::measure(&measured)
-                            + E::measure(&child_summary)
+                        let contains_end_slice = measured.measure::<E>()
+                            + child_summary.measure::<E>()
                             >= end;
 
                         if contains_end_slice {
                             node = child;
-                            start -= S::measure(&measured);
-                            end -= E::measure(&measured);
+                            start -= measured.measure::<S>();
+                            end -= measured.measure::<E>();
                             continue 'outer;
                         } else {
                             return (node, start, end);

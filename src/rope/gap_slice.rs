@@ -1,7 +1,7 @@
 use super::gap_buffer::GapBuffer;
 use super::metrics::{ChunkSummary, SummaryUpTo, ToByteOffset};
 use super::utils::{debug_no_quotes, panic_messages as panic};
-use crate::tree::{LeafSlice, Metric};
+use crate::tree::{LeafSlice, Metric, Summary};
 
 /// A slice of a [`GapBuffer`](super::gap_buffer::GapBuffer).
 #[derive(Copy, Clone, Default)]
@@ -86,7 +86,7 @@ impl<'a> GapSlice<'a> {
     where
         M: Metric<ChunkSummary>,
     {
-        M::measure(&self.left_summary)
+        self.left_summary.measure::<M>()
     }
 
     #[inline]
