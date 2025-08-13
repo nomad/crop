@@ -119,8 +119,6 @@ impl<'a, const ARITY: usize, L: Leaf, M: UnitMetric<L>> Iterator
             } else if iter.base_total > iter.base_yielded {
                 let (remainder, advance) = iter.remainder();
 
-                debug_assert!(advance.is_zero());
-
                 debug_assert_eq!(advance, iter.base_total - iter.base_yielded);
 
                 iter.base_yielded = iter.base_total;
