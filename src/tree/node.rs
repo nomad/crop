@@ -116,6 +116,20 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    #[track_caller]
+    #[inline]
+    pub(super) fn convert_measure_from_offset<M1, M2>(
+        &self,
+        _start_from: L::BaseMetric,
+        _up_to: M1,
+    ) -> M2
+    where
+        M1: SlicingMetric<L>,
+        M2: Metric<L::Summary>,
+    {
+        todo!();
+    }
+
     #[inline]
     pub(super) fn depth(&self) -> usize {
         match self {
@@ -213,6 +227,18 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                 },
             }
         }
+    }
+
+    #[inline]
+    pub(super) fn leaf_at_measure_from_offset<M>(
+        &self,
+        _start_from: L::BaseMetric,
+        _measure: M,
+    ) -> (L::Slice<'_>, M)
+    where
+        M: Metric<L::Summary>,
+    {
+        todo!();
     }
 
     #[inline]

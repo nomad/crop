@@ -117,9 +117,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         if up_to == M1::zero() {
             M2::zero()
         } else {
-            self.root
-                .convert_measure::<M1, M2>(M1::measure(&self.offset) + up_to)
-                - M2::measure(&self.offset)
+            self.root.convert_measure_from_offset(self.offset.measure(), up_to)
         }
     }
 
@@ -144,11 +142,10 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
                 M::measure(&self.summary) - self.end_slice.measure::<M>();
 
             if all_minus_last >= measure {
-                let (leaf, mut offset) = self
-                    .root
-                    .leaf_at_measure(M::measure(&self.offset) + measure);
-                offset -= M::measure(&self.offset);
-                (leaf, offset)
+                self.root.leaf_at_measure_from_offset(
+                    self.offset.measure(),
+                    measure,
+                )
             } else {
                 (self.end_slice, all_minus_last)
             }
