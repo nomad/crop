@@ -635,15 +635,15 @@ fn build_slice<'a, const N: usize, L, S, E>(
                         start - S::measure(&slice.offset),
                     );
 
-                    let start_summary = start_slice.summarize();
-
-                    let right_summary = leaf.summarize() - &start_summary;
-
                     if start_slice.is_empty() {
                         slice.offset += leaf.summarize();
                         *recompute_root = true;
                         return;
                     }
+
+                    let start_summary = start_slice.summarize();
+
+                    let right_summary = leaf.summarize() - &start_summary;
 
                     slice.offset += right_summary;
                     slice.summary += start_summary;
