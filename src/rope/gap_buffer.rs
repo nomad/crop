@@ -358,45 +358,45 @@ impl GapBuffer {
 
                 left_summary += ChunkSummary::from(chunk);
             } else {
-                let (to_first, to_second) = split_adjusted::<true>(
+                let (to_left, to_right) = split_adjusted::<true>(
                     chunk,
                     to_left - left_summary.bytes(),
                 );
 
                 let range = {
                     let start = left_summary.bytes();
-                    let end = start + to_first.len();
+                    let end = start + to_left.len();
                     start..end
                 };
 
-                bytes[range].copy_from_slice(to_first.as_bytes());
+                bytes[range].copy_from_slice(to_left.as_bytes());
 
-                left_summary += ChunkSummary::from(to_first);
+                left_summary += ChunkSummary::from(to_left);
 
                 let mut start = MAX_BYTES - (total_len - left_summary.bytes());
 
                 let range = {
-                    let end = start + to_second.len();
+                    let end = start + to_right.len();
                     start..end
                 };
 
-                bytes[range].copy_from_slice(to_second.as_bytes());
+                bytes[range].copy_from_slice(to_right.as_bytes());
 
-                start += to_second.len();
+                start += to_right.len();
 
-                let mut right_summary = ChunkSummary::from(to_second);
+                let mut right_summary = ChunkSummary::from(to_right);
 
-                for &segment in chunks {
+                for &chunk in chunks {
                     let range = {
-                        let end = start + segment.len();
+                        let end = start + chunk.len();
                         start..end
                     };
 
-                    bytes[range].copy_from_slice(segment.as_bytes());
+                    bytes[range].copy_from_slice(chunk.as_bytes());
 
-                    start += segment.len();
+                    start += chunk.len();
 
-                    right_summary += ChunkSummary::from(segment);
+                    right_summary += ChunkSummary::from(chunk);
                 }
 
                 return Self { bytes, left_summary, right_summary };
@@ -540,8 +540,8 @@ impl GapBuffer {
         let offset = byte_offset;
 
         #[allow(clippy::comparison_chain)]
-        // The offset splits the first segment => move all the text after the
-        // offset to the start of the second segment.
+        // The offset splits the left chunk => move all the text after the
+        // offset to the start of the right chunk.
         //
         // aa|bb~~~ccc => aa~~~bbccc
         if offset < self.len_left() {
@@ -555,8 +555,8 @@ impl GapBuffer {
                 MAX_BYTES - len_right,
             );
         }
-        // The offset splits the second segment => move all the text before the
-        // offset to the end of the first segment.
+        // The offset splits the right chunk => move all the text before the
+        // offset to the end of the left chunk.
         //
         // aaa~~~bb|cc => aaabb~~~cc
         else if offset > self.len_left() {
@@ -714,9 +714,9 @@ impl GapBuffer {
             ChunkSummary::from(a) + ChunkSummary::from(b)
         );
 
-        // Shift the first segment to the right.
-        let len_first = self.len_left();
-        self.bytes.copy_within(..len_first, a.len() + b.len());
+        // Shift the left chunk to the right.
+        let len_left = self.len_left();
+        self.bytes.copy_within(..len_left, a.len() + b.len());
 
         // Prepend the first string.
         self.bytes[..a.len()].copy_from_slice(a.as_bytes());

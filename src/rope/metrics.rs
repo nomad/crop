@@ -247,12 +247,12 @@ impl Metric<ChunkSummary> for ByteMetric {
 
     #[inline]
     fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
-        Self(gap_buffer.left_summary.bytes + gap_buffer.right_summary.bytes)
+        Self(gap_buffer.len())
     }
 
     #[inline]
     fn measure_slice(gap_slice: &GapSlice) -> Self {
-        Self(gap_slice.left_summary.bytes + gap_slice.right_summary.bytes)
+        Self(gap_slice.len())
     }
 }
 

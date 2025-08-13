@@ -170,7 +170,7 @@ impl<'a> GapSlice<'a> {
         }
     }
 
-    /// The second segment if it's not empty, or the first one otherwise.
+    /// The right chunk if it's not empty, or the left one otherwise.
     #[inline]
     pub(super) fn last_chunk(&self) -> &'a str {
         if self.len_right() == 0 {
