@@ -2,16 +2,7 @@ use core::fmt::Debug;
 use core::ops::{Add, AddAssign, RangeBounds, Sub, SubAssign};
 
 pub trait Summary:
-    Debug
-    + Default
-    + Clone
-    + Add<Self, Output = Self>
-    + AddAssign<Self>
-    + for<'a> AddAssign<&'a Self>
-    + Sub<Self, Output = Self>
-    + SubAssign<Self>
-    + for<'a> Sub<&'a Self, Output = Self>
-    + PartialEq
+    Debug + Default + Clone + AddAssign<Self> + SubAssign<Self> + PartialEq
 {
     /// The leaf type this summary is for.
     type Leaf: Leaf<Summary = Self>;

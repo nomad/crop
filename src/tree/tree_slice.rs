@@ -58,9 +58,9 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
 
                 if self.leaf_count() == 2 {
                     assert_eq!(
-                        self.summary,
-                        self.start_slice.summarize()
-                            + self.end_slice.summarize()
+                        self.summary.base_measure(),
+                        self.start_slice.base_measure()
+                            + self.end_slice.base_measure()
                     );
                 }
 
@@ -563,14 +563,17 @@ fn build_slice<'a, const N: usize, L, S, E>(
 
                     let right_slice = S::slice_from(leaf.as_slice(), start);
 
-                    let left_summary =
-                        leaf.summarize() - right_slice.summarize();
+                    let left_slice_end_measure =
+                        leaf.measure::<E>() - right_slice.measure::<E>();
 
-                    let end = end - *end_offset - left_summary.measure::<E>();
+                    let left_slice_base_measure =
+                        leaf.base_measure() - right_slice.base_measure();
+
+                    let end = end - *end_offset - left_slice_end_measure;
 
                     let start_slice = E::slice_up_to(right_slice, end);
 
-                    slice.offset += left_summary.base_measure();
+                    slice.offset += left_slice_base_measure;
                     slice.summary = start_slice.summarize();
                     slice.start_slice = start_slice;
                     slice.end_slice = start_slice;

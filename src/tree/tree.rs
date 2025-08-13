@@ -1548,7 +1548,7 @@ mod tree_replace {
 
 #[cfg(test)]
 mod tests {
-    use core::ops::{Add, AddAssign, Sub, SubAssign};
+    use core::ops::{AddAssign, SubAssign};
 
     use super::*;
 
@@ -1558,36 +1558,10 @@ mod tests {
         leaves: usize,
     }
 
-    impl Add<Self> for UsizeSummary {
-        type Output = Self;
-
-        #[inline]
-        fn add(mut self, rhs: Self) -> Self {
-            self += &rhs;
-            self
-        }
-    }
-
     impl AddAssign<Self> for UsizeSummary {
         fn add_assign(&mut self, rhs: Self) {
-            *self += &rhs;
-        }
-    }
-
-    impl AddAssign<&Self> for UsizeSummary {
-        fn add_assign(&mut self, rhs: &Self) {
             self.count += rhs.count;
             self.leaves += rhs.leaves;
-        }
-    }
-
-    impl Sub<Self> for UsizeSummary {
-        type Output = Self;
-
-        #[inline]
-        fn sub(mut self, rhs: Self) -> Self {
-            self -= rhs;
-            self
         }
     }
 
@@ -1595,16 +1569,6 @@ mod tests {
         fn sub_assign(&mut self, rhs: Self) {
             self.count -= rhs.count;
             self.leaves -= rhs.leaves;
-        }
-    }
-
-    impl Sub<&Self> for UsizeSummary {
-        type Output = Self;
-
-        #[inline]
-        fn sub(mut self, rhs: &Self) -> Self {
-            self -= *rhs;
-            self
         }
     }
 

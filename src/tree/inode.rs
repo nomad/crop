@@ -281,7 +281,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 // remove the second child.
                 if first.len() + second.len() <= Self::max_children() {
                     first.children.append(&mut second.children);
-                    first.summary += second.summary();
+                    first.summary += second.summary.clone();
                     self.children.remove(1);
                 }
                 // Move the minimum number of children from the second child
@@ -346,7 +346,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 // then remove the last child.
                 if penultimate.len() + last.len() <= Self::max_children() {
                     penultimate.children.append(&mut last.children);
-                    penultimate.summary += last.summary();
+                    penultimate.summary += last.summary.clone();
                     self.children.remove(last_idx);
                 }
                 // Move the minimum number of children from the penultimate
