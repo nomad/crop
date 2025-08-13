@@ -349,7 +349,7 @@ mod tests {
         let buffer = GapBuffer::from("ba\r\n");
         let mut slice = buffer.as_slice();
         slice.truncate_trailing_line_break();
-        assert_eq!("aa", slice);
+        assert_eq!("ba", slice);
     }
 
     #[test]

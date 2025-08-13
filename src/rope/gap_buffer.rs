@@ -116,12 +116,12 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::GapBuffer;
-    /// let mut left = GapBuffer::<10>::from("Hello");
-    /// let mut right = GapBuffer::<10>::from(", World!");
+    /// let mut left = GapBuffer::from("ab");
+    /// let mut right = GapBuffer::from("cdef");
     ///
     /// left.add_from_right(2, &mut right);
-    /// assert_eq!(left, "Hello, ");
-    /// assert_eq!(right, "World!");
+    /// assert_eq!(left, "abcd");
+    /// assert_eq!(right, "ef");
     /// ```
     #[inline]
     pub fn add_from_right(
@@ -171,14 +171,14 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::GapBuffer;
-    /// # use crop::tree::Summarize;
-    /// let mut left = GapBuffer::<15>::from("Hello");
+    /// # use crop::tree::Leaf;
+    /// let mut left = GapBuffer::from("ab");
     ///
-    /// let mut right = GapBuffer::<15>::from(", World!");
+    /// let mut right = GapBuffer::from("cd");
     ///
     /// left.append_other(&mut right);
     ///
-    /// assert_eq!(left, "Hello, World!");
+    /// assert_eq!(left, "abcd");
     ///
     /// assert_eq!(right, "");
     /// ```
@@ -219,13 +219,13 @@ impl GapBuffer {
     /// ```
     /// # use crop::{GapBuffer, ChunkSummary};
     ///
-    /// let mut buffer = GapBuffer::<10>::from("aabb");
-    /// assert_eq!(buffer.left_chunk(), "aa");
-    /// assert_eq!(buffer.right_chunk(), "bb");
+    /// let mut buffer = GapBuffer::from("ab");
+    /// assert_eq!(buffer.left_chunk(), "a");
+    /// assert_eq!(buffer.right_chunk(), "b");
     ///
-    /// buffer.append_str("cc", ChunkSummary::from("cc"));
-    /// assert_eq!(buffer.left_chunk(), "aa");
-    /// assert_eq!(buffer.right_chunk(), "bbcc");
+    /// buffer.append_str("c", ChunkSummary::from("c"));
+    /// assert_eq!(buffer.left_chunk(), "a");
+    /// assert_eq!(buffer.right_chunk(), "bc");
     /// ```
     #[inline]
     pub fn append_str(&mut self, str: &str, str_summary: ChunkSummary) {
@@ -255,11 +255,11 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::{GapBuffer, ChunkSummary};
-    /// let mut buffer = GapBuffer::<10>::from("aabb");
+    /// let mut buffer = GapBuffer::from("ab");
     ///
-    /// buffer.append_two("cc", "dd", ChunkSummary::from("ccdd"));
-    /// assert_eq!(buffer.left_chunk(), "aa");
-    /// assert_eq!(buffer.right_chunk(), "bbccdd");
+    /// buffer.append_two("c", "d", ChunkSummary::from("cd"));
+    /// assert_eq!(buffer.left_chunk(), "a");
+    /// assert_eq!(buffer.right_chunk(), "bcd");
     /// ```
     #[inline]
     pub fn append_two(&mut self, a: &str, b: &str, a_b_summary: ChunkSummary) {
@@ -324,9 +324,9 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::GapBuffer;
-    /// let buffer = GapBuffer::<10>::from_chunks(&["a", "abb", "cc", "dd"]);
-    /// assert_eq!(buffer.left_chunk(), "aabb");
-    /// assert_eq!(buffer.right_chunk(), "ccdd");
+    /// let buffer = GapBuffer::from_chunks(&["a", "b", "c", "d"]);
+    /// assert_eq!(buffer.left_chunk(), "ab");
+    /// assert_eq!(buffer.right_chunk(), "cd");
     /// ```
     #[inline]
     pub fn from_chunks(chunks: &[&str]) -> Self {
@@ -521,16 +521,16 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::GapBuffer;
-    /// # use crop::tree::Summarize;
-    /// let mut buffer = GapBuffer::<10>::from("aaaabbbb");
+    /// # use crop::tree::Leaf;
+    /// let mut buffer = GapBuffer::from("aabb");
     ///
-    /// buffer.move_gap(2);
-    /// assert_eq!(buffer.left_chunk(), "aa");
-    /// assert_eq!(buffer.right_chunk(), "aabbbb");
+    /// buffer.move_gap(1);
+    /// assert_eq!(buffer.left_chunk(), "a");
+    /// assert_eq!(buffer.right_chunk(), "abb");
     ///
-    /// buffer.move_gap(6);
-    /// assert_eq!(buffer.left_chunk(), "aaaabb");
-    /// assert_eq!(buffer.right_chunk(), "bb");
+    /// buffer.move_gap(3);
+    /// assert_eq!(buffer.left_chunk(), "aab");
+    /// assert_eq!(buffer.right_chunk(), "b");
     /// ```
     #[inline]
     pub fn move_gap(&mut self, byte_offset: usize) {
@@ -595,16 +595,16 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::GapBuffer;
-    /// # use crop::tree::Summarize;
-    /// let mut left = GapBuffer::<10>::from("Hello, ");
+    /// # use crop::tree::Leaf;
+    /// let mut left = GapBuffer::from("aaa");
     ///
-    /// let mut right = GapBuffer::<10>::from("World!");
+    /// let mut right = GapBuffer::from("b");
     ///
     /// left.move_to_right(2, &mut right);
     ///
-    /// assert_eq!(left, "Hello");
+    /// assert_eq!(left, "a");
     ///
-    /// assert_eq!(right, ", World!");
+    /// assert_eq!(right, "aab");
     /// ```
     #[inline]
     pub fn move_to_right(&mut self, bytes_to_move: usize, right: &mut Self) {
@@ -650,15 +650,15 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::{ChunkSummary, GapBuffer};
-    /// let mut buf = GapBuffer::<15>::from("World!");
+    /// let mut buf = GapBuffer::from("at");
     ///
-    /// let prepend = "Hello, ";
+    /// let prepend = "c";
     ///
     /// let prepended_summary = ChunkSummary::from(prepend);
     ///
     /// buf.prepend(prepend, prepended_summary);
     ///
-    /// assert_eq!(buf, "Hello, World!");
+    /// assert_eq!(buf, "cat");
     /// ```
     #[inline]
     pub fn prepend(&mut self, str: &str, str_summary: ChunkSummary) {
@@ -687,18 +687,18 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::{ChunkSummary, GapBuffer};
-    /// let mut buf = GapBuffer::<15>::from("!");
+    /// let mut buf = GapBuffer::from("!");
     ///
-    /// let hello = "Hello, ";
+    /// let first = "c";
     ///
-    /// let world = "World";
+    /// let second = "at";
     ///
     /// let prepended_summary =
-    ///     ChunkSummary::from(hello) + ChunkSummary::from(world);
+    ///     ChunkSummary::from(first) + ChunkSummary::from(second);
     ///
-    /// buf.prepend_two(hello, world, prepended_summary);
+    /// buf.prepend_two(first, second, prepended_summary);
     ///
-    /// assert_eq!(buf, "Hello, World!");
+    /// assert_eq!(buf, "cat!");
     /// ```
     #[inline]
     pub fn prepend_two(
@@ -739,13 +739,13 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::{ChunkSummary, GapBuffer};
-    /// let mut buffer = GapBuffer::<10>::from("foo\nbar");
+    /// let mut buffer = GapBuffer::from("a\nbc");
     ///
-    /// let removed_summary = ChunkSummary::from("foo\n");
+    /// let removed_summary = ChunkSummary::from("a\n");
     ///
-    /// buffer.remove_up_to(4, removed_summary);
+    /// buffer.remove_up_to(2, removed_summary);
     ///
-    /// assert_eq!(buffer, "bar");
+    /// assert_eq!(buffer, "bc");
     /// ```
     #[inline]
     pub fn remove_up_to(
@@ -792,10 +792,10 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::GapBuffer;
-    /// # use crop::tree::Summarize;
-    /// let mut buffer = GapBuffer::<10>::from("foo\nbar");
-    /// buffer.replace_non_overflowing(4..7, "baz\r\n");
-    /// assert_eq!(buffer, "foo\nbaz\r\n");
+    /// # use crop::tree::Leaf;
+    /// let mut buffer = GapBuffer::from("foo");
+    /// buffer.replace_non_overflowing(1..3, "ire");
+    /// assert_eq!(buffer, "fire");
     /// ```
     #[inline]
     pub fn replace_non_overflowing(
@@ -840,8 +840,9 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::GapBuffer;
-    /// # use crop::tree::Summarize;
-    /// let mut buffer = GapBuffer::<10>::from("foo\nbar");
+    /// # use crop::tree::Leaf;
+    /// # if cfg!(feature = "small_chunks") {
+    /// let mut buffer = GapBuffer::from("foo\n");
     ///
     /// // Replace the newline with a string that's too long to fit in the
     /// // buffer.
@@ -850,9 +851,11 @@ impl GapBuffer {
     /// assert_eq!(buffer, "foo");
     ///
     /// let mut extras = extras.into_iter();
-    /// assert_eq!("foo\nbar\r\nb", extras.next().unwrap());
-    /// assert_eq!("azbar", extras.next().unwrap());
+    /// assert_eq!("foo\n", extras.next().unwrap());
+    /// assert_eq!("bar\r", extras.next().unwrap());
+    /// assert_eq!("\nbaz", extras.next().unwrap());
     /// assert_eq!(None, extras.next());
+    /// # }
     /// ```
     #[inline]
     pub fn replace_overflowing(
@@ -866,7 +869,11 @@ impl GapBuffer {
         debug_assert!(end <= self.len());
         debug_assert!(self.is_char_boundary(start));
         debug_assert!(self.is_char_boundary(end));
-        debug_assert!(self.len() - (end - start) + s.len() > MAX_BYTES);
+        debug_assert!(
+            self.len() - (end - start) + s.len() > MAX_BYTES,
+            "{}",
+            MAX_BYTES
+        );
 
         let (extra_left, extra_right) = if end <= self.len_left() {
             (&self.left_chunk()[end..], self.right_chunk())
@@ -1012,16 +1019,16 @@ impl GapBuffer {
     ///
     /// ```
     /// # use crop::GapBuffer;
-    /// # use crop::tree::Summarize;
-    /// let mut buffer = GapBuffer::<10>::from("foo\nbar\r\n");
+    /// # use crop::tree::Leaf;
+    /// let mut buffer = GapBuffer::from("f\n\r\n");
     /// assert_eq!(buffer.summarize_range(0..buffer.len()), buffer.summarize());
     ///
-    /// let s = buffer.summarize_range(0..4);
-    /// assert_eq!(s.bytes(), 4);
-    /// assert_eq!(s.line_breaks(), 1);
+    /// let s = buffer.summarize_range(0..1);
+    /// assert_eq!(s.bytes(), 1);
+    /// assert_eq!(s.line_breaks(), 0);
     ///
-    /// let s = buffer.summarize_range(2..buffer.len());
-    /// assert_eq!(s.bytes(), 7);
+    /// let s = buffer.summarize_range(1..buffer.len());
+    /// assert_eq!(s.bytes(), 3);
     /// assert_eq!(s.line_breaks(), 2);
     /// ```
     #[inline]
