@@ -236,11 +236,7 @@ impl<const N: usize, L: Leaf, M: Metric<L::Summary>> Clone
 {
     #[inline]
     fn clone(&self) -> Self {
-        Self {
-            path: self.path.clone(),
-            yielded_in_leaf: self.yielded_in_leaf.clone(),
-            ..*self
-        }
+        Self { path: self.path.clone(), ..*self }
     }
 }
 
@@ -599,7 +595,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
 
         let (mut end_slice, rest, mut advance) = M::first_unit(slice);
 
-        self.yielded_in_leaf = advance.clone();
+        self.yielded_in_leaf = advance;
         self.start_slice = rest;
 
         advance += L::BaseMetric::measure(&summary);
@@ -810,7 +806,7 @@ impl<'a, const N: usize, L: Leaf, M: UnitMetric<L>> UnitsForward<'a, N, L, M> {
             return (
                 TreeSlice {
                     root: self.leaf_node,
-                    offset: self.yielded_in_leaf.clone(),
+                    offset: self.yielded_in_leaf,
                     start_slice: self.start_slice,
                     end_slice: self.start_slice,
                     summary,
@@ -893,11 +889,7 @@ impl<const N: usize, L: Leaf, M: Metric<L::Summary>> Clone
 {
     #[inline]
     fn clone(&self) -> Self {
-        Self {
-            path: self.path.clone(),
-            yielded_in_leaf: self.yielded_in_leaf.clone(),
-            ..*self
-        }
+        Self { path: self.path.clone(), ..*self }
     }
 }
 

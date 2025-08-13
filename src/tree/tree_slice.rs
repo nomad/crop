@@ -34,11 +34,7 @@ pub enum SliceLeafCount {
 impl<const ARITY: usize, L: Leaf> Clone for TreeSlice<'_, ARITY, L> {
     #[inline]
     fn clone(&self) -> Self {
-        TreeSlice {
-            offset: self.offset.clone(),
-            summary: self.summary.clone(),
-            ..*self
-        }
+        TreeSlice { summary: self.summary.clone(), ..*self }
     }
 }
 
@@ -286,6 +282,8 @@ where
             root,
             start,
             end,
+            &mut S::zero(),
+            &mut E::zero(),
             &mut recompute_root,
             &mut false,
             &mut false,
@@ -462,11 +460,14 @@ where
 /// the other fields of the slice are valid.
 #[track_caller]
 #[inline]
+#[allow(clippy::too_many_arguments)]
 fn build_slice<'a, const N: usize, L, S, E>(
     slice: &mut TreeSlice<'a, N, L>,
     node: &'a Arc<Node<N, L>>,
     start: S,
     end: E,
+    start_offset: &mut S,
+    end_offset: &mut E,
     recompute_root: &mut bool,
     found_start_slice: &mut bool,
     done: &mut bool,
@@ -487,9 +488,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                 let child_summary = child.summary();
 
                 if !*found_start_slice {
-                    if S::measure(&slice.offset) + S::measure(&child_summary)
-                        >= start
-                    {
+                    if *start_offset + child_summary.measure::<S>() >= start {
                         // This child contains the starting slice somewhere in
                         // its subtree. Run this function again with this child
                         // as the node.
@@ -498,17 +497,21 @@ fn build_slice<'a, const N: usize, L, S, E>(
                             child,
                             start,
                             end,
+                            start_offset,
+                            end_offset,
                             recompute_root,
                             found_start_slice,
                             done,
                         );
                     } else {
                         // This child comes before the starting leaf.
-                        slice.offset += child_summary;
+                        slice.offset += child_summary.base_measure();
+                        *start_offset += child_summary.measure::<S>();
+                        *end_offset += child_summary.measure::<E>();
                     }
-                } else if E::measure(&slice.offset)
-                    + E::measure(&slice.summary)
-                    + E::measure(&child_summary)
+                } else if *end_offset
+                    + slice.summary.measure::<E>()
+                    + child_summary.measure::<E>()
                     >= end
                 {
                     // This child contains the ending leaf somewhere in its
@@ -519,6 +522,8 @@ fn build_slice<'a, const N: usize, L, S, E>(
                         child,
                         start,
                         end,
+                        start_offset,
+                        end_offset,
                         recompute_root,
                         found_start_slice,
                         done,
@@ -537,9 +542,9 @@ fn build_slice<'a, const N: usize, L, S, E>(
             // This leaf must contain either the first slice, the last slice or
             // both.
 
-            let contains_end_slice = E::measure(&slice.offset)
-                + E::measure(&slice.summary)
-                + E::measure(&leaf_summary)
+            let contains_end_slice = *end_offset
+                + slice.summary.measure::<E>()
+                + leaf_summary.measure::<E>()
                 >= end;
 
             if !*found_start_slice {
@@ -548,27 +553,24 @@ fn build_slice<'a, const N: usize, L, S, E>(
                 debug_assert!({
                     // If we haven't yet found the first slice this leaf must
                     // contain it.
-                    S::measure(&slice.offset) + S::measure(&leaf_summary)
-                        >= start
+                    *start_offset + leaf_summary.measure::<S>() >= start
                 });
 
                 if contains_end_slice {
                     // The end of the range is also contained in this leaf
                     // so the final slice only spans this single leaf.
-                    let start = start - S::measure(&slice.offset);
+                    let start = start - *start_offset;
 
                     let right_slice = S::slice_from(leaf.as_slice(), start);
 
                     let left_summary =
                         leaf.summarize() - right_slice.summarize();
 
-                    let end = end
-                        - E::measure(&slice.offset)
-                        - E::measure(&left_summary);
+                    let end = end - *end_offset - left_summary.measure::<E>();
 
                     let start_slice = E::slice_up_to(right_slice, end);
 
-                    slice.offset += left_summary;
+                    slice.offset += left_summary.base_measure();
                     slice.summary = start_slice.summarize();
                     slice.start_slice = start_slice;
                     slice.end_slice = start_slice;
@@ -576,22 +578,21 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     *done = true;
                 } else {
                     // This leaf contains the first slice but not the last.
-                    let start_slice = S::slice_from(
-                        leaf.as_slice(),
-                        start - S::measure(&slice.offset),
-                    );
+                    let start_slice =
+                        S::slice_from(leaf.as_slice(), start - *start_offset);
 
                     if start_slice.is_empty() {
-                        slice.offset += leaf.summarize();
+                        slice.offset += leaf.base_measure();
+                        *start_offset += leaf.measure::<S>();
+                        *end_offset += leaf.measure::<E>();
                         *recompute_root = true;
                         return;
                     }
 
                     let start_summary = start_slice.summarize();
 
-                    let right_summary = leaf.summarize() - &start_summary;
-
-                    slice.offset += right_summary;
+                    slice.offset +=
+                        leaf.base_measure() - start_summary.base_measure();
                     slice.summary += start_summary;
                     slice.start_slice = start_slice;
 
@@ -600,9 +601,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
             } else {
                 debug_assert!(contains_end_slice);
 
-                let end = end
-                    - E::measure(&slice.offset)
-                    - E::measure(&slice.summary);
+                let end = end - *end_offset - slice.summary.measure::<E>();
 
                 // This leaf contains the last slice.
                 let end_slice = E::slice_up_to(leaf.as_slice(), end);
