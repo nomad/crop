@@ -583,10 +583,13 @@ impl Rope {
         }
 
         if end == self.tree.summary().line_breaks() + 1 {
-            return RopeSlice {
-                tree_slice: self.tree.slice_from(RawLineMetric(start)),
-                has_trailing_newline: false,
+            let tree_slice = if start == end {
+                self.tree.slice_from(ByteMetric(self.byte_len()))
+            } else {
+                self.tree.slice_from(RawLineMetric(start))
             };
+            debug_assert!(!tree_slice.end_slice().has_trailing_newline());
+            return RopeSlice { tree_slice, has_trailing_newline: false };
         }
 
         self.tree.slice(RawLineMetric(start)..RawLineMetric(end)).into()

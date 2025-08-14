@@ -283,8 +283,6 @@ where
         debug_assert!(S::zero() <= start);
         debug_assert!(end <= root.measure::<E>());
 
-        println!("Slicing between {start:?} and {end:?} in\n{root:#?}");
-
         let (root, start, end) =
             deepest_node_containing_range(root, start, end);
 
@@ -310,8 +308,6 @@ where
             &mut false,
         );
 
-        println!("Need to recompute root: {recompute_root}");
-
         if recompute_root {
             let start = slice.offset;
 
@@ -324,12 +320,6 @@ where
             slice.root = root;
             slice.offset -= offset;
         }
-
-        println!("Slice's root: {:?}", slice.root);
-        println!("Slice's offset: {:?}", slice.offset);
-        println!("Slice's summary: {:?}", slice.summary);
-        println!("Slice's start_slice: {:?}", slice.start_slice);
-        println!("Slice's end_slice: {:?}", slice.end_slice);
 
         slice
     }
@@ -505,8 +495,6 @@ fn build_slice<'a, const N: usize, L, S, E>(
     S: SlicingMetric<L>,
     E: SlicingMetric<L>,
 {
-    println!("Node is leaf? {}", node.is_leaf());
-
     match &**node {
         Node::Internal(inode) => {
             for child in inode.children() {
@@ -608,10 +596,6 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     slice.summary = start_slice.summarize();
                     slice.start_slice = start_slice;
                     slice.end_slice = start_slice;
-
-                    println!(
-                        "Set both start and end slices to {start_slice:?}"
-                    );
 
                     *done = true;
                 } else {
