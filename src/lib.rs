@@ -169,7 +169,7 @@ pub use rope::{Rope, RopeBuilder, RopeSlice};
 pub use rope::{
     gap_buffer::GapBuffer,
     gap_slice::GapSlice,
-    metrics::ChunkSummary,
+    metrics::StrSummary,
 };
 
 #[inline]

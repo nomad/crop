@@ -15,14 +15,14 @@ use crate::tree::{
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
 #[doc(hidden)]
-pub struct ChunkSummary {
+pub struct StrSummary {
     bytes: usize,
     line_breaks: usize,
     #[cfg(feature = "utf16-metric")]
     utf16_code_units: usize,
 }
 
-impl From<&str> for ChunkSummary {
+impl From<&str> for StrSummary {
     #[inline]
     fn from(s: &str) -> Self {
         Self {
@@ -34,7 +34,7 @@ impl From<&str> for ChunkSummary {
     }
 }
 
-impl From<char> for ChunkSummary {
+impl From<char> for StrSummary {
     #[inline]
     fn from(ch: char) -> Self {
         Self {
@@ -46,7 +46,7 @@ impl From<char> for ChunkSummary {
     }
 }
 
-impl ChunkSummary {
+impl StrSummary {
     #[inline]
     pub fn bytes(&self) -> usize {
         self.bytes
@@ -70,7 +70,7 @@ impl ChunkSummary {
     }
 }
 
-impl Summary for ChunkSummary {
+impl Summary for StrSummary {
     type Leaf = str;
 
     #[inline]
@@ -79,7 +79,7 @@ impl Summary for ChunkSummary {
     }
 }
 
-impl Add for ChunkSummary {
+impl Add for StrSummary {
     type Output = Self;
 
     #[inline]
@@ -89,7 +89,7 @@ impl Add for ChunkSummary {
     }
 }
 
-impl AddAssign for ChunkSummary {
+impl AddAssign for StrSummary {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
         self.bytes += rhs.bytes;
@@ -101,7 +101,7 @@ impl AddAssign for ChunkSummary {
     }
 }
 
-impl Sub for ChunkSummary {
+impl Sub for StrSummary {
     type Output = Self;
 
     #[inline]
@@ -111,7 +111,7 @@ impl Sub for ChunkSummary {
     }
 }
 
-impl SubAssign for ChunkSummary {
+impl SubAssign for StrSummary {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
         self.bytes -= rhs.bytes;
@@ -126,7 +126,7 @@ impl SubAssign for ChunkSummary {
 impl Leaf for str {
     type BaseMetric = ByteMetric;
     type Slice<'a> = &'a Self;
-    type Summary = ChunkSummary;
+    type Summary = StrSummary;
 
     #[inline]
     fn as_slice(&self) -> Self::Slice<'_> {
@@ -135,7 +135,7 @@ impl Leaf for str {
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        ChunkSummary::from(self)
+        StrSummary::from(self)
     }
 }
 
@@ -144,29 +144,29 @@ impl<'a> LeafSlice<'a> for &'a str {
 
     #[inline]
     fn summarize(&self) -> <Self::Leaf as Leaf>::Summary {
-        ChunkSummary::from(*self)
+        StrSummary::from(*self)
     }
 }
 
 /// Conversion trait from the metric implement this trait to the corresponding
 /// byte offset.
-pub trait ToByteOffset: Metric<ChunkSummary> {
+pub trait ToByteOffset: Metric<StrSummary> {
     /// Should return the byte offset of `self` in the given string.
     fn to_byte_offset(&self, in_str: &str) -> usize;
 }
 
 /// Trait to get the summary of a string up to a given offset.
-pub trait SummaryUpTo: Metric<ChunkSummary> {
+pub trait SummaryUpTo: Metric<StrSummary> {
     /// Return the summary of the given string up to `offset`, where
     ///
     /// * `str_summary` is the string's summary,
     /// * `byte_offset` is byte offset of `offset`.
     fn up_to(
         in_str: &str,
-        str_summary: ChunkSummary,
+        str_summary: StrSummary,
         offset: Self,
         byte_offset: usize,
-    ) -> ChunkSummary;
+    ) -> StrSummary;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -231,13 +231,13 @@ impl SummaryUpTo for ByteMetric {
     #[inline]
     fn up_to(
         in_str: &str,
-        str_summary: ChunkSummary,
+        str_summary: StrSummary,
         offset: Self,
         byte_offset: usize,
-    ) -> ChunkSummary {
+    ) -> StrSummary {
         debug_assert_eq!(offset.0, byte_offset);
 
-        ChunkSummary {
+        StrSummary {
             bytes: byte_offset,
 
             line_breaks: count::line_breaks_up_to(
@@ -256,7 +256,7 @@ impl SummaryUpTo for ByteMetric {
     }
 }
 
-impl Metric<ChunkSummary> for ByteMetric {
+impl Metric<StrSummary> for ByteMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
@@ -268,7 +268,7 @@ impl Metric<ChunkSummary> for ByteMetric {
     }
 
     #[inline]
-    fn measure(summary: &ChunkSummary) -> Self {
+    fn measure(summary: &StrSummary) -> Self {
         Self(summary.bytes)
     }
 
@@ -384,11 +384,11 @@ impl SummaryUpTo for RawLineMetric {
     #[inline]
     fn up_to(
         in_str: &str,
-        str_summary: ChunkSummary,
+        str_summary: StrSummary,
         Self(line_offset): Self,
         byte_offset: usize,
-    ) -> ChunkSummary {
-        ChunkSummary {
+    ) -> StrSummary {
+        StrSummary {
             bytes: byte_offset,
 
             line_breaks: line_offset,
@@ -403,7 +403,7 @@ impl SummaryUpTo for RawLineMetric {
     }
 }
 
-impl Metric<ChunkSummary> for RawLineMetric {
+impl Metric<StrSummary> for RawLineMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
@@ -415,7 +415,7 @@ impl Metric<ChunkSummary> for RawLineMetric {
     }
 
     #[inline]
-    fn measure(summary: &ChunkSummary) -> Self {
+    fn measure(summary: &StrSummary) -> Self {
         Self(summary.line_breaks)
     }
 
@@ -528,7 +528,7 @@ impl SubAssign for LineMetric {
     }
 }
 
-impl Metric<ChunkSummary> for LineMetric {
+impl Metric<StrSummary> for LineMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
@@ -540,7 +540,7 @@ impl Metric<ChunkSummary> for LineMetric {
     }
 
     #[inline]
-    fn measure(summary: &ChunkSummary) -> Self {
+    fn measure(summary: &StrSummary) -> Self {
         Self(summary.line_breaks)
     }
 
@@ -656,11 +656,11 @@ mod utf16_metric {
         #[inline]
         fn up_to(
             in_str: &str,
-            str_summary: ChunkSummary,
+            str_summary: StrSummary,
             Self(utf16_code_unit_offset): Self,
             byte_offset: usize,
-        ) -> ChunkSummary {
-            ChunkSummary {
+        ) -> StrSummary {
+            StrSummary {
                 bytes: byte_offset,
 
                 line_breaks: count::line_breaks_up_to(
@@ -674,7 +674,7 @@ mod utf16_metric {
         }
     }
 
-    impl Metric<ChunkSummary> for Utf16Metric {
+    impl Metric<StrSummary> for Utf16Metric {
         #[inline]
         fn zero() -> Self {
             Self(0)
@@ -686,7 +686,7 @@ mod utf16_metric {
         }
 
         #[inline]
-        fn measure(summary: &ChunkSummary) -> Self {
+        fn measure(summary: &StrSummary) -> Self {
             Self(summary.utf16_code_units)
         }
 

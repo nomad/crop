@@ -1,6 +1,6 @@
 use super::Rope;
 use super::gap_buffer::GapBuffer;
-use super::metrics::ChunkSummary;
+use super::metrics::StrSummary;
 use super::rope::RopeChunk;
 use super::utils::split_adjusted;
 use crate::tree::TreeBuilder;
@@ -59,7 +59,7 @@ impl RopeBuilder {
             text,
         ) {
             self.buffer.left_summary =
-                ChunkSummary::from(self.buffer_left_chunk());
+                StrSummary::from(self.buffer_left_chunk());
 
             self.tree_builder.append(core::mem::take(&mut self.buffer));
 
@@ -104,7 +104,7 @@ impl RopeBuilder {
     pub fn build(mut self) -> Rope {
         if self.buffer_len_left > 0 {
             self.buffer.left_summary =
-                ChunkSummary::from(self.buffer_left_chunk());
+                StrSummary::from(self.buffer_left_chunk());
 
             self.rope_has_trailing_newline =
                 self.buffer.has_trailing_newline();
