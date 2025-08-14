@@ -1226,8 +1226,8 @@ impl Leaf for GapBuffer {
         GapBufferSummary {
             chunks_summary: self.left_summary + self.right_summary,
             #[cfg(feature = "chunk-len")]
-            num_chunks: (self.left_summary.bytes() > 0) as usize
-                + (self.right_summary.bytes() > 0) as usize,
+            num_chunks: (self.len_left() > 0) as usize
+                + (self.len_right() > 0) as usize,
         }
     }
 }
