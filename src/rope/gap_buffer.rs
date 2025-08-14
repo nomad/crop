@@ -208,8 +208,8 @@ impl GapBuffer {
         self.left_summary += self.right_summary;
         self.right_summary = other.left_summary + other.right_summary;
 
-        other.left_summary = StrSummary::new();
-        other.right_summary = StrSummary::new();
+        other.left_summary = StrSummary::empty();
+        other.right_summary = StrSummary::empty();
     }
 
     /// Appends the given string to `self`, shifting the bytes currently in the
@@ -419,7 +419,7 @@ impl GapBuffer {
 
         let mut bytes = Box::new([0u8; MAX_BYTES]);
 
-        let mut left_summary = StrSummary::new();
+        let mut left_summary = StrSummary::empty();
 
         let mut chunks = chunks.iter();
 
@@ -844,7 +844,7 @@ impl GapBuffer {
             self.left_summary -= removed_summary;
         } else {
             self.right_summary -= removed_summary - self.left_summary;
-            self.left_summary = StrSummary::new();
+            self.left_summary = StrSummary::empty();
         }
     }
 
@@ -1162,8 +1162,7 @@ impl GapBuffer {
         if byte_offset <= self.len_right() / 2 {
             self.right_chunk()[..byte_offset].summarize()
         } else {
-            self.right_summary
-                - self.right_chunk()[byte_offset..].summarize()
+            self.right_summary - self.right_chunk()[byte_offset..].summarize()
         }
     }
 
@@ -1178,7 +1177,7 @@ impl GapBuffer {
 
         if byte_offset <= self.len_left() {
             self.left_summary = self.summarize_left_chunk_up_to(byte_offset);
-            self.right_summary = StrSummary::new();
+            self.right_summary = StrSummary::empty();
         } else {
             let offset = byte_offset - self.len_left();
 

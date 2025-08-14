@@ -123,7 +123,7 @@ impl<'a> GapSlice<'a> {
             // The right chunk has exactly 1 character, so we can keep just the
             // left chunk.
             Ordering::Equal => {
-                self.right_summary = StrSummary::new();
+                self.right_summary = StrSummary::empty();
                 self.bytes = &self.bytes[..self.len_left()];
             },
         }
@@ -136,7 +136,7 @@ impl<'a> GapSlice<'a> {
     #[inline]
     pub(super) fn truncate_trailing_line_break(&mut self) -> StrSummary {
         if !self.has_trailing_newline() {
-            return StrSummary::new();
+            return StrSummary::empty();
         }
 
         let mut removed_summary = self.truncate_last_char();
@@ -260,7 +260,7 @@ impl<'a> GapSlice<'a> {
             let left = Self {
                 bytes: bytes_left,
                 left_summary: left_left_summary,
-                right_summary: StrSummary::new(),
+                right_summary: StrSummary::empty(),
             };
 
             let right = Self {
@@ -294,7 +294,7 @@ impl<'a> GapSlice<'a> {
             let right = Self {
                 bytes: bytes_right,
                 left_summary: self.right_summary - right_left_summary,
-                right_summary: StrSummary::new(),
+                right_summary: StrSummary::empty(),
             };
 
             (left, right)

@@ -33,12 +33,6 @@ impl StrSummary {
         self.line_breaks
     }
 
-    #[doc(hidden)]
-    #[inline]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     #[cfg(feature = "utf16-metric")]
     #[inline]
     pub fn utf16_code_units(&self) -> usize {
