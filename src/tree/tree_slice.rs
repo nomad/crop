@@ -226,26 +226,22 @@ where
     pub fn slice<M>(self, range: Range<M>) -> Self
     where
         M: SlicingMetric<L> + FromMetric<L::BaseMetric, L::Summary>,
-        L::BaseMetric: SlicingMetric<L>,
+        L::BaseMetric: SlicingMetric<L> + FromMetric<M, L::Summary>,
     {
         debug_assert!(M::zero() <= range.start);
         debug_assert!(range.start <= range.end);
         debug_assert!(range.end <= self.measure::<M>() + M::one());
 
-        let slice_offset = self.measure_offset::<M>();
+        let start = self.offset + self.convert_len_to_base(range.start);
 
         if range.end < self.measure::<M>() + M::one() {
             Self::slice_node(
                 self.root,
-                slice_offset + range.start,
-                slice_offset + range.end,
+                start,
+                self.measure_offset::<M>() + range.end,
             )
         } else {
-            Self::slice_node(
-                self.root,
-                slice_offset + range.start,
-                self.offset + self.base_len(),
-            )
+            Self::slice_node(self.root, start, self.offset + self.base_len())
         }
     }
 
