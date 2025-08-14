@@ -250,11 +250,6 @@ impl Metric<StrSummary> for ByteMetric {
     }
 
     #[inline]
-    fn one() -> Self {
-        Self(1)
-    }
-
-    #[inline]
     fn measure(summary: &StrSummary) -> Self {
         Self(summary.bytes)
     }
@@ -397,11 +392,6 @@ impl Metric<StrSummary> for RawLineMetric {
     }
 
     #[inline]
-    fn one() -> Self {
-        Self(1)
-    }
-
-    #[inline]
     fn measure(summary: &StrSummary) -> Self {
         Self(summary.line_breaks)
     }
@@ -436,6 +426,11 @@ impl SlicingMetric<GapBuffer> for RawLineMetric {
 }
 
 impl UnitMetric<GapBuffer> for RawLineMetric {
+    #[inline]
+    fn one() -> Self {
+        Self(1)
+    }
+
     #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
@@ -522,11 +517,6 @@ impl Metric<StrSummary> for LineMetric {
     }
 
     #[inline]
-    fn one() -> Self {
-        Self(1)
-    }
-
-    #[inline]
     fn measure(summary: &StrSummary) -> Self {
         Self(summary.line_breaks)
     }
@@ -543,6 +533,11 @@ impl Metric<StrSummary> for LineMetric {
 }
 
 impl UnitMetric<GapBuffer> for LineMetric {
+    #[inline]
+    fn one() -> Self {
+        Self(1)
+    }
+
     #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
@@ -665,11 +660,6 @@ mod utf16_metric {
         #[inline]
         fn zero() -> Self {
             Self(0)
-        }
-
-        #[inline]
-        fn one() -> Self {
-            Self(1)
         }
 
         #[inline]

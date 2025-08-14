@@ -137,7 +137,7 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     where
         M: Metric<L::Summary>,
     {
-        debug_assert!(offset <= self.measure::<M>() + M::one());
+        debug_assert!(offset <= self.measure::<M>());
         self.root.leaf_at_offset(offset)
     }
 
@@ -197,9 +197,24 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     {
         debug_assert!(M::zero() <= range.start);
         debug_assert!(range.start <= range.end);
-        debug_assert!(range.end <= self.measure::<M>() + M::one());
+        debug_assert!(range.end <= self.measure::<M>());
 
         TreeSlice::slice_node(&self.root, range.start, range.end)
+    }
+
+    /// Returns a slice of the `Tree` from the given offset to the end of the
+    /// tree.
+    #[track_caller]
+    #[inline]
+    pub fn slice_from<M>(&self, start: M) -> TreeSlice<'_, ARITY, L>
+    where
+        M: SlicingMetric<L>,
+        L::BaseMetric: SlicingMetric<L>,
+        for<'d> L::Slice<'d>: Default,
+    {
+        debug_assert!(start <= self.measure::<M>());
+
+        TreeSlice::slice_node(&self.root, start, self.base_len())
     }
 
     #[inline]
@@ -1613,10 +1628,6 @@ mod tests {
     impl Metric<UsizeSummary> for LeavesMetric {
         fn zero() -> Self {
             0
-        }
-
-        fn one() -> Self {
-            1
         }
 
         fn measure(summary: &UsizeSummary) -> Self {

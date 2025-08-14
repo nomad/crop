@@ -385,6 +385,15 @@ impl<'a> RopeSlice<'a> {
             panic::line_offset_out_of_bounds(line_index, self.line_len());
         }
 
+        if line_index == self.tree_slice.summary().line_breaks() {
+            return Self {
+                tree_slice: self
+                    .tree_slice
+                    .slice_from(RawLineMetric(line_index)),
+                has_trailing_newline: false,
+            };
+        }
+
         let tree_slice = self
             .tree_slice
             .slice(RawLineMetric(line_index)..RawLineMetric(line_index + 1));
@@ -504,6 +513,13 @@ impl<'a> RopeSlice<'a> {
 
         if end > self.line_len() {
             panic::line_offset_out_of_bounds(end, self.line_len());
+        }
+
+        if end == self.tree_slice.summary().line_breaks() + 1 {
+            return Self {
+                tree_slice: self.tree_slice.slice_from(RawLineMetric(start)),
+                has_trailing_newline: false,
+            };
         }
 
         self.tree_slice.slice(RawLineMetric(start)..RawLineMetric(end)).into()

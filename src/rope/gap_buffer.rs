@@ -1385,11 +1385,6 @@ impl<M: Metric<StrSummary>> Metric<GapBufferSummary> for M {
     }
 
     #[inline(always)]
-    fn one() -> Self {
-        <M as Metric<StrSummary>>::one()
-    }
-
-    #[inline(always)]
     fn measure(summary: &GapBufferSummary) -> Self {
         M::measure(&summary.chunks_summary)
     }

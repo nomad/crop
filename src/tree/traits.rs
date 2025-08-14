@@ -126,10 +126,6 @@ pub trait Metric<S: Summary>:
     /// it should hold `m == m + M::zero()`.
     fn zero() -> Self;
 
-    /// The smallest value larger than [`zero`](Self::zero()) this metric can
-    /// measure.
-    fn one() -> Self;
-
     /// Returns the measure of the leaf's summary according to this metric.
     fn measure(summary: &S) -> Self;
 
@@ -170,6 +166,10 @@ pub trait SlicingMetric<L: Leaf>: Metric<L::Summary> {
 
 /// Allows iterating forward over the units of this metric.
 pub trait UnitMetric<L: Leaf>: Metric<L::Summary> {
+    /// The smallest value larger than [`zero`](Metric::zero()) this metric can
+    /// measure.
+    fn one() -> Self;
+
     /// Returns a `(first_slice, rest_slice, advance)` tuple, where `advance`
     /// is equal to `first_slice`'s base length **plus** the length of any
     /// content between the end of `first_slice` and the start of `rest_slice`

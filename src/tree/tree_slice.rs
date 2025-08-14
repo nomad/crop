@@ -75,7 +75,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         M: FromMetric<L::BaseMetric, L::Summary>,
         L::BaseMetric: FromMetric<M, L::Summary>,
     {
-        debug_assert!(offset <= self.measure::<M>() + M::one());
+        debug_assert!(offset <= self.measure::<M>());
 
         if offset.is_zero() {
             L::BaseMetric::zero()
@@ -98,7 +98,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     where
         M: Metric<L::Summary> + FromMetric<L::BaseMetric, L::Summary>,
     {
-        debug_assert!(offset <= self.measure::<M>() + M::one());
+        debug_assert!(offset <= self.measure::<M>());
 
         let len_start_slice = self.start_slice.measure::<M>();
 
@@ -230,19 +230,25 @@ where
     {
         debug_assert!(M::zero() <= range.start);
         debug_assert!(range.start <= range.end);
-        debug_assert!(range.end <= self.measure::<M>() + M::one());
+        debug_assert!(range.end <= self.measure::<M>());
 
         let start = self.offset + self.convert_len_to_base(range.start);
+        let end = self.measure_offset::<M>() + range.end;
+        Self::slice_node(self.root, start, end)
+    }
 
-        if range.end < self.measure::<M>() + M::one() {
-            Self::slice_node(
-                self.root,
-                start,
-                self.measure_offset::<M>() + range.end,
-            )
-        } else {
-            Self::slice_node(self.root, start, self.offset + self.base_len())
-        }
+    #[track_caller]
+    #[inline]
+    pub fn slice_from<M>(self, start: M) -> Self
+    where
+        M: SlicingMetric<L> + FromMetric<L::BaseMetric, L::Summary>,
+        L::BaseMetric: SlicingMetric<L> + FromMetric<M, L::Summary>,
+    {
+        debug_assert!(start <= self.measure::<M>());
+
+        let start = self.offset + self.convert_len_to_base(start);
+        let end = self.offset + self.base_len();
+        Self::slice_node(self.root, start, end)
     }
 
     #[inline]
@@ -275,7 +281,9 @@ where
         E: SlicingMetric<L>,
     {
         debug_assert!(S::zero() <= start);
-        debug_assert!(end <= root.measure::<E>() + E::one());
+        debug_assert!(end <= root.measure::<E>());
+
+        println!("Slicing between {start:?} and {end:?} in\n{root:#?}");
 
         let (root, start, end) =
             deepest_node_containing_range(root, start, end);
@@ -302,6 +310,8 @@ where
             &mut false,
         );
 
+        println!("Need to recompute root: {recompute_root}");
+
         if recompute_root {
             let start = slice.offset;
 
@@ -314,6 +324,12 @@ where
             slice.root = root;
             slice.offset -= offset;
         }
+
+        println!("Slice's root: {:?}", slice.root);
+        println!("Slice's offset: {:?}", slice.offset);
+        println!("Slice's summary: {:?}", slice.summary);
+        println!("Slice's start_slice: {:?}", slice.start_slice);
+        println!("Slice's end_slice: {:?}", slice.end_slice);
 
         slice
     }
@@ -489,6 +505,8 @@ fn build_slice<'a, const N: usize, L, S, E>(
     S: SlicingMetric<L>,
     E: SlicingMetric<L>,
 {
+    println!("Node is leaf? {}", node.is_leaf());
+
     match &**node {
         Node::Internal(inode) => {
             for child in inode.children() {
@@ -590,6 +608,10 @@ fn build_slice<'a, const N: usize, L, S, E>(
                     slice.summary = start_slice.summarize();
                     slice.start_slice = start_slice;
                     slice.end_slice = start_slice;
+
+                    println!(
+                        "Set both start and end slices to {start_slice:?}"
+                    );
 
                     *done = true;
                 } else {
