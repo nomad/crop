@@ -54,7 +54,7 @@ fn byte_slice_0() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn byte_slice_random() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let r = Rope::from(s);
@@ -139,7 +139,7 @@ fn byte_slice_then_line() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn line_slices_random() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let r = Rope::from(s);
@@ -189,7 +189,7 @@ fn line_slices_random() {
 /// content while also satisying its invariants.
 #[test]
 fn rope_from_slice() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     let slices = if cfg!(miri) {
         ["Hello world", "ƒoo", "bär", "baz", "🗻∈🌏"]

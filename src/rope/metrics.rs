@@ -1,9 +1,11 @@
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
-use super::gap_buffer::GapBuffer;
+use super::gap_buffer::{GapBuffer, GapBufferSummary};
 use super::gap_slice::GapSlice;
 use crate::tree::{
     DoubleEndedUnitMetric,
+    FromMetric,
+    Leaf,
     LeafSlice,
     Metric,
     SlicingMetric,
@@ -13,26 +15,41 @@ use crate::tree::{
 
 #[derive(Copy, Clone, Default, Debug, PartialEq)]
 #[doc(hidden)]
-pub struct ChunkSummary {
+pub struct StrSummary {
     bytes: usize,
     line_breaks: usize,
     #[cfg(feature = "utf16-metric")]
     utf16_code_units: usize,
 }
 
-impl From<&str> for ChunkSummary {
+impl StrSummary {
     #[inline]
-    fn from(s: &str) -> Self {
-        Self {
-            bytes: s.len(),
-            line_breaks: count::line_breaks(s),
-            #[cfg(feature = "utf16-metric")]
-            utf16_code_units: count::utf16_code_units(s),
-        }
+    pub fn bytes(&self) -> usize {
+        self.bytes
+    }
+
+    #[inline]
+    pub fn line_breaks(&self) -> usize {
+        self.line_breaks
+    }
+
+    #[cfg(feature = "utf16-metric")]
+    #[inline]
+    pub fn utf16_code_units(&self) -> usize {
+        self.utf16_code_units
     }
 }
 
-impl From<char> for ChunkSummary {
+impl Summary for StrSummary {
+    type Leaf = str;
+
+    #[inline]
+    fn empty() -> Self {
+        Self::default()
+    }
+}
+
+impl From<char> for StrSummary {
     #[inline]
     fn from(ch: char) -> Self {
         Self {
@@ -44,35 +61,7 @@ impl From<char> for ChunkSummary {
     }
 }
 
-impl ChunkSummary {
-    #[inline]
-    pub fn bytes(&self) -> usize {
-        self.bytes
-    }
-
-    #[inline]
-    pub fn line_breaks(&self) -> usize {
-        self.line_breaks
-    }
-
-    #[doc(hidden)]
-    #[inline]
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    #[cfg(feature = "utf16-metric")]
-    #[inline]
-    pub fn utf16_code_units(&self) -> usize {
-        self.utf16_code_units
-    }
-}
-
-impl Summary for ChunkSummary {
-    type Leaf = GapBuffer;
-}
-
-impl Add<Self> for ChunkSummary {
+impl Add for StrSummary {
     type Output = Self;
 
     #[inline]
@@ -82,37 +71,7 @@ impl Add<Self> for ChunkSummary {
     }
 }
 
-impl Sub<Self> for ChunkSummary {
-    type Output = Self;
-
-    #[inline]
-    fn sub(mut self, rhs: Self) -> Self {
-        self -= rhs;
-        self
-    }
-}
-
-impl Add<&Self> for ChunkSummary {
-    type Output = Self;
-
-    #[inline]
-    fn add(mut self, rhs: &Self) -> Self {
-        self += rhs;
-        self
-    }
-}
-
-impl Sub<&Self> for ChunkSummary {
-    type Output = Self;
-
-    #[inline]
-    fn sub(mut self, rhs: &Self) -> Self {
-        self -= rhs;
-        self
-    }
-}
-
-impl AddAssign<Self> for ChunkSummary {
+impl AddAssign for StrSummary {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
         self.bytes += rhs.bytes;
@@ -124,7 +83,17 @@ impl AddAssign<Self> for ChunkSummary {
     }
 }
 
-impl SubAssign<Self> for ChunkSummary {
+impl Sub for StrSummary {
+    type Output = Self;
+
+    #[inline]
+    fn sub(mut self, rhs: Self) -> Self {
+        self -= rhs;
+        self
+    }
+}
+
+impl SubAssign for StrSummary {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
         self.bytes -= rhs.bytes;
@@ -136,39 +105,55 @@ impl SubAssign<Self> for ChunkSummary {
     }
 }
 
-impl AddAssign<&Self> for ChunkSummary {
+impl Leaf for str {
+    type BaseMetric = ByteMetric;
+    type Slice<'a> = &'a Self;
+    type Summary = StrSummary;
+
     #[inline]
-    fn add_assign(&mut self, rhs: &Self) {
-        *self += *rhs;
+    fn as_slice(&self) -> Self::Slice<'_> {
+        self
+    }
+
+    #[inline]
+    fn summarize(&self) -> Self::Summary {
+        StrSummary {
+            bytes: self.len(),
+            line_breaks: count::line_breaks(self),
+            #[cfg(feature = "utf16-metric")]
+            utf16_code_units: count::utf16_code_units(self),
+        }
     }
 }
 
-impl SubAssign<&Self> for ChunkSummary {
+impl<'a> LeafSlice<'a> for &'a str {
+    type Leaf = str;
+
     #[inline]
-    fn sub_assign(&mut self, rhs: &Self) {
-        *self -= *rhs;
+    fn summarize(&self) -> <Self::Leaf as Leaf>::Summary {
+        (*self).summarize()
     }
 }
 
 /// Conversion trait from the metric implement this trait to the corresponding
 /// byte offset.
-pub trait ToByteOffset: Metric<ChunkSummary> {
+pub trait ToByteOffset: Metric<StrSummary> {
     /// Should return the byte offset of `self` in the given string.
     fn to_byte_offset(&self, in_str: &str) -> usize;
 }
 
 /// Trait to get the summary of a string up to a given offset.
-pub trait SummaryUpTo: Metric<ChunkSummary> {
+pub trait SummaryUpTo: Metric<StrSummary> {
     /// Return the summary of the given string up to `offset`, where
     ///
     /// * `str_summary` is the string's summary,
     /// * `byte_offset` is byte offset of `offset`.
     fn up_to(
         in_str: &str,
-        str_summary: ChunkSummary,
+        str_summary: StrSummary,
         offset: Self,
         byte_offset: usize,
-    ) -> ChunkSummary;
+    ) -> StrSummary;
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -233,13 +218,13 @@ impl SummaryUpTo for ByteMetric {
     #[inline]
     fn up_to(
         in_str: &str,
-        str_summary: ChunkSummary,
+        str_summary: StrSummary,
         offset: Self,
         byte_offset: usize,
-    ) -> ChunkSummary {
+    ) -> StrSummary {
         debug_assert_eq!(offset.0, byte_offset);
 
-        ChunkSummary {
+        StrSummary {
             bytes: byte_offset,
 
             line_breaks: count::line_breaks_up_to(
@@ -258,30 +243,46 @@ impl SummaryUpTo for ByteMetric {
     }
 }
 
-impl Metric<ChunkSummary> for ByteMetric {
+impl Metric<StrSummary> for ByteMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
     }
 
     #[inline]
-    fn one() -> Self {
-        Self(1)
-    }
-
-    #[inline]
-    fn measure(summary: &ChunkSummary) -> Self {
+    fn measure(summary: &StrSummary) -> Self {
         Self(summary.bytes)
     }
 
     #[inline]
-    fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
-        Self(gap_buffer.left_summary.bytes + gap_buffer.right_summary.bytes)
+    fn measure_leaf(str: &str) -> Self {
+        Self(str.len())
     }
 
     #[inline]
-    fn measure_slice(gap_slice: &GapSlice) -> Self {
-        Self(gap_slice.left_summary.bytes + gap_slice.right_summary.bytes)
+    fn measure_slice(str: &&str) -> Self {
+        Self(str.len())
+    }
+}
+
+impl FromMetric<RawLineMetric, GapBufferSummary> for ByteMetric {
+    #[inline]
+    fn measure_up_to(
+        gap_buffer: &GapBuffer,
+        line_offset: RawLineMetric,
+    ) -> Self {
+        Self(gap_buffer.convert_len_to_byte(line_offset))
+    }
+}
+
+#[cfg(feature = "utf16-metric")]
+impl FromMetric<utf16_metric::Utf16Metric, GapBufferSummary> for ByteMetric {
+    #[inline]
+    fn measure_up_to(
+        gap_buffer: &GapBuffer,
+        utf16_offset: utf16_metric::Utf16Metric,
+    ) -> Self {
+        Self(gap_buffer.convert_len_to_byte(utf16_offset))
     }
 }
 
@@ -342,6 +343,17 @@ impl SubAssign for RawLineMetric {
     }
 }
 
+impl FromMetric<ByteMetric, GapBufferSummary> for RawLineMetric {
+    #[inline]
+    fn measure_up_to(
+        gap_buffer: &GapBuffer,
+        ByteMetric(byte_offset): ByteMetric,
+    ) -> Self {
+        gap_buffer.assert_char_boundary(byte_offset);
+        gap_buffer.convert_len_from_byte::<Self>(byte_offset)
+    }
+}
+
 impl ToByteOffset for RawLineMetric {
     #[inline]
     fn to_byte_offset(&self, s: &str) -> usize {
@@ -354,11 +366,11 @@ impl SummaryUpTo for RawLineMetric {
     #[inline]
     fn up_to(
         in_str: &str,
-        str_summary: ChunkSummary,
+        str_summary: StrSummary,
         Self(line_offset): Self,
         byte_offset: usize,
-    ) -> ChunkSummary {
-        ChunkSummary {
+    ) -> StrSummary {
+        StrSummary {
             bytes: byte_offset,
 
             line_breaks: line_offset,
@@ -373,36 +385,25 @@ impl SummaryUpTo for RawLineMetric {
     }
 }
 
-impl Metric<ChunkSummary> for RawLineMetric {
+impl Metric<StrSummary> for RawLineMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
     }
 
     #[inline]
-    fn one() -> Self {
-        Self(1)
-    }
-
-    #[inline]
-    fn measure(summary: &ChunkSummary) -> Self {
+    fn measure(summary: &StrSummary) -> Self {
         Self(summary.line_breaks)
     }
 
     #[inline]
-    fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
-        Self(
-            gap_buffer.left_summary.line_breaks
-                + gap_buffer.right_summary.line_breaks,
-        )
+    fn measure_leaf(str: &str) -> Self {
+        Self(count::line_breaks(str))
     }
 
     #[inline]
-    fn measure_slice(gap_slice: &GapSlice) -> Self {
-        Self(
-            gap_slice.left_summary.line_breaks
-                + gap_slice.right_summary.line_breaks,
-        )
+    fn measure_slice(str: &&str) -> Self {
+        Self(count::line_breaks(str))
     }
 }
 
@@ -426,14 +427,19 @@ impl SlicingMetric<GapBuffer> for RawLineMetric {
 
 impl UnitMetric<GapBuffer> for RawLineMetric {
     #[inline]
+    fn one() -> Self {
+        Self(1)
+    }
+
+    #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
-    ) -> (GapSlice<'a>, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, GapSlice<'a>, ByteMetric)
     where
         'a: 'a,
     {
         let (first, rest) = chunk.split_at_offset(RawLineMetric(1));
-        (first, rest, first.summarize())
+        (first, rest, first.measure())
     }
 }
 
@@ -441,16 +447,16 @@ impl DoubleEndedUnitMetric<GapBuffer> for RawLineMetric {
     #[inline]
     fn last_unit<'a>(
         slice: GapSlice<'a>,
-    ) -> (GapSlice<'a>, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, GapSlice<'a>, ByteMetric)
     where
         'a: 'a,
     {
-        let split_offset = slice.summarize().line_breaks
+        let split_offset = slice.measure::<Self>().0
             - (slice.has_trailing_newline() as usize);
 
         let (rest, last) = slice.split_at_offset(RawLineMetric(split_offset));
 
-        (rest, last, last.summarize())
+        (rest, last, last.measure())
     }
 
     #[inline]
@@ -504,47 +510,47 @@ impl SubAssign for LineMetric {
     }
 }
 
-impl Metric<ChunkSummary> for LineMetric {
+impl Metric<StrSummary> for LineMetric {
     #[inline]
     fn zero() -> Self {
         Self(0)
     }
 
     #[inline]
-    fn one() -> Self {
-        Self(1)
-    }
-
-    #[inline]
-    fn measure(summary: &ChunkSummary) -> Self {
+    fn measure(summary: &StrSummary) -> Self {
         Self(summary.line_breaks)
     }
 
     #[inline]
-    fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
-        Self(RawLineMetric::measure_leaf(gap_buffer).0)
+    fn measure_leaf(str: &str) -> Self {
+        Self(count::line_breaks(str))
     }
 
     #[inline]
-    fn measure_slice(gap_slice: &GapSlice) -> Self {
-        Self(RawLineMetric::measure_slice(gap_slice).0)
+    fn measure_slice(str: &&str) -> Self {
+        Self(count::line_breaks(str))
     }
 }
 
 impl UnitMetric<GapBuffer> for LineMetric {
     #[inline]
+    fn one() -> Self {
+        Self(1)
+    }
+
+    #[inline]
     fn first_unit<'a>(
         chunk: GapSlice<'a>,
-    ) -> (GapSlice<'a>, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, GapSlice<'a>, ByteMetric)
     where
         'a: 'a,
     {
-        let (mut first, rest, first_summary) =
+        let (mut first, rest, first_byte_len) =
             <RawLineMetric as UnitMetric<GapBuffer>>::first_unit(chunk);
 
         first.truncate_trailing_line_break();
 
-        (first, rest, first_summary)
+        (first, rest, first_byte_len)
     }
 }
 
@@ -552,18 +558,18 @@ impl DoubleEndedUnitMetric<GapBuffer> for LineMetric {
     #[inline]
     fn last_unit<'a>(
         chunk: GapSlice<'a>,
-    ) -> (GapSlice<'a>, GapSlice<'a>, ChunkSummary)
+    ) -> (GapSlice<'a>, GapSlice<'a>, ByteMetric)
     where
         'a: 'a,
     {
-        let (rest, mut last, last_summary) =
+        let (rest, mut last, last_byte_len) =
             <RawLineMetric as DoubleEndedUnitMetric<GapBuffer>>::last_unit(
                 chunk,
             );
 
         last.truncate_trailing_line_break();
 
-        (rest, last, last_summary)
+        (rest, last, last_byte_len)
     }
 
     #[inline]
@@ -585,12 +591,19 @@ mod utf16_metric {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
     pub struct Utf16Metric(pub usize);
 
-    impl Add<Self> for Utf16Metric {
+    impl Add for Utf16Metric {
         type Output = Self;
 
         #[inline]
         fn add(self, other: Self) -> Self {
             Self(self.0 + other.0)
+        }
+    }
+
+    impl AddAssign for Utf16Metric {
+        #[inline]
+        fn add_assign(&mut self, other: Self) {
+            self.0 += other.0
         }
     }
 
@@ -600,13 +613,6 @@ mod utf16_metric {
         #[inline]
         fn sub(self, other: Self) -> Self {
             Self(self.0 - other.0)
-        }
-    }
-
-    impl AddAssign for Utf16Metric {
-        #[inline]
-        fn add_assign(&mut self, other: Self) {
-            self.0 += other.0
         }
     }
 
@@ -632,11 +638,11 @@ mod utf16_metric {
         #[inline]
         fn up_to(
             in_str: &str,
-            str_summary: ChunkSummary,
+            str_summary: StrSummary,
             Self(utf16_code_unit_offset): Self,
             byte_offset: usize,
-        ) -> ChunkSummary {
-            ChunkSummary {
+        ) -> StrSummary {
+            StrSummary {
                 bytes: byte_offset,
 
                 line_breaks: count::line_breaks_up_to(
@@ -650,36 +656,37 @@ mod utf16_metric {
         }
     }
 
-    impl Metric<ChunkSummary> for Utf16Metric {
+    impl Metric<StrSummary> for Utf16Metric {
         #[inline]
         fn zero() -> Self {
             Self(0)
         }
 
         #[inline]
-        fn one() -> Self {
-            Self(1)
-        }
-
-        #[inline]
-        fn measure(summary: &ChunkSummary) -> Self {
+        fn measure(summary: &StrSummary) -> Self {
             Self(summary.utf16_code_units)
         }
 
         #[inline]
-        fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
-            Self(
-                gap_buffer.left_summary.utf16_code_units
-                    + gap_buffer.right_summary.utf16_code_units,
-            )
+        fn measure_leaf(str: &str) -> Self {
+            Self(count::utf16_code_units(str))
         }
 
         #[inline]
-        fn measure_slice(gap_slice: &GapSlice) -> Self {
-            Self(
-                gap_slice.left_summary.utf16_code_units
-                    + gap_slice.right_summary.utf16_code_units,
-            )
+        fn measure_slice(str: &&str) -> Self {
+            Self(count::utf16_code_units(str))
+        }
+    }
+
+    impl FromMetric<ByteMetric, GapBufferSummary> for Utf16Metric {
+        #[track_caller]
+        #[inline]
+        fn measure_up_to(
+            gap_buffer: &GapBuffer,
+            ByteMetric(byte_offset): ByteMetric,
+        ) -> Self {
+            gap_buffer.assert_char_boundary(byte_offset);
+            gap_buffer.convert_len_from_byte::<Self>(byte_offset)
         }
     }
 

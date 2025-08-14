@@ -281,7 +281,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 // remove the second child.
                 if first.len() + second.len() <= Self::max_children() {
                     first.children.append(&mut second.children);
-                    first.summary += second.summary();
+                    first.summary += second.summary.clone();
                     self.children.remove(1);
                 }
                 // Move the minimum number of children from the second child
@@ -346,7 +346,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
                 // then remove the last child.
                 if penultimate.len() + last.len() <= Self::max_children() {
                     penultimate.children.append(&mut last.children);
-                    penultimate.summary += last.summary();
+                    penultimate.summary += last.summary.clone();
                     self.children.remove(last_idx);
                 }
                 // Move the minimum number of children from the penultimate
@@ -379,7 +379,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
+    pub fn base_len(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
@@ -393,18 +393,18 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &self.children
     }
 
-    /// Returns the index of the child at the given measure together
-    /// with the combined `M`-offset of the other children up to but not
-    /// including that child.
+    /// Returns the index of the child at the given offset together with the
+    /// combined M-length of the other children up to but not including that
+    /// child.
     #[inline]
-    pub(super) fn child_at_measure<M>(&self, measure: M) -> (usize, M)
+    pub(super) fn child_at_offset<M>(&self, offset: M) -> (usize, M)
     where
         M: Metric<L::Summary>,
     {
-        debug_assert!(measure <= self.measure::<M>());
+        debug_assert!(offset <= self.measure::<M>());
 
         let mut idx = 0;
-        let mut offset = M::zero();
+        let mut measured = M::zero();
         let children = self.children();
 
         loop {
@@ -415,12 +415,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             // goes out of bounds.
             let child = unsafe { children.get_unchecked(idx) };
 
-            let child_measure = child.measure::<M>();
+            let child_len = child.measure::<M>();
 
-            offset += child_measure;
+            measured += child_len;
 
-            if offset >= measure {
-                return (idx, offset - child_measure);
+            if offset <= measured {
+                return (idx, measured - child_len);
             }
 
             idx += 1;
@@ -454,13 +454,13 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             // before the index goes out of bounds.
             let child = unsafe { children.get_unchecked(idx) };
 
-            let measure = child.measure::<M>();
+            let child_len = child.measure::<M>();
 
-            offset += measure;
+            offset += child_len;
 
             if offset >= range.start {
                 if offset >= range.end {
-                    return Some((idx, offset - measure));
+                    return Some((idx, offset - child_len));
                 } else {
                     return None;
                 }
@@ -491,7 +491,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(end <= self.len());
 
         for child in &self.children[start..end] {
-            self.summary -= &child.summary();
+            self.summary -= child.summary();
         }
 
         self.children.drain(start..end)
@@ -502,7 +502,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         Self {
             children: Vec::with_capacity(N),
             depth: 1,
-            summary: Default::default(),
+            summary: L::Summary::empty(),
         }
     }
 
@@ -535,7 +535,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         let mut summary = children[0].summary();
 
         for child in &children[1..] {
-            summary += &child.summary();
+            summary += child.summary();
         }
 
         Self { children, depth, summary }
@@ -608,7 +608,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(!self.is_full());
         debug_assert_eq!(child.depth() + 1, self.depth());
 
-        self.summary += &child.summary();
+        self.summary += child.summary();
         self.children.insert(child_offset, child);
     }
 
@@ -768,7 +768,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     #[inline]
     pub fn measure<M: Metric<L::Summary>>(&self) -> M {
-        M::measure(self.summary())
+        self.summary().measure()
     }
 
     #[inline]
@@ -849,7 +849,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert!(!self.is_full());
         debug_assert_eq!(child.depth() + 1, self.depth());
 
-        self.summary += &child.summary();
+        self.summary += child.summary();
         self.children.push(child);
     }
 
@@ -862,7 +862,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     pub(super) fn remove(&mut self, child_idx: usize) -> Arc<Node<N, L>> {
         debug_assert!(child_idx < self.len());
         let child = self.children.remove(child_idx);
-        self.summary -= &child.summary();
+        self.summary -= child.summary();
         child
     }
 
@@ -887,9 +887,9 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         debug_assert_eq!(new_child.depth() + 1, self.depth());
 
         let to_swap = &self.children[child_idx];
-        self.summary -= &to_swap.summary();
+        self.summary -= to_swap.summary();
 
-        self.summary += &new_child.summary();
+        self.summary += new_child.summary();
         self.children[child_idx] = new_child;
     }
 
@@ -929,11 +929,11 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     {
         let child = &mut self.children[child_idx];
 
-        self.summary -= &child.summary();
+        self.summary -= child.summary();
 
         let ret = fun(child);
 
-        self.summary += &child.summary();
+        self.summary += child.summary();
 
         ret
     }

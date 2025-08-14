@@ -81,7 +81,7 @@ impl Rope {
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
-            self.tree.leaf_at_measure(ByteMetric(byte_index + 1));
+            self.tree.leaf_at_offset(ByteMetric(byte_index + 1));
 
         chunk.byte(byte_index - chunk_byte_offset)
     }
@@ -133,7 +133,7 @@ impl Rope {
         }
 
         let ByteMetric(byte_offset) =
-            self.tree.convert_measure(RawLineMetric(line_offset));
+            self.tree.convert_len(RawLineMetric(line_offset));
 
         byte_offset
     }
@@ -166,9 +166,8 @@ impl Rope {
             panic::utf16_offset_out_of_bounds(utf16_offset, self.utf16_len())
         }
 
-        let ByteMetric(byte_offset) = self
-            .tree
-            .convert_measure(super::metrics::Utf16Metric(utf16_offset));
+        let ByteMetric(byte_offset) =
+            self.tree.convert_len(super::metrics::Utf16Metric(utf16_offset));
 
         byte_offset
     }
@@ -375,7 +374,7 @@ impl Rope {
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
-            self.tree.leaf_at_measure(ByteMetric(byte_offset));
+            self.tree.leaf_at_offset(ByteMetric(byte_offset));
 
         chunk.is_char_boundary(byte_offset - chunk_byte_offset)
     }
@@ -460,6 +459,13 @@ impl Rope {
             panic::line_index_out_of_bounds(line_index, self.line_len());
         }
 
+        if line_index == self.tree.summary().line_breaks() {
+            return RopeSlice {
+                tree_slice: self.tree.slice_from(RawLineMetric(line_index)),
+                has_trailing_newline: false,
+            };
+        }
+
         let tree_slice = self
             .tree
             .slice(RawLineMetric(line_index)..RawLineMetric(line_index + 1));
@@ -534,7 +540,7 @@ impl Rope {
         }
 
         let RawLineMetric(line_offset) =
-            self.tree.convert_measure(ByteMetric(byte_offset));
+            self.tree.convert_len(ByteMetric(byte_offset));
 
         line_offset
     }
@@ -574,6 +580,16 @@ impl Rope {
 
         if end > self.line_len() {
             panic::line_offset_out_of_bounds(end, self.line_len());
+        }
+
+        if end == self.tree.summary().line_breaks() + 1 {
+            let tree_slice = if start == end {
+                self.tree.slice_from(ByteMetric(self.byte_len()))
+            } else {
+                self.tree.slice_from(RawLineMetric(start))
+            };
+            debug_assert!(!tree_slice.end_slice().has_trailing_newline());
+            return RopeSlice { tree_slice, has_trailing_newline: false };
         }
 
         self.tree.slice(RawLineMetric(start)..RawLineMetric(end)).into()
@@ -757,7 +773,7 @@ impl Rope {
         }
 
         let super::metrics::Utf16Metric(utf16_offset) =
-            self.tree.convert_measure(ByteMetric(byte_offset));
+            self.tree.convert_len(ByteMetric(byte_offset));
 
         utf16_offset
     }

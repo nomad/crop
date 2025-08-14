@@ -1,4 +1,4 @@
-use super::traits::{BalancedLeaf, Leaf, LeafSlice, Metric, SlicingMetric};
+use super::traits::{BalancedLeaf, FromMetric, Leaf, Metric};
 use super::{Arc, Inode};
 
 #[derive(Clone)]
@@ -72,16 +72,15 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn base_measure(&self) -> L::BaseMetric {
+    pub(super) fn base_len(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
-    #[track_caller]
     #[inline]
-    pub(super) fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
+    pub(super) fn convert_len<M1, M2>(&self, up_to: M1) -> M2
     where
-        M1: SlicingMetric<L>,
-        M2: Metric<L::Summary>,
+        M1: Metric<L::Summary>,
+        M2: FromMetric<M1, L::Summary>,
     {
         debug_assert!(up_to <= self.measure::<M1>());
 
@@ -109,8 +108,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                 },
 
                 Node::Leaf(leaf) => {
-                    let slice = M1::slice_up_to(leaf.as_slice(), up_to - m1);
-                    return m2 + slice.measure::<M2>();
+                    return m2 + M2::measure_up_to(leaf, up_to - m1);
                 },
             }
         }
@@ -186,12 +184,17 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    /// Returns the leaf at the given offset, together with the leaf's
+    /// M-offset in the tree.
+    ///
+    /// If the offset falls on a leaf boundary, the leaf to its left is
+    /// returned.
     #[inline]
-    pub(super) fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'_>, M)
+    pub(super) fn leaf_at_offset<M>(&self, offset: M) -> (&L, M)
     where
         M: Metric<L::Summary>,
     {
-        debug_assert!(measure <= self.measure::<M>());
+        debug_assert!(offset <= self.measure::<M>());
 
         let mut measured = M::zero();
 
@@ -200,17 +203,15 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         loop {
             match node {
                 Node::Internal(inode) => {
-                    let (child_idx, offset) =
-                        inode.child_at_measure(measure - measured);
+                    let (child_idx, child_offset) =
+                        inode.child_at_offset(offset - measured);
 
-                    measured += offset;
+                    measured += child_offset;
 
                     node = inode.child(child_idx);
                 },
 
-                Node::Leaf(leaf) => {
-                    return (leaf.as_slice(), measured);
-                },
+                Node::Leaf(leaf) => return (leaf, measured),
             }
         }
     }
@@ -226,7 +227,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
-    /// Continuously replaces the node its child qs long as it's an internal
+    /// Continuously replaces the node its child as long as it's an internal
     /// node with a single child. Note that an inode might become a leaf node
     /// after calling this.
     ///

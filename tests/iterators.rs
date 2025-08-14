@@ -1,5 +1,5 @@
 use crop::Rope;
-use rand::{Rng, rng};
+use rand::Rng;
 
 mod common;
 
@@ -41,7 +41,7 @@ fn iter_bytes_both_ways() {
     let s = if cfg!(miri) { "Hello, world!" } else { LARGE };
     let rope = Rope::from(s);
 
-    let i = rng().random_range(0..=s.len());
+    let i = common::rng().random_range(0..=s.len());
 
     println!("i: {i}");
 
@@ -209,7 +209,7 @@ fn iter_chars_both_ways() {
     let rope = Rope::from(LARGE);
 
     let total_chars = LARGE.chars().count();
-    let i = rng().random_range(0..=total_chars);
+    let i = common::rng().random_range(0..=total_chars);
 
     println!("i: {i}");
 
@@ -429,7 +429,7 @@ fn iter_lines_forward_backward() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn iter_lines_over_random_slices() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let rope = Rope::from(s);
@@ -541,7 +541,7 @@ fn iter_raw_lines_over_test_vectors() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn iter_raw_lines_over_random_slices() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let rope = Rope::from(s);

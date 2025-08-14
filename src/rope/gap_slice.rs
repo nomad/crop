@@ -1,14 +1,14 @@
-use super::gap_buffer::GapBuffer;
-use super::metrics::{ChunkSummary, SummaryUpTo, ToByteOffset};
+use super::gap_buffer::{GapBuffer, GapBufferSummary};
+use super::metrics::{StrSummary, SummaryUpTo, ToByteOffset};
 use super::utils::{debug_no_quotes, panic_messages as panic};
-use crate::tree::{LeafSlice, Metric};
+use crate::tree::{LeafSlice, Metric, Summary};
 
 /// A slice of a [`GapBuffer`](super::gap_buffer::GapBuffer).
 #[derive(Copy, Clone, Default)]
 pub struct GapSlice<'a> {
     pub(super) bytes: &'a [u8],
-    pub(super) left_summary: ChunkSummary,
-    pub(super) right_summary: ChunkSummary,
+    pub(super) left_summary: StrSummary,
+    pub(super) right_summary: StrSummary,
 }
 
 impl core::fmt::Debug for GapSlice<'_> {
@@ -55,7 +55,7 @@ impl<'a> GapSlice<'a> {
     }
 
     pub(super) fn assert_invariants(&self) {
-        assert_eq!(self.left_summary, ChunkSummary::from(self.left_chunk()));
+        assert_eq!(self.left_summary, self.left_chunk().summarize());
 
         if self.len_right() == 0 {
             assert_eq!(self.len_left(), self.bytes.len());
@@ -84,13 +84,13 @@ impl<'a> GapSlice<'a> {
     #[inline]
     fn left_measure<M>(&self) -> M
     where
-        M: Metric<ChunkSummary>,
+        M: Metric<StrSummary>,
     {
-        M::measure(&self.left_summary)
+        self.left_summary.measure::<M>()
     }
 
     #[inline]
-    pub(super) fn truncate_last_char(&mut self) -> ChunkSummary {
+    pub(super) fn truncate_last_char(&mut self) -> StrSummary {
         debug_assert!(self.len() > 0);
 
         use core::cmp::Ordering;
@@ -101,7 +101,7 @@ impl<'a> GapSlice<'a> {
             .next_back()
             .expect("this slice isn't empty");
 
-        let removed_summary = ChunkSummary::from(last_char);
+        let removed_summary = StrSummary::from(last_char);
 
         let len_utf8 = removed_summary.bytes();
 
@@ -123,7 +123,7 @@ impl<'a> GapSlice<'a> {
             // The right chunk has exactly 1 character, so we can keep just the
             // left chunk.
             Ordering::Equal => {
-                self.right_summary = ChunkSummary::new();
+                self.right_summary = StrSummary::empty();
                 self.bytes = &self.bytes[..self.len_left()];
             },
         }
@@ -134,9 +134,9 @@ impl<'a> GapSlice<'a> {
     /// Removes the trailing line break (if it has one), returning the summary
     /// of what was removed.
     #[inline]
-    pub(super) fn truncate_trailing_line_break(&mut self) -> ChunkSummary {
+    pub(super) fn truncate_trailing_line_break(&mut self) -> StrSummary {
         if !self.has_trailing_newline() {
-            return ChunkSummary::new();
+            return StrSummary::empty();
         }
 
         let mut removed_summary = self.truncate_last_char();
@@ -170,7 +170,7 @@ impl<'a> GapSlice<'a> {
         }
     }
 
-    /// The second segment if it's not empty, or the first one otherwise.
+    /// The right chunk if it's not empty, or the left one otherwise.
     #[inline]
     pub(super) fn last_chunk(&self) -> &'a str {
         if self.len_right() == 0 {
@@ -223,7 +223,7 @@ impl<'a> GapSlice<'a> {
     ///
     /// # Panics
     ///
-    /// Panics if the offset is greater than the M-measure of the slice.
+    /// Panics if the offset is greater than the M-length of the slice.
     ///
     /// # Examples
     ///
@@ -241,7 +241,7 @@ impl<'a> GapSlice<'a> {
     #[inline]
     pub fn split_at_offset<M>(&self, mut offset: M) -> (Self, Self)
     where
-        M: Metric<ChunkSummary> + ToByteOffset + SummaryUpTo,
+        M: Metric<StrSummary> + ToByteOffset + SummaryUpTo,
     {
         debug_assert!(offset <= self.measure::<M>());
 
@@ -260,7 +260,7 @@ impl<'a> GapSlice<'a> {
             let left = Self {
                 bytes: bytes_left,
                 left_summary: left_left_summary,
-                right_summary: ChunkSummary::new(),
+                right_summary: StrSummary::empty(),
             };
 
             let right = Self {
@@ -294,7 +294,7 @@ impl<'a> GapSlice<'a> {
             let right = Self {
                 bytes: bytes_right,
                 left_summary: self.right_summary - right_left_summary,
-                right_summary: ChunkSummary::new(),
+                right_summary: StrSummary::empty(),
             };
 
             (left, right)
@@ -328,8 +328,10 @@ impl<'a> LeafSlice<'a> for GapSlice<'a> {
     type Leaf = GapBuffer;
 
     #[inline]
-    fn summarize(&self) -> ChunkSummary {
-        self.right_summary + self.left_summary
+    fn summarize(&self) -> GapBufferSummary {
+        GapBufferSummary {
+            chunks_summary: self.right_summary + self.left_summary,
+        }
     }
 }
 

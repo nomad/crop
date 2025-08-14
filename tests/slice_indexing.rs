@@ -10,7 +10,7 @@ use common::{CURSED_LIPSUM, LARGE, MEDIUM, SMALL, TINY};
 #[cfg_attr(miri, ignore)]
 #[test]
 fn byte_random() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let r = Rope::from(s);
@@ -22,13 +22,13 @@ fn byte_random() {
             let str_slice = &s[start..end];
             let rope_slice = r.byte_slice(start..end);
 
-            for (idx, byte) in str_slice.bytes().enumerate() {
-                if byte != rope_slice.byte(idx) {
-                    println!(
-                        "byte index: {idx}, byte range: {:?}",
-                        start..end
+            for (idx, str_byte) in str_slice.bytes().enumerate() {
+                let rope_byte = rope_slice.byte(idx);
+                if str_byte != rope_byte {
+                    panic!(
+                        "string's byte is {str_byte}, but rope's byte is \
+                         {rope_byte}",
                     );
-                    assert_eq!(byte, rope_slice.byte(idx));
                 }
             }
         }
@@ -40,7 +40,7 @@ fn byte_random() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn is_char_boundary_random() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [CURSED_LIPSUM, TINY, SMALL, MEDIUM, LARGE] {
         let r = Rope::from(s);
@@ -76,7 +76,7 @@ fn is_char_boundary_random() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn line_of_byte_random() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let crop = Rope::from(s);
@@ -110,7 +110,7 @@ fn line_of_byte_random() {
 #[cfg_attr(miri, ignore)]
 #[test]
 fn byte_of_line_random() {
-    let mut rng = rand::rng();
+    let mut rng = common::rng();
 
     for s in [TINY, SMALL, MEDIUM, LARGE] {
         let crop = Rope::from(s);

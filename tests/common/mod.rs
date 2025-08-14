@@ -1,9 +1,31 @@
 #![allow(dead_code)]
 
+use std::env;
+
+use rand::SeedableRng;
+
 pub const TINY: &str = include_str!("tiny.txt");
 pub const SMALL: &str = include_str!("small.txt");
 pub const MEDIUM: &str = include_str!("medium.txt");
 pub const LARGE: &str = include_str!("large.txt");
+
+#[track_caller]
+pub fn rng() -> impl rand::Rng {
+    let seed = seed();
+    println!("SEED: {seed:?}");
+    rand_chacha::ChaChaRng::seed_from_u64(seed)
+}
+
+#[track_caller]
+fn seed() -> u64 {
+    match env::var("SEED") {
+        Ok(seed) => seed.parse().expect("couldn't parse $SEED"),
+        Err(env::VarError::NotPresent) => rand::random(),
+        Err(env::VarError::NotUnicode(seed)) => {
+            panic!("$SEED contained invalid unicode: {seed:?}")
+        },
+    }
+}
 
 /// A cursed version of a lorem ipsum paragraph taken from [this online
 /// tool][1] with mixed line breaks (LF and CRLF).
