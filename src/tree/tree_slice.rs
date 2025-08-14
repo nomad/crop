@@ -62,7 +62,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
             M::zero()
         } else {
             self.root.convert_len::<_, M>(self.offset + base_offset)
-                - self.offset_len::<M>()
+                - self.measure_offset::<M>()
         }
     }
 
@@ -80,7 +80,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         if offset.is_zero() {
             L::BaseMetric::zero()
         } else {
-            let m_offset = self.offset_len::<M>();
+            let m_offset = self.measure_offset::<M>();
             self.root.convert_len::<_, L::BaseMetric>(m_offset + offset)
                 - self.offset
         }
@@ -113,7 +113,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
             return (self.end_slice, len_total_minus_end);
         }
 
-        let m_offset = self.offset_len::<M>();
+        let m_offset = self.measure_offset::<M>();
         let (leaf, leaf_offset) = self.root.leaf_at_offset(m_offset + offset);
         (leaf.as_slice(), leaf_offset - m_offset)
     }
@@ -209,7 +209,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     /// Note that it's never necessary to call this with `L::BaseMetric`, as
     /// that's already known to be [`Self::offset`].
     #[inline]
-    fn offset_len<M>(&self) -> M
+    fn measure_offset<M>(&self) -> M
     where
         M: FromMetric<L::BaseMetric, L::Summary>,
     {
@@ -225,26 +225,26 @@ where
     #[inline]
     pub fn slice<M>(self, range: Range<M>) -> Self
     where
-        M: SlicingMetric<L>,
+        M: SlicingMetric<L> + FromMetric<L::BaseMetric, L::Summary>,
         L::BaseMetric: SlicingMetric<L>,
     {
         debug_assert!(M::zero() <= range.start);
         debug_assert!(range.start <= range.end);
         debug_assert!(range.end <= self.measure::<M>() + M::one());
 
+        let slice_offset = self.measure_offset::<M>();
+
         if range.end < self.measure::<M>() + M::one() {
-            Self::slice_node_at_offset(
+            Self::slice_node(
                 self.root,
-                self.offset,
-                range.start,
-                range.end,
+                slice_offset + range.start,
+                slice_offset + range.end,
             )
         } else {
-            Self::slice_node_at_offset(
+            Self::slice_node(
                 self.root,
-                self.offset,
-                range.start,
-                self.base_len(),
+                slice_offset + range.start,
+                self.offset + self.base_len(),
             )
         }
     }
@@ -320,21 +320,6 @@ where
         }
 
         slice
-    }
-
-    #[track_caller]
-    #[inline]
-    fn slice_node_at_offset<S, E>(
-        _root: &'a Arc<Node<ARITY, L>>,
-        _offset: L::BaseMetric,
-        _start: S,
-        _end: E,
-    ) -> Self
-    where
-        S: SlicingMetric<L>,
-        E: SlicingMetric<L>,
-    {
-        todo!();
     }
 }
 
