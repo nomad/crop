@@ -89,6 +89,7 @@ mod tests {
         if cfg!(feature = "chunk-len") { Some(rope.chunk_len()) } else { None }
     }
 
+    #[cfg(feature = "chunk-len")]
     #[test]
     fn ser_de_bincode() {
         let mut rope = Rope::new();
