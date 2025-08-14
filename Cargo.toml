@@ -25,11 +25,12 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
 default = ["simd", "std"]
+chunk-len = []
 graphemes = ["unicode-segmentation"]
 serde = ["dep:serde"]
 simd = ["str_indices/simd"]
-utf16-metric = []
 std = []
+utf16-metric = []
 
 # Private features
 small_chunks = []
@@ -43,6 +44,7 @@ serde = { version = "1", optional = true }
 unicode-segmentation = { version = "1.10.0", optional = true }
 
 [dev-dependencies]
+bincode = { version = "2", features = ["serde"] }
 criterion = "0.7"
 rand = "0.9"
 rand_chacha = "0.9"

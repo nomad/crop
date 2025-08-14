@@ -331,6 +331,9 @@ impl<'a> LeafSlice<'a> for GapSlice<'a> {
     fn summarize(&self) -> GapBufferSummary {
         GapBufferSummary {
             chunks_summary: self.right_summary + self.left_summary,
+            #[cfg(feature = "chunk-len")]
+            num_chunks: (self.len_left() > 0) as usize
+                + (self.len_right() > 0) as usize,
         }
     }
 }

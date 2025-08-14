@@ -12,6 +12,8 @@ pub struct Chunks<'a> {
     leaves: Leaves<'a, { Rope::arity() }, RopeChunk>,
     forward_extra_right: Option<&'a str>,
     backward_extra_left: Option<&'a str>,
+    #[cfg(feature = "chunk-len")]
+    len: usize,
 }
 
 impl<'a> From<&'a Rope> for Chunks<'a> {
@@ -21,7 +23,13 @@ impl<'a> From<&'a Rope> for Chunks<'a> {
         if rope.is_empty() {
             let _ = leaves.next();
         }
-        Self { leaves, forward_extra_right: None, backward_extra_left: None }
+        Self {
+            leaves,
+            forward_extra_right: None,
+            backward_extra_left: None,
+            #[cfg(feature = "chunk-len")]
+            len: rope.chunk_len(),
+        }
     }
 }
 
@@ -32,15 +40,46 @@ impl<'a> From<&RopeSlice<'a>> for Chunks<'a> {
         if slice.is_empty() {
             let _ = leaves.next();
         }
-        Self { leaves, forward_extra_right: None, backward_extra_left: None }
+        Self {
+            leaves,
+            forward_extra_right: None,
+            backward_extra_left: None,
+            #[cfg(feature = "chunk-len")]
+            len: slice.chunk_len(),
+        }
     }
 }
 
-impl<'a> Iterator for Chunks<'a> {
-    type Item = &'a str;
+impl<'a> Chunks<'a> {
+    #[inline]
+    fn next_back_inner(&mut self) -> Option<&'a str> {
+        if let Some(extra) = self.backward_extra_left.take() {
+            Some(extra)
+        } else {
+            let Some(gap_slice) = self.leaves.next_back() else {
+                return self.forward_extra_right.take();
+            };
+
+            if gap_slice.right_chunk().is_empty() {
+                #[cfg(feature = "small_chunks")]
+                if gap_slice.left_chunk().is_empty() {
+                    return self.next_back_inner();
+                }
+
+                debug_assert!(!gap_slice.left_chunk().is_empty());
+
+                Some(gap_slice.left_chunk())
+            } else {
+                if !gap_slice.left_chunk().is_empty() {
+                    self.backward_extra_left = Some(gap_slice.left_chunk());
+                }
+                Some(gap_slice.right_chunk())
+            }
+        }
+    }
 
     #[inline]
-    fn next(&mut self) -> Option<Self::Item> {
+    fn next_inner(&mut self) -> Option<&'a str> {
         if let Some(extra) = self.forward_extra_right.take() {
             Some(extra)
         } else {
@@ -51,7 +90,7 @@ impl<'a> Iterator for Chunks<'a> {
             if gap_slice.left_chunk().is_empty() {
                 #[cfg(feature = "small_chunks")]
                 if gap_slice.right_chunk().is_empty() {
-                    return self.next();
+                    return self.next_inner();
                 }
 
                 debug_assert!(!gap_slice.right_chunk().is_empty());
@@ -67,36 +106,50 @@ impl<'a> Iterator for Chunks<'a> {
     }
 }
 
+impl<'a> Iterator for Chunks<'a> {
+    type Item = &'a str;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        let next = self.next_inner();
+        #[cfg(feature = "chunk-len")]
+        {
+            self.len -= next.is_some() as usize;
+        }
+        next
+    }
+
+    #[cfg_attr(docsrs, doc(cfg(feature = "chunk-len")))]
+    #[cfg(feature = "chunk-len")]
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let exact = self.len();
+        (exact, Some(exact))
+    }
+}
+
 impl DoubleEndedIterator for Chunks<'_> {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if let Some(extra) = self.backward_extra_left.take() {
-            Some(extra)
-        } else {
-            let Some(gap_slice) = self.leaves.next_back() else {
-                return self.forward_extra_right.take();
-            };
-
-            if gap_slice.right_chunk().is_empty() {
-                #[cfg(feature = "small_chunks")]
-                if gap_slice.left_chunk().is_empty() {
-                    return self.next_back();
-                }
-
-                debug_assert!(!gap_slice.left_chunk().is_empty());
-
-                Some(gap_slice.left_chunk())
-            } else {
-                if !gap_slice.left_chunk().is_empty() {
-                    self.backward_extra_left = Some(gap_slice.left_chunk());
-                }
-                Some(gap_slice.right_chunk())
-            }
+        let next = self.next_back_inner();
+        #[cfg(feature = "chunk-len")]
+        {
+            self.len -= next.is_some() as usize;
         }
+        next
     }
 }
 
 impl core::iter::FusedIterator for Chunks<'_> {}
+
+#[cfg_attr(docsrs, doc(cfg(feature = "chunk-len")))]
+#[cfg(feature = "chunk-len")]
+impl core::iter::ExactSizeIterator for Chunks<'_> {
+    #[inline]
+    fn len(&self) -> usize {
+        self.len
+    }
+}
 
 /// An iterator over the bytes of `Rope`s and `RopeSlice`s.
 ///

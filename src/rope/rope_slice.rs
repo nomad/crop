@@ -242,6 +242,17 @@ impl<'a> RopeSlice<'a> {
         Chars::from(self)
     }
 
+    /// Returns the number of chunks in this `RopeSlice`.
+    ///
+    /// This is equivalent to `self.chunks().len()`, but it doesn't require
+    /// constructing an intermediate [`Chunks`] iterator.
+    #[cfg_attr(docsrs, doc(cfg(feature = "chunk-len")))]
+    #[cfg(feature = "chunk-len")]
+    #[inline]
+    pub fn chunk_len(&self) -> usize {
+        self.tree_slice.summary().num_chunks
+    }
+
     /// Returns an iterator over the chunks of this `RopeSlice`.
     #[inline]
     pub fn chunks(&self) -> Chunks<'a> {

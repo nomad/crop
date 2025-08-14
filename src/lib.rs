@@ -151,14 +151,13 @@
 
 extern crate alloc;
 
+mod rope;
 pub mod iter {
     //! Iterators over [`Rope`](crate::Rope)s and
     //! [`RopeSlice`](crate::RopeSlice)s.
 
     pub use crate::rope::iterators::*;
 }
-
-mod rope;
 #[doc(hidden)]
 pub mod tree;
 

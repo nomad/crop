@@ -8,7 +8,10 @@ mod tests {
 
         serde_test::assert_tokens(
             &rope,
-            &[serde_test::Token::Seq { len: None }, serde_test::Token::SeqEnd],
+            &[
+                serde_test::Token::Seq { len: chunk_len(&rope) },
+                serde_test::Token::SeqEnd,
+            ],
         );
     }
 
@@ -22,7 +25,7 @@ mod tests {
         serde_test::assert_tokens(
             &rope,
             &[
-                serde_test::Token::Seq { len: None },
+                serde_test::Token::Seq { len: chunk_len(&rope) },
                 serde_test::Token::Str("lorem ipsum"),
                 serde_test::Token::SeqEnd,
             ],
@@ -40,7 +43,7 @@ mod tests {
         serde_test::assert_tokens(
             &rope,
             &[
-                serde_test::Token::Seq { len: None },
+                serde_test::Token::Seq { len: chunk_len(&rope) },
                 serde_test::Token::Str("lorem ipsum"),
                 serde_test::Token::Str(" dolor"),
                 serde_test::Token::SeqEnd,
@@ -58,7 +61,7 @@ mod tests {
         serde_test::assert_tokens(
             &rope,
             &[
-                serde_test::Token::Seq { len: None },
+                serde_test::Token::Seq { len: chunk_len(&rope) },
                 serde_test::Token::Str("lorem\nipsum"),
                 serde_test::Token::SeqEnd,
             ],
@@ -75,10 +78,40 @@ mod tests {
         serde_test::assert_tokens(
             &rope,
             &[
-                serde_test::Token::Seq { len: None },
+                serde_test::Token::Seq { len: chunk_len(&rope) },
                 serde_test::Token::Str("lorem\r\nipsum"),
                 serde_test::Token::SeqEnd,
             ],
         );
+    }
+
+    fn chunk_len(_rope: &Rope) -> Option<usize> {
+        #[cfg(feature = "chunk-len")]
+        {
+            Some(_rope.chunk_len())
+        }
+        #[cfg(not(feature = "chunk-len"))]
+        {
+            None
+        }
+    }
+
+    #[cfg(feature = "chunk-len")]
+    #[test]
+    fn ser_de_bincode() {
+        let mut rope = Rope::new();
+        rope.insert(0, "lorem dolor");
+        rope.insert(6, "ipsuma ");
+        rope.delete(11..12);
+
+        let config = bincode::config::standard();
+
+        let serialized = bincode::serde::encode_to_vec(&rope, config).unwrap();
+
+        let (deserialized, _) =
+            bincode::serde::decode_from_slice::<Rope, _>(&serialized, config)
+                .unwrap();
+
+        assert_eq!(rope, deserialized);
     }
 }
