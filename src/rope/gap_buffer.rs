@@ -1338,7 +1338,11 @@ impl Summary for GapBufferSummary {
 
     #[inline]
     fn empty() -> Self {
-        Self { chunks_summary: StrSummary::empty(), num_chunks: 0 }
+        Self {
+            chunks_summary: StrSummary::empty(),
+            #[cfg(feature = "chunk-len")]
+            num_chunks: 0,
+        }
     }
 }
 
