@@ -85,8 +85,15 @@ mod tests {
         );
     }
 
-    fn chunk_len(rope: &Rope) -> Option<usize> {
-        if cfg!(feature = "chunk-len") { Some(rope.chunk_len()) } else { None }
+    fn chunk_len(_rope: &Rope) -> Option<usize> {
+        #[cfg(feature = "chunk-len")]
+        {
+            Some(_rope.chunk_len())
+        }
+        #[cfg(not(feature = "chunk-len"))]
+        {
+            None
+        }
     }
 
     #[cfg(feature = "chunk-len")]
