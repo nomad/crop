@@ -22,13 +22,13 @@ fn byte_random() {
             let str_slice = &s[start..end];
             let rope_slice = r.byte_slice(start..end);
 
-            for (idx, byte) in str_slice.bytes().enumerate() {
-                if byte != rope_slice.byte(idx) {
-                    println!(
-                        "byte index: {idx}, byte range: {:?}",
-                        start..end
+            for (idx, str_byte) in str_slice.bytes().enumerate() {
+                let rope_byte = rope_slice.byte(idx);
+                if str_byte != rope_byte {
+                    panic!(
+                        "string's byte is {str_byte}, but rope's byte is \
+                         {rope_byte}",
                     );
-                    assert_eq!(byte, rope_slice.byte(idx));
                 }
             }
         }

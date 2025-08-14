@@ -109,7 +109,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         let len_total_minus_end =
             self.measure::<M>() - self.end_slice.measure::<M>();
 
-        if len_total_minus_end <= offset {
+        if len_total_minus_end < offset {
             return (self.end_slice, len_total_minus_end);
         }
 
