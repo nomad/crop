@@ -115,8 +115,9 @@ impl<'a> RopeSlice<'a> {
             return self.byte_len();
         }
 
-        let ByteMetric(byte_offset) =
-            self.tree_slice.convert_measure(RawLineMetric(line_offset));
+        let ByteMetric(byte_offset) = self
+            .tree_slice
+            .convert_measure_to_base(RawLineMetric(line_offset));
 
         byte_offset
     }
@@ -150,9 +151,9 @@ impl<'a> RopeSlice<'a> {
             panic::utf16_offset_out_of_bounds(utf16_offset, self.utf16_len())
         }
 
-        let ByteMetric(byte_offset) = self
-            .tree_slice
-            .convert_measure(super::metrics::Utf16Metric(utf16_offset));
+        let ByteMetric(byte_offset) = self.tree_slice.convert_measure_to_base(
+            super::metrics::Utf16Metric(utf16_offset),
+        );
 
         byte_offset
     }
@@ -463,7 +464,7 @@ impl<'a> RopeSlice<'a> {
         }
 
         let RawLineMetric(line_offset) =
-            self.tree_slice.convert_measure(ByteMetric(byte_offset));
+            self.tree_slice.convert_measure_from_base(ByteMetric(byte_offset));
 
         line_offset
     }
@@ -671,7 +672,7 @@ impl<'a> RopeSlice<'a> {
         }
 
         let super::metrics::Utf16Metric(utf16_offset) =
-            self.tree_slice.convert_measure(ByteMetric(byte_offset));
+            self.tree_slice.convert_measure_from_base(ByteMetric(byte_offset));
 
         utf16_offset
     }

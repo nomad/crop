@@ -49,20 +49,40 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         self.measure::<L::BaseMetric>()
     }
 
-    /// Returns the `M2`-measure of all the leaves before `up_to` plus the
-    /// `M2`-measure of the left sub-slice of the leaf at `up_to`.
+    /// Returns the `M`-measure of all the leaves before the given offset, plus
+    /// the `M`-measure of the left sub-slice of the leaf at the given offset.
     #[inline]
-    pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
+    pub fn convert_measure_from_base<M>(&self, base_offset: L::BaseMetric) -> M
     where
-        M1: SlicingMetric<L>,
-        M2: Metric<L::Summary>,
+        M: FromMetric<L::BaseMetric, L::Summary>,
     {
-        debug_assert!(up_to <= self.measure::<M1>());
+        debug_assert!(base_offset <= self.base_measure());
 
-        if up_to == M1::zero() {
-            M2::zero()
+        if base_offset.is_zero() {
+            M::zero()
         } else {
-            self.root.convert_measure_from_offset(self.offset, up_to)
+            self.root.convert_measure::<_, M>(self.offset + base_offset)
+                - self.measure_offset::<M>()
+        }
+    }
+
+    /// Returns the base measure of all the leaves before the given offset,
+    /// plus the base measure of the left sub-slice of the leaf at the given
+    /// offset.
+    #[inline]
+    pub fn convert_measure_to_base<M>(&self, offset: M) -> L::BaseMetric
+    where
+        M: FromMetric<L::BaseMetric, L::Summary>,
+        L::BaseMetric: FromMetric<M, L::Summary>,
+    {
+        debug_assert!(offset <= self.measure::<M>());
+
+        if offset.is_zero() {
+            L::BaseMetric::zero()
+        } else {
+            let m_offset = self.measure_offset::<M>();
+            self.root.convert_measure::<_, L::BaseMetric>(m_offset + offset)
+                - self.offset
         }
     }
 
