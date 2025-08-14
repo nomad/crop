@@ -227,7 +227,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
-    /// Continuously replaces the node its child qs long as it's an internal
+    /// Continuously replaces the node its child as long as it's an internal
     /// node with a single child. Note that an inode might become a leaf node
     /// after calling this.
     ///

@@ -1091,7 +1091,7 @@ impl GapBuffer {
     /// # use crop::GapBuffer;
     /// # use crop::tree::Leaf;
     /// let mut buffer = GapBuffer::from("f\n\r\n");
-    /// assert_eq!(buffer.summarize_range(0..buffer.len()), buffer.summarize());
+    /// assert_eq!(buffer.summarize_range(0..buffer.len()), *buffer.summarize());
     ///
     /// let s = buffer.summarize_range(0..1);
     /// assert_eq!(s.bytes(), 1);
