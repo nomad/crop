@@ -156,7 +156,7 @@ impl GapBuffer {
                 bytes_to_add - right.len_left(),
             );
 
-            let summary = right.left_summary + StrSummary::from(move_left);
+            let summary = right.left_summary + move_left.summarize();
 
             self.append_two(right.left_chunk(), move_left, summary);
 
@@ -224,20 +224,21 @@ impl GapBuffer {
     /// # Examples
     ///
     /// ```
-    /// # use crop::{GapBuffer, StrSummary};
+    /// # use crop::GapBuffer;
+    /// # use crop::tree::Leaf;
     ///
     /// let mut buffer = GapBuffer::from("ab");
     /// assert_eq!(buffer.left_chunk(), "a");
     /// assert_eq!(buffer.right_chunk(), "b");
     ///
-    /// buffer.append_str("c", StrSummary::from("c"));
+    /// buffer.append_str("c", "c".summarize());
     /// assert_eq!(buffer.left_chunk(), "a");
     /// assert_eq!(buffer.right_chunk(), "bc");
     /// ```
     #[inline]
     pub fn append_str(&mut self, str: &str, str_summary: StrSummary) {
         debug_assert!(str.len() <= self.len_gap());
-        debug_assert_eq!(str_summary, StrSummary::from(str));
+        debug_assert_eq!(str_summary, str.summarize());
 
         let start = MAX_BYTES - self.len_right();
 
@@ -261,20 +262,18 @@ impl GapBuffer {
     /// # Examples
     ///
     /// ```
-    /// # use crop::{GapBuffer, StrSummary};
+    /// # use crop::GapBuffer;
+    /// # use crop::tree::Leaf;
     /// let mut buffer = GapBuffer::from("ab");
     ///
-    /// buffer.append_two("c", "d", StrSummary::from("cd"));
+    /// buffer.append_two("c", "d", "cd".summarize());
     /// assert_eq!(buffer.left_chunk(), "a");
     /// assert_eq!(buffer.right_chunk(), "bcd");
     /// ```
     #[inline]
     pub fn append_two(&mut self, a: &str, b: &str, a_b_summary: StrSummary) {
         debug_assert!(a.len() + b.len() <= self.len_gap());
-        debug_assert_eq!(
-            a_b_summary,
-            StrSummary::from(a) + StrSummary::from(b)
-        );
+        debug_assert_eq!(a_b_summary, a.summarize() + b.summarize());
 
         // Shift the right chunk to the left.
         let start = MAX_BYTES - self.len_right();
@@ -434,7 +433,7 @@ impl GapBuffer {
 
                 bytes[range].copy_from_slice(chunk.as_bytes());
 
-                left_summary += StrSummary::from(chunk);
+                left_summary += chunk.summarize();
             } else {
                 let (to_left, to_right) = split_adjusted::<true>(
                     chunk,
@@ -449,7 +448,7 @@ impl GapBuffer {
 
                 bytes[range].copy_from_slice(to_left.as_bytes());
 
-                left_summary += StrSummary::from(to_left);
+                left_summary += to_left.summarize();
 
                 let mut start = MAX_BYTES - (total_len - left_summary.bytes());
 
@@ -462,7 +461,7 @@ impl GapBuffer {
 
                 start += to_right.len();
 
-                let mut right_summary = StrSummary::from(to_right);
+                let mut right_summary = to_right.summarize();
 
                 for &chunk in chunks {
                     let range = {
@@ -474,7 +473,7 @@ impl GapBuffer {
 
                     start += chunk.len();
 
-                    right_summary += StrSummary::from(chunk);
+                    right_summary += chunk.summarize();
                 }
 
                 return Self { bytes, left_summary, right_summary };
@@ -515,7 +514,7 @@ impl GapBuffer {
 
         self.bytes[insert_range].copy_from_slice(s.as_bytes());
 
-        let inserted_summary = StrSummary::from(s);
+        let inserted_summary = s.summarize();
 
         self.left_summary += inserted_summary;
     }
@@ -697,7 +696,7 @@ impl GapBuffer {
                 self.len_right() - bytes_to_move,
             );
 
-            let moved_summary = StrSummary::from(move_right);
+            let moved_summary = move_right.summarize();
 
             right.prepend(move_right, moved_summary);
 
@@ -708,7 +707,7 @@ impl GapBuffer {
                 self.len_left() - (bytes_to_move - self.len_right()),
             );
 
-            let move_right_summary = StrSummary::from(move_right);
+            let move_right_summary = move_right.summarize();
 
             let moved_summary = move_right_summary + self.right_summary;
 
@@ -729,21 +728,20 @@ impl GapBuffer {
     /// # Examples
     ///
     /// ```
-    /// # use crop::{StrSummary, GapBuffer};
+    /// # use crop::GapBuffer;
+    /// # use crop::tree::Leaf;
     /// let mut buf = GapBuffer::from("at");
     ///
     /// let prepend = "c";
     ///
-    /// let prepended_summary = StrSummary::from(prepend);
-    ///
-    /// buf.prepend(prepend, prepended_summary);
+    /// buf.prepend(prepend, prepend.summarize());
     ///
     /// assert_eq!(buf, "cat");
     /// ```
     #[inline]
     pub fn prepend(&mut self, str: &str, str_summary: StrSummary) {
         debug_assert!(str.len() <= self.len_gap());
-        debug_assert_eq!(str_summary, StrSummary::from(str));
+        debug_assert_eq!(str_summary, str.summarize());
 
         // Shift the left chunk over.
         let len_left = self.len_left();
@@ -766,16 +764,15 @@ impl GapBuffer {
     /// # Examples
     ///
     /// ```
-    /// # use crop::{StrSummary, GapBuffer};
+    /// # use crop::GapBuffer;
+    /// # use crop::tree::Leaf;
     /// let mut buf = GapBuffer::from("!");
     ///
     /// let first = "c";
     ///
     /// let second = "at";
     ///
-    /// let prepended_summary = StrSummary::from(first) + StrSummary::from(second);
-    ///
-    /// buf.prepend_two(first, second, prepended_summary);
+    /// buf.prepend_two(first, second, "cat".summarize());
     ///
     /// assert_eq!(buf, "cat!");
     /// ```
@@ -787,11 +784,7 @@ impl GapBuffer {
         prepended_summary: StrSummary,
     ) {
         debug_assert!(a.len() + b.len() <= self.len_gap());
-
-        debug_assert_eq!(
-            prepended_summary,
-            StrSummary::from(a) + StrSummary::from(b)
-        );
+        debug_assert_eq!(prepended_summary, a.summarize() + b.summarize());
 
         // Shift the left chunk to the right.
         let len_left = self.len_left();
@@ -817,12 +810,11 @@ impl GapBuffer {
     /// # Examples
     ///
     /// ```
-    /// # use crop::{StrSummary, GapBuffer};
+    /// # use crop::GapBuffer;
+    /// # use crop::tree::Leaf;
     /// let mut buffer = GapBuffer::from("a\nbc");
     ///
-    /// let removed_summary = StrSummary::from("a\n");
-    ///
-    /// buffer.remove_up_to(2, removed_summary);
+    /// buffer.remove_up_to(2, "a\n".summarize());
     ///
     /// assert_eq!(buffer, "bc");
     /// ```
@@ -892,7 +884,7 @@ impl GapBuffer {
 
         let removed_summary = self.summarize_range(start..end);
 
-        let added_summary = StrSummary::from(s);
+        let added_summary = s.summarize();
 
         self.bytes[start..start + s.len()].copy_from_slice(s.as_bytes());
 
@@ -1079,10 +1071,9 @@ impl GapBuffer {
         debug_assert!(self.left_chunk().is_char_boundary(byte_offset));
 
         if byte_offset <= self.len_left() / 2 {
-            StrSummary::from(&self.left_chunk()[..byte_offset])
+            self.left_chunk()[..byte_offset].summarize()
         } else {
-            self.left_summary
-                - StrSummary::from(&self.left_chunk()[byte_offset..])
+            self.left_summary - self.left_chunk()[byte_offset..].summarize()
         }
     }
 
@@ -1128,14 +1119,13 @@ impl GapBuffer {
         ) -> StrSummary {
             // The whole range is inside the left chunk.
             if end <= buffer.len_left() {
-                let chunk = &buffer.left_chunk()[start..end];
-                StrSummary::from(chunk)
+                buffer.left_chunk()[start..end].summarize()
             }
             // The start is on the left chunk and the end is on the right.
             else if start <= buffer.len_left() {
                 let left_chunk = &buffer.left_chunk()[start..];
 
-                StrSummary::from(left_chunk)
+                left_chunk.summarize()
                     + buffer
                         .summarize_right_chunk_up_to(end - buffer.len_left())
             }
@@ -1143,8 +1133,7 @@ impl GapBuffer {
             else {
                 start -= buffer.len_left();
                 end -= buffer.len_left();
-                let chunk = &buffer.right_chunk()[start..end];
-                StrSummary::from(chunk)
+                buffer.right_chunk()[start..end].summarize()
             }
         }
 
@@ -1171,10 +1160,10 @@ impl GapBuffer {
         debug_assert!(self.right_chunk().is_char_boundary(byte_offset));
 
         if byte_offset <= self.len_right() / 2 {
-            StrSummary::from(&self.right_chunk()[..byte_offset])
+            self.right_chunk()[..byte_offset].summarize()
         } else {
             self.right_summary
-                - StrSummary::from(&self.right_chunk()[byte_offset..])
+                - self.right_chunk()[byte_offset..].summarize()
         }
     }
 
@@ -1594,7 +1583,7 @@ mod tests {
         buffer.move_gap(2);
 
         let offset = 1;
-        buffer.remove_up_to(offset, StrSummary::from(&s[..offset]));
+        buffer.remove_up_to(offset, s[..offset].summarize());
 
         assert_eq!("bb", buffer);
     }

@@ -55,7 +55,7 @@ impl<'a> GapSlice<'a> {
     }
 
     pub(super) fn assert_invariants(&self) {
-        assert_eq!(self.left_summary, StrSummary::from(self.left_chunk()));
+        assert_eq!(self.left_summary, self.left_chunk().summarize());
 
         if self.len_right() == 0 {
             assert_eq!(self.len_left(), self.bytes.len());

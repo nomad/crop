@@ -22,30 +22,6 @@ pub struct StrSummary {
     utf16_code_units: usize,
 }
 
-impl From<&str> for StrSummary {
-    #[inline]
-    fn from(s: &str) -> Self {
-        Self {
-            bytes: s.len(),
-            line_breaks: count::line_breaks(s),
-            #[cfg(feature = "utf16-metric")]
-            utf16_code_units: count::utf16_code_units(s),
-        }
-    }
-}
-
-impl From<char> for StrSummary {
-    #[inline]
-    fn from(ch: char) -> Self {
-        Self {
-            bytes: ch.len_utf8(),
-            line_breaks: (ch == '\n') as usize,
-            #[cfg(feature = "utf16-metric")]
-            utf16_code_units: ch.len_utf16(),
-        }
-    }
-}
-
 impl StrSummary {
     #[inline]
     pub fn bytes(&self) -> usize {
@@ -76,6 +52,18 @@ impl Summary for StrSummary {
     #[inline]
     fn empty() -> Self {
         Self::default()
+    }
+}
+
+impl From<char> for StrSummary {
+    #[inline]
+    fn from(ch: char) -> Self {
+        Self {
+            bytes: ch.len_utf8(),
+            line_breaks: (ch == '\n') as usize,
+            #[cfg(feature = "utf16-metric")]
+            utf16_code_units: ch.len_utf16(),
+        }
     }
 }
 
@@ -135,7 +123,12 @@ impl Leaf for str {
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        StrSummary::from(self)
+        StrSummary {
+            bytes: self.len(),
+            line_breaks: count::line_breaks(self),
+            #[cfg(feature = "utf16-metric")]
+            utf16_code_units: count::utf16_code_units(self),
+        }
     }
 }
 
@@ -144,7 +137,7 @@ impl<'a> LeafSlice<'a> for &'a str {
 
     #[inline]
     fn summarize(&self) -> <Self::Leaf as Leaf>::Summary {
-        StrSummary::from(*self)
+        (*self).summarize()
     }
 }
 
