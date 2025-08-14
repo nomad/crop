@@ -1,3 +1,5 @@
+use core::cmp::Ordering;
+
 use super::traits::{BalancedLeaf, Leaf, LeafSlice, Metric, SlicingMetric};
 use super::{Arc, Inode};
 
@@ -95,12 +97,19 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                     for child in inode.children() {
                         let child_m1 = child.measure::<M1>();
 
-                        if m1 + child_m1 >= up_to {
-                            node = &**child;
-                            continue 'outer;
-                        } else {
-                            m1 += child_m1;
-                            m2 += child.measure::<M2>();
+                        match (m1 + child_m1).cmp(&up_to) {
+                            Ordering::Less => {
+                                m1 += child_m1;
+                                m2 += child.measure::<M2>();
+                            },
+
+                            // The child is exactly the right size.
+                            Ordering::Equal => return m2 + child.measure(),
+
+                            Ordering::Greater => {
+                                node = &**child;
+                                continue 'outer;
+                            },
                         }
                     }
 
@@ -198,8 +207,13 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
+    /// Returns the leaf at the given measure, together with the leaf's
+    /// `M`-offset in the tree.
+    ///
+    /// If the measure falls on a leaf boundary, the leaf to the left of the
+    /// measure is returned.
     #[inline]
-    pub(super) fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'_>, M)
+    pub(super) fn leaf_at_measure<M>(&self, measure: M) -> (&L, M)
     where
         M: Metric<L::Summary>,
     {
@@ -220,23 +234,9 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                     node = inode.child(child_idx);
                 },
 
-                Node::Leaf(leaf) => {
-                    return (leaf.as_slice(), measured);
-                },
+                Node::Leaf(leaf) => return (leaf, measured),
             }
         }
-    }
-
-    #[inline]
-    pub(super) fn leaf_at_measure_from_offset<M>(
-        &self,
-        _start_from: L::BaseMetric,
-        _measure: M,
-    ) -> (L::Slice<'_>, M)
-    where
-        M: Metric<L::Summary>,
-    {
-        todo!();
     }
 
     #[inline]

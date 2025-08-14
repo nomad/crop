@@ -44,54 +44,6 @@ impl<const ARITY: usize, L: Leaf> Copy for TreeSlice<'_, ARITY, L> where
 }
 
 impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
-    /*
-      Public methods
-    */
-
-    #[doc(hidden)]
-    pub fn assert_invariants(&self) {
-        match &**self.root {
-            Node::Internal(_) => {
-                assert!(self.leaf_count() > 1);
-                assert!(!self.start_slice.is_empty());
-                assert!(!self.end_slice.is_empty());
-
-                if self.leaf_count() == 2 {
-                    assert_eq!(
-                        self.summary.base_measure(),
-                        self.start_slice.base_measure()
-                            + self.end_slice.base_measure()
-                    );
-                }
-
-                // This last part checks that the first and last slices are
-                // under different children of the root, making the latter the
-                // deepest node that contains both.
-
-                let (root, remove_offset) = {
-                    let start = self.offset;
-                    deepest_node_containing_base_range(
-                        self.root,
-                        start,
-                        start + self.summary.base_measure(),
-                    )
-                };
-
-                // These asserts should be equivalent but we use them all for
-                // redundancy.
-
-                assert!(Arc::ptr_eq(self.root, root));
-                assert_eq!(self.root.depth(), root.depth());
-                assert!(remove_offset.is_zero());
-            },
-
-            Node::Leaf(leaf) => {
-                assert_eq!(self.leaf_count(), 1);
-                assert!(leaf.base_measure() >= self.base_measure());
-            },
-        }
-    }
-
     #[inline]
     pub fn base_measure(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
@@ -141,7 +93,9 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
             return (self.end_slice, len_total_minus_end);
         }
 
-        self.root.leaf_at_measure_from_offset(self.offset, measure)
+        let offset = self.measure_offset::<M>();
+        let (leaf, leaf_offset) = self.root.leaf_at_measure(offset + measure);
+        (leaf.as_slice(), leaf_offset - offset)
     }
 
     #[inline]
@@ -172,11 +126,6 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     }
 
     #[inline]
-    pub(super) fn root(&self) -> &'a Arc<Node<ARITY, L>> {
-        self.root
-    }
-
-    #[inline]
     pub fn start_slice(&self) -> L::Slice<'a> {
         self.start_slice
     }
@@ -184,6 +133,126 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     #[inline]
     pub fn summary(&self) -> &L::Summary {
         &self.summary
+    }
+
+    #[inline]
+    pub(super) fn root(&self) -> &'a Arc<Node<ARITY, L>> {
+        self.root
+    }
+
+    #[doc(hidden)]
+    pub fn assert_invariants(&self) {
+        match &**self.root {
+            Node::Internal(_) => {
+                assert!(self.leaf_count() > 1);
+                assert!(!self.start_slice.is_empty());
+                assert!(!self.end_slice.is_empty());
+
+                if self.leaf_count() == 2 {
+                    assert_eq!(
+                        self.summary.base_measure(),
+                        self.start_slice.base_measure()
+                            + self.end_slice.base_measure()
+                    );
+                }
+
+                // This last part checks that the first and last slices are
+                // under different children of the root, making the latter the
+                // deepest node that contains both.
+
+                let (root, remove_offset) = {
+                    let start = self.offset;
+                    deepest_node_containing_base_range(
+                        self.root,
+                        start,
+                        start + self.summary.base_measure(),
+                    )
+                };
+
+                // These asserts should be equivalent but we use them all for
+                // redundancy.
+
+                assert!(Arc::ptr_eq(self.root, root));
+                assert_eq!(self.root.depth(), root.depth());
+                assert!(remove_offset.is_zero());
+            },
+
+            Node::Leaf(leaf) => {
+                assert_eq!(self.leaf_count(), 1);
+                assert!(leaf.base_measure() >= self.base_measure());
+            },
+        }
+    }
+
+    /// Returns the `M`-length of the subtree under [`root`](Self::root) up to
+    /// the start of the [`start_slice`](Self::start_slice).
+    ///
+    /// Note that it's never necessary to call this with `L::BaseMetric`, as
+    /// that's already known to be [`Self::offset`].
+    #[inline]
+    fn measure_offset<M>(&self) -> M
+    where
+        M: Metric<L::Summary>,
+    {
+        use core::ops::{Add, AddAssign, Sub, SubAssign};
+
+        /// A `Metric`-wrapper with `unreachable!` `SlicingMetric` impls
+        /// to be given to [`Node::convert_measure()`] which lets us avoid
+        /// adding a `L::BaseMetric: SlicingMetric<L>` bound to this function.
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+        struct OnBoundary<T>(T);
+
+        impl<T: Add<Output = T>> Add for OnBoundary<T> {
+            type Output = Self;
+            #[inline]
+            fn add(self, rhs: Self) -> Self {
+                Self(self.0 + rhs.0)
+            }
+        }
+        impl<T: AddAssign> AddAssign for OnBoundary<T> {
+            #[inline]
+            fn add_assign(&mut self, rhs: Self) {
+                self.0 += rhs.0;
+            }
+        }
+        impl<T: Sub<Output = T>> Sub for OnBoundary<T> {
+            type Output = Self;
+            fn sub(self, _: Self) -> Self {
+                unreachable!()
+            }
+        }
+        impl<T: SubAssign> SubAssign for OnBoundary<T> {
+            fn sub_assign(&mut self, _: Self) {
+                unreachable!()
+            }
+        }
+        impl<S: Summary> Metric<S> for OnBoundary<<S::Leaf as Leaf>::BaseMetric> {
+            #[inline]
+            fn zero() -> Self {
+                Self(<S::Leaf as Leaf>::BaseMetric::zero())
+            }
+            #[inline]
+            fn measure(summary: &S) -> Self {
+                Self(summary.base_measure())
+            }
+            #[inline]
+            fn one() -> Self {
+                unreachable!()
+            }
+        }
+        impl<L: Leaf> SlicingMetric<L> for OnBoundary<L::BaseMetric> {
+            fn slice_up_to<'a>(_: L::Slice<'a>, _: Self) -> L::Slice<'a> {
+                unreachable!()
+            }
+            fn slice_from<'a>(_: L::Slice<'a>, _: Self) -> L::Slice<'a> {
+                unreachable!()
+            }
+        }
+
+        // Make the offset lie on a leaf boundary to avoid slicing.
+        let base_offset = self.offset + self.start_slice.base_measure();
+        let m_offset: M = self.root.convert_measure(OnBoundary(base_offset));
+        m_offset - self.start_slice.measure::<M>()
     }
 }
 

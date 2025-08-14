@@ -306,6 +306,23 @@ impl GapBuffer {
         }
     }
 
+    /// Returns the byte at the given index.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the index is out of bounds, i.e. greater than or equal to
+    /// [`len()`](Self::len()).
+    #[inline]
+    pub(super) fn byte(&self, byte_index: usize) -> u8 {
+        debug_assert!(byte_index < self.len());
+
+        if byte_index < self.len_left() {
+            self.left_chunk().as_bytes()[byte_index]
+        } else {
+            self.right_chunk().as_bytes()[byte_index - self.len_left()]
+        }
+    }
+
     /// The number of bytes `RopeChunk`s must always stay over.
     pub(super) const fn chunk_min() -> usize {
         // The buffer can be underfilled by 3 bytes at most, which can happen
@@ -443,7 +460,7 @@ impl GapBuffer {
     }
 
     #[inline]
-    fn is_char_boundary(&self, byte_offset: usize) -> bool {
+    pub(super) fn is_char_boundary(&self, byte_offset: usize) -> bool {
         debug_assert!(byte_offset <= self.len());
 
         if byte_offset <= self.len_left() {

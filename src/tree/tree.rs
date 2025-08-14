@@ -133,12 +133,11 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
     /// plus the `M`-measure of all the leaves before it.
     #[inline]
-    pub fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'_>, M)
+    pub fn leaf_at_measure<M>(&self, measure: M) -> (&L, M)
     where
         M: Metric<L::Summary>,
     {
         debug_assert!(measure <= self.measure::<M>() + M::one());
-
         self.root.leaf_at_measure(measure)
     }
 
