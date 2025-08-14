@@ -44,24 +44,24 @@ impl<'a> Iterator for Chunks<'a> {
         if let Some(extra) = self.forward_extra_right.take() {
             Some(extra)
         } else {
-            let Some(chunk) = self.leaves.next() else {
+            let Some(gap_slice) = self.leaves.next() else {
                 return self.backward_extra_left.take();
             };
 
-            if chunk.left_chunk().is_empty() {
+            if gap_slice.left_chunk().is_empty() {
                 #[cfg(feature = "small_chunks")]
-                if chunk.right_chunk().is_empty() {
+                if gap_slice.right_chunk().is_empty() {
                     return self.next();
                 }
 
-                debug_assert!(!chunk.right_chunk().is_empty());
+                debug_assert!(!gap_slice.right_chunk().is_empty());
 
-                Some(chunk.right_chunk())
+                Some(gap_slice.right_chunk())
             } else {
-                if !chunk.right_chunk().is_empty() {
-                    self.forward_extra_right = Some(chunk.right_chunk());
+                if !gap_slice.right_chunk().is_empty() {
+                    self.forward_extra_right = Some(gap_slice.right_chunk());
                 }
-                Some(chunk.left_chunk())
+                Some(gap_slice.left_chunk())
             }
         }
     }
@@ -73,24 +73,24 @@ impl DoubleEndedIterator for Chunks<'_> {
         if let Some(extra) = self.backward_extra_left.take() {
             Some(extra)
         } else {
-            let Some(chunk) = self.leaves.next_back() else {
+            let Some(gap_slice) = self.leaves.next_back() else {
                 return self.forward_extra_right.take();
             };
 
-            if chunk.right_chunk().is_empty() {
+            if gap_slice.right_chunk().is_empty() {
                 #[cfg(feature = "small_chunks")]
-                if chunk.left_chunk().is_empty() {
+                if gap_slice.left_chunk().is_empty() {
                     return self.next_back();
                 }
 
-                debug_assert!(!chunk.left_chunk().is_empty());
+                debug_assert!(!gap_slice.left_chunk().is_empty());
 
-                Some(chunk.left_chunk())
+                Some(gap_slice.left_chunk())
             } else {
-                if !chunk.left_chunk().is_empty() {
-                    self.backward_extra_left = Some(chunk.left_chunk());
+                if !gap_slice.left_chunk().is_empty() {
+                    self.backward_extra_left = Some(gap_slice.left_chunk());
                 }
-                Some(chunk.right_chunk())
+                Some(gap_slice.right_chunk())
             }
         }
     }

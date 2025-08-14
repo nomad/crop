@@ -75,7 +75,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         M: FromMetric<L::BaseMetric, L::Summary>,
         L::BaseMetric: FromMetric<M, L::Summary>,
     {
-        debug_assert!(offset <= self.measure::<M>());
+        debug_assert!(offset <= self.measure::<M>() + M::one());
 
         if offset.is_zero() {
             L::BaseMetric::zero()
