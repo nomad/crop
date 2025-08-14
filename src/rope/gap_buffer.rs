@@ -47,10 +47,14 @@ pub struct GapBuffer {
     pub(super) right_summary: StrSummary,
 }
 
-#[derive(Copy, Clone, Default, Debug, PartialEq)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub struct GapBufferSummary {
     /// The sum of the [`StrSummary`]s of the left and right chunks.
     pub(super) chunks_summary: StrSummary,
+
+    /// The number of chunks in the buffer.
+    #[cfg(feature = "chunk-len")]
+    pub(super) num_chunks: usize,
 }
 
 impl core::fmt::Debug for GapBuffer {
@@ -1221,6 +1225,9 @@ impl Leaf for GapBuffer {
     fn summarize(&self) -> Self::Summary {
         GapBufferSummary {
             chunks_summary: self.left_summary + self.right_summary,
+            #[cfg(feature = "chunk-len")]
+            num_chunks: (self.left_summary.bytes() > 0) as usize
+                + (self.right_summary.bytes() > 0) as usize,
         }
     }
 }
@@ -1331,7 +1338,7 @@ impl Summary for GapBufferSummary {
 
     #[inline]
     fn empty() -> Self {
-        Self { chunks_summary: StrSummary::empty() }
+        Self { chunks_summary: StrSummary::empty(), num_chunks: 0 }
     }
 }
 
@@ -1349,6 +1356,10 @@ impl AddAssign for GapBufferSummary {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
         self.chunks_summary += rhs.chunks_summary;
+        #[cfg(feature = "chunk-len")]
+        {
+            self.num_chunks += rhs.num_chunks;
+        }
     }
 }
 
@@ -1366,6 +1377,10 @@ impl SubAssign for GapBufferSummary {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
         self.chunks_summary -= rhs.chunks_summary;
+        #[cfg(feature = "chunk-len")]
+        {
+            self.num_chunks -= rhs.num_chunks;
+        }
     }
 }
 
