@@ -993,7 +993,13 @@ mod serde_impls {
         where
             S: serde::Serializer,
         {
-            let mut seq = serializer.serialize_seq(None)?;
+            #[cfg(feature = "chunk-len")]
+            let chunk_len = Some(self.chunk_len());
+
+            #[cfg(not(feature = "chunk-len"))]
+            let chunk_len = None;
+
+            let mut seq = serializer.serialize_seq(chunk_len)?;
             for chunk in self.chunks() {
                 seq.serialize_element(chunk)?;
             }
