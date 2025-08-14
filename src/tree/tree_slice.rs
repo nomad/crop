@@ -45,32 +45,32 @@ impl<const ARITY: usize, L: Leaf> Copy for TreeSlice<'_, ARITY, L> where
 
 impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
+    pub fn base_len(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
-    /// Returns the `M`-measure of all the leaves before the given offset, plus
-    /// the `M`-measure of the left sub-slice of the leaf at the given offset.
+    /// Returns the M-length of all the leaves before the given offset, plus
+    /// the M-length of the left sub-slice of the leaf at the given offset.
     #[inline]
-    pub fn convert_measure_from_base<M>(&self, base_offset: L::BaseMetric) -> M
+    pub fn convert_len_from_base<M>(&self, base_offset: L::BaseMetric) -> M
     where
         M: FromMetric<L::BaseMetric, L::Summary>,
     {
-        debug_assert!(base_offset <= self.base_measure());
+        debug_assert!(base_offset <= self.base_len());
 
         if base_offset.is_zero() {
             M::zero()
         } else {
-            self.root.convert_measure::<_, M>(self.offset + base_offset)
-                - self.measure_offset::<M>()
+            self.root.convert_len::<_, M>(self.offset + base_offset)
+                - self.offset_len::<M>()
         }
     }
 
-    /// Returns the base measure of all the leaves before the given offset,
-    /// plus the base measure of the left sub-slice of the leaf at the given
+    /// Returns the base length of all the leaves before the given offset,
+    /// plus the base length of the left sub-slice of the leaf at the given
     /// offset.
     #[inline]
-    pub fn convert_measure_to_base<M>(&self, offset: M) -> L::BaseMetric
+    pub fn convert_len_to_base<M>(&self, offset: M) -> L::BaseMetric
     where
         M: FromMetric<L::BaseMetric, L::Summary>,
         L::BaseMetric: FromMetric<M, L::Summary>,
@@ -80,8 +80,8 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         if offset.is_zero() {
             L::BaseMetric::zero()
         } else {
-            let m_offset = self.measure_offset::<M>();
-            self.root.convert_measure::<_, L::BaseMetric>(m_offset + offset)
+            let m_offset = self.offset_len::<M>();
+            self.root.convert_len::<_, L::BaseMetric>(m_offset + offset)
                 - self.offset
         }
     }
@@ -91,40 +91,39 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
         self.end_slice
     }
 
-    /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
-    /// plus the `M`-measure of all the leaves before it.
+    /// Returns the leaf at the given M-offset, plus the M-length of all the
+    /// leaves before it.
     #[inline]
-    pub fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'a>, M)
+    pub fn leaf_at_offset<M>(&self, offset: M) -> (L::Slice<'a>, M)
     where
         M: Metric<L::Summary> + FromMetric<L::BaseMetric, L::Summary>,
     {
-        debug_assert!(measure <= self.measure::<M>() + M::one());
+        debug_assert!(offset <= self.measure::<M>() + M::one());
 
         let len_start_slice = self.start_slice.measure::<M>();
 
-        if measure <= len_start_slice {
+        if offset <= len_start_slice {
             return (self.start_slice, M::zero());
         }
 
         let len_total_minus_end =
             self.measure::<M>() - self.end_slice.measure::<M>();
 
-        if len_total_minus_end <= measure {
+        if len_total_minus_end <= offset {
             return (self.end_slice, len_total_minus_end);
         }
 
-        let offset = self.measure_offset::<M>();
-        let (leaf, leaf_offset) = self.root.leaf_at_measure(offset + measure);
-        (leaf.as_slice(), leaf_offset - offset)
+        let m_offset = self.offset_len::<M>();
+        let (leaf, leaf_offset) = self.root.leaf_at_offset(m_offset + offset);
+        (leaf.as_slice(), leaf_offset - m_offset)
     }
 
     #[inline]
     pub fn leaf_count(&self) -> SliceLeafCount {
         if self.root.is_leaf() {
             SliceLeafCount::One
-        } else if self.start_slice.base_measure()
-            + self.end_slice.base_measure()
-            == self.base_measure()
+        } else if self.start_slice.base_len() + self.end_slice.base_len()
+            == self.base_len()
         {
             SliceLeafCount::Two
         } else {
@@ -170,9 +169,9 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
 
                 if self.leaf_count() == 2 {
                     assert_eq!(
-                        self.summary.base_measure(),
-                        self.start_slice.base_measure()
-                            + self.end_slice.base_measure()
+                        self.summary.base_len(),
+                        self.start_slice.base_len()
+                            + self.end_slice.base_len()
                     );
                 }
 
@@ -185,7 +184,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
                     deepest_node_containing_base_range(
                         self.root,
                         start,
-                        start + self.summary.base_measure(),
+                        start + self.summary.base_len(),
                     )
                 };
 
@@ -199,7 +198,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
 
             Node::Leaf(leaf) => {
                 assert_eq!(self.leaf_count(), 1);
-                assert!(leaf.base_measure() >= self.base_measure());
+                assert!(leaf.base_len() >= self.base_len());
             },
         }
     }
@@ -210,11 +209,11 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     /// Note that it's never necessary to call this with `L::BaseMetric`, as
     /// that's already known to be [`Self::offset`].
     #[inline]
-    fn measure_offset<M>(&self) -> M
+    fn offset_len<M>(&self) -> M
     where
         M: FromMetric<L::BaseMetric, L::Summary>,
     {
-        self.root.convert_measure(self.offset)
+        self.root.convert_len(self.offset)
     }
 }
 
@@ -245,7 +244,7 @@ where
                 self.root,
                 self.offset,
                 range.start,
-                self.base_measure(),
+                self.base_len(),
             )
         }
     }
@@ -313,7 +312,7 @@ where
             let (root, offset) = deepest_node_containing_base_range(
                 slice.root,
                 start,
-                start + slice.summary.base_measure(),
+                start + slice.summary.base_len(),
             );
 
             slice.root = root;
@@ -385,30 +384,30 @@ where
     'outer: loop {
         match &**node {
             Node::Internal(inode) => {
-                let mut measured = L::Summary::empty();
+                let mut offset = L::Summary::empty();
 
                 for child in inode.children() {
                     let child_summary = child.summary();
 
-                    let contains_start_slice = measured.measure::<S>()
+                    let contains_start_slice = offset.measure::<S>()
                         + child_summary.measure::<S>()
                         >= start;
 
                     if contains_start_slice {
-                        let contains_end_slice = measured.measure::<E>()
+                        let contains_end_slice = offset.measure::<E>()
                             + child_summary.measure::<E>()
                             >= end;
 
                         if contains_end_slice {
                             node = child;
-                            start -= measured.measure::<S>();
-                            end -= measured.measure::<E>();
+                            start -= offset.measure::<S>();
+                            end -= offset.measure::<E>();
                             continue 'outer;
                         } else {
                             return (node, start, end);
                         }
                     } else {
-                        measured += child_summary;
+                        offset += child_summary;
                     }
                 }
 
@@ -421,7 +420,7 @@ where
 }
 
 /// Same as [`deepest_node_containing_range`] except it only accepts base
-/// measures and thus can check whether a node contains `start` using `>`
+/// lengths and thus can check whether a node contains `start` using `>`
 /// instead of `>=` (because the remainder of a slice divided by the BaseMetric
 /// should always be zero), resulting in a potentially deeper node than the one
 /// returned by [`deepest_node_containing_range`].
@@ -444,7 +443,7 @@ where
                 let mut measured = L::BaseMetric::zero();
 
                 for child in inode.children() {
-                    let child_len = child.base_measure();
+                    let child_len = child.base_len();
 
                     let contains_start_slice = measured + child_len > start;
 
@@ -538,7 +537,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                         );
                     } else {
                         // This child comes before the starting leaf.
-                        slice.offset += child_summary.base_measure();
+                        slice.offset += child_summary.base_len();
                         *start_offset += child_summary.measure::<S>();
                         *end_offset += child_summary.measure::<E>();
                     }
@@ -600,7 +599,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                         leaf.measure::<E>() - right_slice.measure::<E>();
 
                     let left_slice_base_measure =
-                        leaf.base_measure() - right_slice.base_measure();
+                        leaf.base_len() - right_slice.base_len();
 
                     let end = end - *end_offset - left_slice_end_measure;
 
@@ -618,7 +617,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
                         S::slice_from(leaf.as_slice(), start - *start_offset);
 
                     if start_slice.is_empty() {
-                        slice.offset += leaf.base_measure();
+                        slice.offset += leaf.base_len();
                         *start_offset += leaf.measure::<S>();
                         *end_offset += leaf.measure::<E>();
                         *recompute_root = true;
@@ -627,8 +626,7 @@ fn build_slice<'a, const N: usize, L, S, E>(
 
                     let start_summary = start_slice.summarize();
 
-                    slice.offset +=
-                        leaf.base_measure() - start_summary.base_measure();
+                    slice.offset += leaf.base_len() - start_summary.base_len();
                     *end_offset +=
                         leaf.measure::<E>() - start_summary.measure::<E>();
 

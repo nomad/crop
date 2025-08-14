@@ -223,7 +223,7 @@ impl<'a> GapSlice<'a> {
     ///
     /// # Panics
     ///
-    /// Panics if the offset is greater than the M-measure of the slice.
+    /// Panics if the offset is greater than the M-length of the slice.
     ///
     /// # Examples
     ///

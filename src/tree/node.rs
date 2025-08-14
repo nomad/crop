@@ -72,12 +72,12 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     }
 
     #[inline]
-    pub(super) fn base_measure(&self) -> L::BaseMetric {
+    pub(super) fn base_len(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
     #[inline]
-    pub(super) fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
+    pub(super) fn convert_len<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: Metric<L::Summary>,
         M2: FromMetric<M1, L::Summary>,
@@ -184,17 +184,17 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         }
     }
 
-    /// Returns the leaf at the given measure, together with the leaf's
-    /// `M`-offset in the tree.
+    /// Returns the leaf at the given offset, together with the leaf's
+    /// M-offset in the tree.
     ///
-    /// If the measure falls on a leaf boundary, the leaf to the left of the
-    /// measure is returned.
+    /// If the offset falls on a leaf boundary, the leaf to its left is
+    /// returned.
     #[inline]
-    pub(super) fn leaf_at_measure<M>(&self, measure: M) -> (&L, M)
+    pub(super) fn leaf_at_offset<M>(&self, offset: M) -> (&L, M)
     where
         M: Metric<L::Summary>,
     {
-        debug_assert!(measure <= self.measure::<M>());
+        debug_assert!(offset <= self.measure::<M>());
 
         let mut measured = M::zero();
 
@@ -203,10 +203,10 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         loop {
             match node {
                 Node::Internal(inode) => {
-                    let (child_idx, offset) =
-                        inode.child_at_measure(measure - measured);
+                    let (child_idx, child_offset) =
+                        inode.child_at_offset(offset - measured);
 
-                    measured += offset;
+                    measured += child_offset;
 
                     node = inode.child(child_idx);
                 },

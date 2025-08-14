@@ -337,7 +337,7 @@ impl GapBuffer {
     }
 
     #[inline]
-    pub(super) fn convert_measure_from_byte<M>(&self, byte_offset: usize) -> M
+    pub(super) fn convert_len_from_byte<M>(&self, byte_offset: usize) -> M
     where
         M: Metric<StrSummary>,
     {
@@ -376,7 +376,7 @@ impl GapBuffer {
     }
 
     #[inline]
-    pub(super) fn convert_measure_to_byte<M>(&self, offset: M) -> usize
+    pub(super) fn convert_len_to_byte<M>(&self, offset: M) -> usize
     where
         M: Metric<StrSummary> + ToByteOffset,
     {

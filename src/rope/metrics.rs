@@ -276,7 +276,7 @@ impl FromMetric<RawLineMetric, GapBufferSummary> for ByteMetric {
         gap_buffer: &GapBuffer,
         line_offset: RawLineMetric,
     ) -> Self {
-        Self(gap_buffer.convert_measure_to_byte(line_offset))
+        Self(gap_buffer.convert_len_to_byte(line_offset))
     }
 }
 
@@ -287,7 +287,7 @@ impl FromMetric<utf16_metric::Utf16Metric, GapBufferSummary> for ByteMetric {
         gap_buffer: &GapBuffer,
         utf16_offset: utf16_metric::Utf16Metric,
     ) -> Self {
-        Self(gap_buffer.convert_measure_to_byte(utf16_offset))
+        Self(gap_buffer.convert_len_to_byte(utf16_offset))
     }
 }
 
@@ -355,7 +355,7 @@ impl FromMetric<ByteMetric, GapBufferSummary> for RawLineMetric {
         ByteMetric(byte_offset): ByteMetric,
     ) -> Self {
         gap_buffer.assert_char_boundary(byte_offset);
-        gap_buffer.convert_measure_from_byte::<Self>(byte_offset)
+        gap_buffer.convert_len_from_byte::<Self>(byte_offset)
     }
 }
 
@@ -696,7 +696,7 @@ mod utf16_metric {
             ByteMetric(byte_offset): ByteMetric,
         ) -> Self {
             gap_buffer.assert_char_boundary(byte_offset);
-            gap_buffer.convert_measure_from_byte::<Self>(byte_offset)
+            gap_buffer.convert_len_from_byte::<Self>(byte_offset)
         }
     }
 

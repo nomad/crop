@@ -8,13 +8,13 @@ pub trait Summary: Debug + Clone + AddAssign + SubAssign {
     fn empty() -> Self;
 
     #[inline]
-    fn base_measure(&self) -> <Self::Leaf as Leaf>::BaseMetric {
+    fn base_len(&self) -> <Self::Leaf as Leaf>::BaseMetric {
         self.measure()
     }
 
     #[inline]
     fn is_empty(&self) -> bool {
-        self.base_measure().is_zero()
+        self.base_len().is_zero()
     }
 
     #[inline]
@@ -37,13 +37,13 @@ pub trait Leaf: Debug {
     fn summarize(&self) -> Self::Summary;
 
     #[inline]
-    fn base_measure(&self) -> Self::BaseMetric {
+    fn base_len(&self) -> Self::BaseMetric {
         self.measure::<Self::BaseMetric>()
     }
 
     #[inline]
     fn is_empty(&self) -> bool {
-        self.base_measure().is_zero()
+        self.base_len().is_zero()
     }
 
     #[inline]
@@ -61,13 +61,13 @@ where
     fn summarize(&self) -> <Self::Leaf as Leaf>::Summary;
 
     #[inline]
-    fn base_measure(&self) -> <Self::Leaf as Leaf>::BaseMetric {
+    fn base_len(&self) -> <Self::Leaf as Leaf>::BaseMetric {
         self.measure()
     }
 
     #[inline]
     fn is_empty(&self) -> bool {
-        self.base_measure().is_zero()
+        self.base_len().is_zero()
     }
 
     #[inline]

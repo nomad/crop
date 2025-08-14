@@ -50,7 +50,7 @@ impl<'a, const ARITY: usize, L: Leaf> Iterator for Leaves<'a, ARITY, L> {
 
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
-        if self.measure_yielded() == self.measure_total() {
+        if self.len_yielded() == self.len_total() {
             None
         } else {
             self.forward.next()
@@ -63,7 +63,7 @@ impl<const ARITY: usize, L: Leaf> DoubleEndedIterator
 {
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
-        if self.measure_yielded() == self.measure_total() {
+        if self.len_yielded() == self.len_total() {
             None
         } else {
             self.backward.previous()
@@ -77,21 +77,18 @@ impl<const ARITY: usize, L: Leaf> core::iter::FusedIterator
 }
 
 impl<const ARITY: usize, L: Leaf> Leaves<'_, ARITY, L> {
-    /// Returns the total base measure of all the leaves in the tree or slice
+    /// Returns the total base length of all the leaves in the tree or slice
     /// being iterated over.
     #[inline]
-    fn measure_total(&self) -> L::BaseMetric {
-        debug_assert_eq!(
-            self.forward.measure_total,
-            self.backward.measure_total
-        );
-        self.forward.measure_total
+    fn len_total(&self) -> L::BaseMetric {
+        debug_assert_eq!(self.forward.len_total, self.backward.len_total);
+        self.forward.len_total
     }
 
-    /// Returns the base measure of all the leaf slices yielded so far.
+    /// Returns the base length of all the leaf slices yielded so far.
     #[inline]
-    fn measure_yielded(&self) -> L::BaseMetric {
-        self.forward.measure_yielded + self.backward.measure_yielded
+    fn len_yielded(&self) -> L::BaseMetric {
+        self.forward.len_yielded + self.backward.len_yielded
     }
 }
 
@@ -124,12 +121,12 @@ struct LeavesForward<'a, const N: usize, L: Leaf> {
     /// iterating over a `Tree`.
     base_offset: L::BaseMetric,
 
-    /// The total base measure of all the leaves in the tree or slice being
+    /// The total base length of all the leaves in the tree or slice being
     /// iterated over.
-    measure_total: L::BaseMetric,
+    len_total: L::BaseMetric,
 
-    /// The base measure of all the leaf slices yielded so far.
-    measure_yielded: L::BaseMetric,
+    /// The base length of all the leaf slices yielded so far.
+    len_yielded: L::BaseMetric,
 }
 
 impl<const N: usize, L: Leaf> Clone for LeavesForward<'_, N, L> {
@@ -152,8 +149,8 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
             path: Vec::with_capacity(tree.root().depth().saturating_sub(1)),
             leaves: &[],
             next_leaf_idx: 0,
-            measure_yielded: L::BaseMetric::zero(),
-            measure_total: tree.base_measure(),
+            len_yielded: L::BaseMetric::zero(),
+            len_total: tree.base_len(),
         }
     }
 }
@@ -171,8 +168,8 @@ impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
             path: Vec::with_capacity(slice.root().depth().saturating_sub(1)),
             leaves: &[],
             next_leaf_idx: 0,
-            measure_yielded: L::BaseMetric::zero(),
-            measure_total: slice.base_measure(),
+            len_yielded: L::BaseMetric::zero(),
+            len_total: slice.base_len(),
         }
     }
 }
@@ -215,7 +212,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 
     #[inline]
     fn initialize(&mut self) -> (L::Slice<'a>, &'a [Arc<Node<N, L>>]) {
-        debug_assert!(self.measure_yielded.is_zero());
+        debug_assert!(self.len_yielded.is_zero());
 
         let mut inode = match self.root {
             Node::Internal(inode) => inode,
@@ -241,7 +238,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                         })
                         .enumerate()
                     {
-                        let this = i.base_measure();
+                        let this = i.base_len();
 
                         if offset + this > self.base_offset {
                             self.path.push((inode, idx));
@@ -263,7 +260,7 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
                                 .children()
                                 .iter()
                                 .take_while(|child| {
-                                    offset += child.base_measure();
+                                    offset += child.base_len();
                                     offset <= self.base_offset
                                 })
                                 .count();
@@ -282,13 +279,13 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 
     #[inline]
     fn next(&mut self) -> Option<L::Slice<'a>> {
-        if self.measure_yielded == self.measure_total {
+        if self.len_yielded == self.len_total {
             return None;
         }
 
-        if self.measure_yielded.is_zero() {
+        if self.len_yielded.is_zero() {
             let (first, rest) = self.initialize();
-            self.measure_yielded = first.base_measure();
+            self.len_yielded = first.base_len();
             self.leaves = rest;
             return Some(first);
         }
@@ -299,12 +296,12 @@ impl<'a, const N: usize, L: Leaf> LeavesForward<'a, N, L> {
 
         let next_leaf = &self.leaves[self.next_leaf_idx].get_leaf();
         self.next_leaf_idx += 1;
-        self.measure_yielded += next_leaf.base_measure();
+        self.len_yielded += next_leaf.base_len();
 
         // If we're iterating over a `TreeSlice`, make sure we're not yielding
         // past its end_slice.
-        if self.measure_yielded > self.measure_total {
-            self.measure_yielded = self.measure_total;
+        if self.len_yielded > self.len_total {
+            self.len_yielded = self.len_total;
             self.last_slice.take()
         } else {
             Some(next_leaf.as_slice())
@@ -337,17 +334,17 @@ struct LeavesBackward<'a, const N: usize, L: Leaf> {
     /// we're iterating over a `TreeSlice`.
     last_slice: Option<L::Slice<'a>>,
 
-    /// The base measure between the end of [`last_slice`](Self::last_slice)
+    /// The base length between the end of [`last_slice`](Self::last_slice)
     /// and the end of the subtree under [`root`](Self::root), or zero if we're
     /// iterating over a `Tree`.
     base_offset: L::BaseMetric,
 
-    /// The total base measure of all the leaves in the tree or slice being
+    /// The total base length of all the leaves in the tree or slice being
     /// iterated over.
-    measure_total: L::BaseMetric,
+    len_total: L::BaseMetric,
 
-    /// The base measure of all the leaf slices yielded so far.
-    measure_yielded: L::BaseMetric,
+    /// The base length of all the leaf slices yielded so far.
+    len_yielded: L::BaseMetric,
 }
 
 impl<const N: usize, L: Leaf> Clone for LeavesBackward<'_, N, L> {
@@ -370,8 +367,8 @@ impl<'a, const N: usize, L: Leaf> From<&'a Tree<N, L>>
             path: Vec::with_capacity(tree.root().depth().saturating_sub(1)),
             leaves: &[],
             last_leaf_idx: 0,
-            measure_yielded: L::BaseMetric::zero(),
-            measure_total: tree.base_measure(),
+            len_yielded: L::BaseMetric::zero(),
+            len_total: tree.base_len(),
         }
     }
 }
@@ -382,7 +379,7 @@ impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
     #[inline]
     fn from(slice: &TreeSlice<'a, ARITY, L>) -> LeavesBackward<'a, ARITY, L> {
         let base_offset =
-            slice.root().base_measure() - slice.offset - slice.base_measure();
+            slice.root().base_len() - slice.offset - slice.base_len();
 
         Self {
             base_offset,
@@ -392,8 +389,8 @@ impl<'a, const ARITY: usize, L: Leaf> From<&TreeSlice<'a, ARITY, L>>
             path: Vec::with_capacity(slice.root().depth().saturating_sub(1)),
             leaves: &[],
             last_leaf_idx: 0,
-            measure_yielded: L::BaseMetric::zero(),
-            measure_total: slice.base_measure(),
+            len_yielded: L::BaseMetric::zero(),
+            len_total: slice.base_len(),
         }
     }
 }
@@ -436,7 +433,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
 
     #[inline]
     fn initialize(&mut self) -> (&'a [Arc<Node<N, L>>], L::Slice<'a>) {
-        debug_assert!(self.measure_yielded.is_zero());
+        debug_assert!(self.len_yielded.is_zero());
 
         let mut inode = match self.root {
             Node::Internal(inode) => inode,
@@ -463,7 +460,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
                         .enumerate()
                         .rev()
                     {
-                        let this = i.base_measure();
+                        let this = i.base_len();
 
                         if offset + this > self.base_offset {
                             self.path.push((inode, idx));
@@ -488,7 +485,7 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
                                     .iter()
                                     .rev()
                                     .take_while(|child| {
-                                        offset += child.base_measure();
+                                        offset += child.base_len();
                                         offset <= self.base_offset
                                     })
                                     .count();
@@ -507,13 +504,13 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
 
     #[inline]
     fn previous(&mut self) -> Option<L::Slice<'a>> {
-        if self.measure_yielded == self.measure_total {
+        if self.len_yielded == self.len_total {
             return None;
         }
 
-        if self.measure_yielded.is_zero() {
+        if self.len_yielded.is_zero() {
             let (rest, last) = self.initialize();
-            self.measure_yielded = last.base_measure();
+            self.len_yielded = last.base_len();
             self.leaves = rest;
             self.last_leaf_idx = rest.len();
             return Some(last);
@@ -525,12 +522,12 @@ impl<'a, const N: usize, L: Leaf> LeavesBackward<'a, N, L> {
 
         self.last_leaf_idx -= 1;
         let next_leaf = &self.leaves[self.last_leaf_idx].get_leaf();
-        self.measure_yielded += next_leaf.base_measure();
+        self.len_yielded += next_leaf.base_len();
 
         // If we're iterating over a `TreeSlice`, make sure we're not yielding
         // past its start_slice.
-        if self.measure_yielded > self.measure_total {
-            self.measure_yielded = self.measure_total;
+        if self.len_yielded > self.len_total {
+            self.len_yielded = self.len_total;
             self.first_slice.take()
         } else {
             Some(next_leaf.as_slice())

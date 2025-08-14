@@ -81,7 +81,7 @@ impl Rope {
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
-            self.tree.leaf_at_measure(ByteMetric(byte_index + 1));
+            self.tree.leaf_at_offset(ByteMetric(byte_index + 1));
 
         chunk.byte(byte_index - chunk_byte_offset)
     }
@@ -133,7 +133,7 @@ impl Rope {
         }
 
         let ByteMetric(byte_offset) =
-            self.tree.convert_measure(RawLineMetric(line_offset));
+            self.tree.convert_len(RawLineMetric(line_offset));
 
         byte_offset
     }
@@ -166,9 +166,8 @@ impl Rope {
             panic::utf16_offset_out_of_bounds(utf16_offset, self.utf16_len())
         }
 
-        let ByteMetric(byte_offset) = self
-            .tree
-            .convert_measure(super::metrics::Utf16Metric(utf16_offset));
+        let ByteMetric(byte_offset) =
+            self.tree.convert_len(super::metrics::Utf16Metric(utf16_offset));
 
         byte_offset
     }
@@ -375,7 +374,7 @@ impl Rope {
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
-            self.tree.leaf_at_measure(ByteMetric(byte_offset));
+            self.tree.leaf_at_offset(ByteMetric(byte_offset));
 
         chunk.is_char_boundary(byte_offset - chunk_byte_offset)
     }
@@ -534,7 +533,7 @@ impl Rope {
         }
 
         let RawLineMetric(line_offset) =
-            self.tree.convert_measure(ByteMetric(byte_offset));
+            self.tree.convert_len(ByteMetric(byte_offset));
 
         line_offset
     }
@@ -757,7 +756,7 @@ impl Rope {
         }
 
         let super::metrics::Utf16Metric(utf16_offset) =
-            self.tree.convert_measure(ByteMetric(byte_offset));
+            self.tree.convert_len(ByteMetric(byte_offset));
 
         utf16_offset
     }

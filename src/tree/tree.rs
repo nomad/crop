@@ -32,8 +32,8 @@ impl<const ARITY: usize, L: BalancedLeaf + Clone> From<TreeSlice<'_, ARITY, L>>
 {
     #[inline]
     fn from(slice: TreeSlice<'_, ARITY, L>) -> Tree<ARITY, L> {
-        let root = if slice.base_measure() == slice.root().base_measure() {
-            // If the TreeSlice and its root have the same base measure it
+        let root = if slice.base_len() == slice.root().base_len() {
+            // If the TreeSlice and its root have the same base length it
             // means the TreeSlice spanned the whole Tree from which it was
             // created and we can simply clone the root.
             Arc::clone(slice.root())
@@ -83,21 +83,21 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     }
 
     #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
+    pub fn base_len(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
-    /// Returns the `M2`-measure of all the leaves before `up_to` plus the
-    /// `M2`-measure of the left sub-slice of the leaf at `up_to`.
+    /// Returns the M2-length of all the leaves before `up_to` plus the
+    /// M2-length of the left sub-slice of the leaf at `up_to`.
     #[track_caller]
     #[inline]
-    pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
+    pub fn convert_len<M1, M2>(&self, up_to: M1) -> M2
     where
         M1: Metric<L::Summary>,
         M2: FromMetric<M1, L::Summary>,
     {
         debug_assert!(up_to <= self.measure::<M1>());
-        self.root.convert_measure(up_to)
+        self.root.convert_len(up_to)
     }
 
     /// Creates a new `Tree` from a sequence of leaves.
@@ -130,15 +130,15 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
         Self { root: Arc::new(Node::Internal(root)) }
     }
 
-    /// Returns the leaf containing the `measure`-th unit of the `M`-metric,
-    /// plus the `M`-measure of all the leaves before it.
+    /// Returns the leaf at the offset, plus the M-length of all the leaves
+    /// before it.
     #[inline]
-    pub fn leaf_at_measure<M>(&self, measure: M) -> (&L, M)
+    pub fn leaf_at_offset<M>(&self, offset: M) -> (&L, M)
     where
         M: Metric<L::Summary>,
     {
-        debug_assert!(measure <= self.measure::<M>() + M::one());
-        self.root.leaf_at_measure(measure)
+        debug_assert!(offset <= self.measure::<M>() + M::one());
+        self.root.leaf_at_offset(offset)
     }
 
     /// Returns an iterator over the leaves of this `Tree`.
@@ -147,8 +147,8 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
         Leaves::from(self)
     }
 
-    /// Returns the `M`-measure of this `Tree` obtaining by summing up the
-    /// `M`-measures of all its leaves.
+    /// Returns the M-length of this `Tree` obtaining by summing up the
+    /// M-lengths of all its leaves.
     #[inline]
     pub fn measure<M>(&self) -> M
     where
@@ -273,7 +273,7 @@ mod from_treeslice {
     /// Returns a `(root, invalid_first, invalid_last)` tuple where:
     ///
     /// - `root` is the internal node obtained by removing all the nodes before
-    ///   `slice.before` and after `slice.before + slice.base_measure`,
+    ///   `slice.before` and after `slice.before + slice.base_measure()`,
     ///
     /// - `invalid_{first,last}` are the number of invalid nodes contained in
     ///   the subtrees of the first and last child, respectively.
@@ -305,7 +305,7 @@ mod from_treeslice {
         let start = slice.offset;
 
         for child in children.by_ref() {
-            let this = child.base_measure();
+            let this = child.base_len();
 
             if offset + this > start {
                 if start == L::BaseMetric::zero() {
@@ -328,13 +328,13 @@ mod from_treeslice {
             }
         }
 
-        let end = start + slice.base_measure();
+        let end = start + slice.base_len();
 
         for child in children {
-            let this = child.base_measure();
+            let this = child.base_len();
 
             if offset + this >= end {
-                if end == slice.root().base_measure() {
+                if end == slice.root().base_len() {
                     root.push(Arc::clone(child));
                 } else {
                     let last = cut_end_rec(
@@ -375,7 +375,7 @@ mod from_treeslice {
                 let mut children = i.children().iter();
 
                 for child in children.by_ref() {
-                    let this = child.base_measure();
+                    let this = child.base_len();
 
                     if offset + this > take_from {
                         let first = cut_start_rec(
@@ -439,7 +439,7 @@ mod from_treeslice {
                 let mut offset = L::BaseMetric::zero();
 
                 for child in i.children() {
-                    let this = child.base_measure();
+                    let this = child.base_len();
 
                     if offset + this >= take_up_to {
                         let last = cut_end_rec(
@@ -714,9 +714,9 @@ mod tree_replace {
 
         for (idx, child) in indexes.by_ref().map(|idx| (idx, inode.child(idx)))
         {
-            let child_measure = child.measure::<M>();
+            let child_len = child.measure::<M>();
 
-            offset += child_measure;
+            offset += child_len;
 
             if offset >= range.start {
                 start_idx = idx;
@@ -724,7 +724,7 @@ mod tree_replace {
                 extra_leaves = inode.with_child_mut(start_idx, |child| {
                     replace_nodes_in_start_subtree(
                         Arc::make_mut(child),
-                        range.start + child_measure - offset,
+                        range.start + child_len - offset,
                         replace_with,
                         &mut start_should_rebalance,
                     )
@@ -742,9 +742,9 @@ mod tree_replace {
         });
 
         for (idx, child) in indexes.map(|idx| (idx, inode.child(idx))) {
-            let child_measure = child.measure::<M>();
+            let child_len = child.measure::<M>();
 
-            offset += child_measure;
+            offset += child_len;
 
             if offset >= range.end {
                 end_idx = idx;
@@ -752,7 +752,7 @@ mod tree_replace {
                 inode.with_child_mut(end_idx, |child| {
                     replace_nodes_in_end_subtree(
                         Arc::make_mut(child),
-                        range.end + child_measure - offset,
+                        range.end + child_len - offset,
                         &mut extra_leaves,
                         &mut end_should_rebalance,
                     )
@@ -815,7 +815,7 @@ mod tree_replace {
             },
         };
 
-        let (start_idx, offset) = inode.child_at_measure(replace_from);
+        let (start_idx, offset) = inode.child_at_offset(replace_from);
 
         let extra_leaves = inode.with_child_mut(start_idx, |child| {
             replace_nodes_in_start_subtree(
@@ -895,9 +895,9 @@ mod tree_replace {
         let mut offset = inode.measure::<M>();
 
         for (idx, child) in inode.children().iter().enumerate().rev() {
-            let child_measure = child.measure::<M>();
+            let child_len = child.measure::<M>();
 
-            offset -= child_measure;
+            offset -= child_len;
 
             if offset < replace_up_to {
                 end_idx = idx;

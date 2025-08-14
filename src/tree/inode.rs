@@ -379,7 +379,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
     }
 
     #[inline]
-    pub fn base_measure(&self) -> L::BaseMetric {
+    pub fn base_len(&self) -> L::BaseMetric {
         self.measure::<L::BaseMetric>()
     }
 
@@ -393,18 +393,18 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
         &self.children
     }
 
-    /// Returns the index of the child at the given measure together
-    /// with the combined `M`-offset of the other children up to but not
-    /// including that child.
+    /// Returns the index of the child at the given offset together with the
+    /// combined M-length of the other children up to but not including that
+    /// child.
     #[inline]
-    pub(super) fn child_at_measure<M>(&self, measure: M) -> (usize, M)
+    pub(super) fn child_at_offset<M>(&self, offset: M) -> (usize, M)
     where
         M: Metric<L::Summary>,
     {
-        debug_assert!(measure <= self.measure::<M>());
+        debug_assert!(offset <= self.measure::<M>());
 
         let mut idx = 0;
-        let mut offset = M::zero();
+        let mut measured = M::zero();
         let children = self.children();
 
         loop {
@@ -415,12 +415,12 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             // goes out of bounds.
             let child = unsafe { children.get_unchecked(idx) };
 
-            let child_measure = child.measure::<M>();
+            let child_len = child.measure::<M>();
 
-            offset += child_measure;
+            measured += child_len;
 
-            if offset >= measure {
-                return (idx, offset - child_measure);
+            if offset <= measured {
+                return (idx, measured - child_len);
             }
 
             idx += 1;
@@ -454,13 +454,13 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
             // before the index goes out of bounds.
             let child = unsafe { children.get_unchecked(idx) };
 
-            let measure = child.measure::<M>();
+            let child_len = child.measure::<M>();
 
-            offset += measure;
+            offset += child_len;
 
             if offset >= range.start {
                 if offset >= range.end {
-                    return Some((idx, offset - measure));
+                    return Some((idx, offset - child_len));
                 } else {
                     return None;
                 }
@@ -768,7 +768,7 @@ impl<const N: usize, L: Leaf> Inode<N, L> {
 
     #[inline]
     pub fn measure<M: Metric<L::Summary>>(&self) -> M {
-        M::measure(self.summary())
+        self.summary().measure()
     }
 
     #[inline]

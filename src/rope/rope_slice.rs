@@ -57,7 +57,7 @@ impl<'a> RopeSlice<'a> {
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
-            self.tree_slice.leaf_at_measure(ByteMetric(byte_index + 1));
+            self.tree_slice.leaf_at_offset(ByteMetric(byte_index + 1));
 
         chunk.byte(byte_index - chunk_byte_offset)
     }
@@ -115,9 +115,8 @@ impl<'a> RopeSlice<'a> {
             return self.byte_len();
         }
 
-        let ByteMetric(byte_offset) = self
-            .tree_slice
-            .convert_measure_to_base(RawLineMetric(line_offset));
+        let ByteMetric(byte_offset) =
+            self.tree_slice.convert_len_to_base(RawLineMetric(line_offset));
 
         byte_offset
     }
@@ -151,9 +150,9 @@ impl<'a> RopeSlice<'a> {
             panic::utf16_offset_out_of_bounds(utf16_offset, self.utf16_len())
         }
 
-        let ByteMetric(byte_offset) = self.tree_slice.convert_measure_to_base(
-            super::metrics::Utf16Metric(utf16_offset),
-        );
+        let ByteMetric(byte_offset) = self
+            .tree_slice
+            .convert_len_to_base(super::metrics::Utf16Metric(utf16_offset));
 
         byte_offset
     }
@@ -302,7 +301,7 @@ impl<'a> RopeSlice<'a> {
         }
 
         let (chunk, ByteMetric(chunk_byte_offset)) =
-            self.tree_slice.leaf_at_measure(ByteMetric(byte_offset));
+            self.tree_slice.leaf_at_offset(ByteMetric(byte_offset));
 
         chunk.is_char_boundary(byte_offset - chunk_byte_offset)
     }
@@ -464,7 +463,7 @@ impl<'a> RopeSlice<'a> {
         }
 
         let RawLineMetric(line_offset) =
-            self.tree_slice.convert_measure_from_base(ByteMetric(byte_offset));
+            self.tree_slice.convert_len_from_base(ByteMetric(byte_offset));
 
         line_offset
     }
@@ -589,7 +588,7 @@ impl<'a> RopeSlice<'a> {
         let slice = &mut self.tree_slice;
 
         // The last slice only contains one byte so we have to re-slice.
-        if slice.end_slice.base_measure() == ByteMetric(1) {
+        if slice.end_slice.base_len() == ByteMetric(1) {
             *self = self.byte_slice(..self.byte_len() - 1);
         }
         // The last slice contains at least 2 bytes, so we can just mutate in
@@ -672,7 +671,7 @@ impl<'a> RopeSlice<'a> {
         }
 
         let super::metrics::Utf16Metric(utf16_offset) =
-            self.tree_slice.convert_measure_from_base(ByteMetric(byte_offset));
+            self.tree_slice.convert_len_from_base(ByteMetric(byte_offset));
 
         utf16_offset
     }
