@@ -5,13 +5,14 @@
 
 use alloc::boxed::Box;
 use alloc::vec::Vec;
+use core::cmp::Ordering;
 use core::ops::{Range, RangeBounds};
 
 use super::gap_slice::GapSlice;
-use super::metrics::{ByteMetric, ChunkSummary};
+use super::metrics::{ByteMetric, ChunkSummary, ToByteOffset};
 use super::utils::{panic_messages as panic, *};
 use crate::range_bounds_to_start_end;
-use crate::tree::{BalancedLeaf, Leaf, ReplaceableLeaf};
+use crate::tree::{BalancedLeaf, Leaf, Metric, ReplaceableLeaf, Summary};
 
 #[cfg(any(test, feature = "small_chunks"))]
 const MAX_BYTES: usize = 4;
@@ -288,7 +289,7 @@ impl GapBuffer {
     /// is not a character boundary.
     #[track_caller]
     #[inline]
-    fn assert_char_boundary(&self, byte_offset: usize) {
+    pub(super) fn assert_char_boundary(&self, byte_offset: usize) {
         debug_assert!(byte_offset <= self.len());
 
         if !self.is_char_boundary(byte_offset) {
@@ -328,6 +329,62 @@ impl GapBuffer {
         // The buffer can be underfilled by 3 bytes at most, which can happen
         // when a byte offset lands inside a 4 byte codepoint.
         Self::min_bytes().saturating_sub(3)
+    }
+
+    #[inline]
+    pub(super) fn convert_measure_from_byte<M>(&self, byte_offset: usize) -> M
+    where
+        M: Metric<ChunkSummary>,
+    {
+        debug_assert!(self.is_char_boundary(byte_offset));
+
+        #[inline]
+        fn measure_up_to<M: Metric<ChunkSummary>>(
+            chunk: &str,
+            _chunk_len: M,
+            byte_offset: usize,
+        ) -> M {
+            // debug_assert_eq!(chunk.measure::<M>(), chunk_len);
+            if byte_offset <= chunk.len() / 2 {
+                todo!();
+                // M::measure_leaf(&chunk[..byte_offset])
+            } else {
+                todo!();
+                // chunk_len - M::measure_leaf(&chunk[byte_offset..])
+            }
+        }
+
+        match byte_offset.cmp(&self.len_left()) {
+            Ordering::Less => measure_up_to(
+                self.left_chunk(),
+                self.left_summary.measure::<M>(),
+                byte_offset,
+            ),
+            Ordering::Equal => self.left_summary.measure::<M>(),
+            Ordering::Greater => {
+                self.left_summary.measure::<M>()
+                    + measure_up_to(
+                        self.right_chunk(),
+                        self.right_summary.measure::<M>(),
+                        byte_offset - self.len_left(),
+                    )
+            },
+        }
+    }
+
+    #[inline]
+    pub(super) fn convert_measure_to_byte<M>(&self, offset: M) -> usize
+    where
+        M: Metric<ChunkSummary> + ToByteOffset,
+    {
+        let len_left = self.left_summary.measure::<M>();
+
+        if offset <= len_left {
+            offset.to_byte_offset(self.left_chunk())
+        } else {
+            self.len_left()
+                + (offset - len_left).to_byte_offset(self.right_chunk())
+        }
     }
 
     /// Creates a new `GapBuffer` from a slice of `&str`s.
@@ -517,10 +574,12 @@ impl GapBuffer {
         self.right_summary.bytes()
     }
 
+    #[inline]
     pub(super) const fn max_bytes() -> usize {
         MAX_BYTES
     }
 
+    #[inline]
     /// The minimum number of bytes this buffer should have to not be
     /// considered underfilled.
     pub(super) const fn min_bytes() -> usize {

@@ -76,7 +76,7 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     #[inline]
     pub fn leaf_at_measure<M>(&self, measure: M) -> (L::Slice<'a>, M)
     where
-        M: Metric<L::Summary>,
+        M: Metric<L::Summary> + FromMetric<L::BaseMetric, L::Summary>,
     {
         debug_assert!(measure <= self.measure::<M>() + M::one());
 
@@ -192,67 +192,9 @@ impl<'a, const ARITY: usize, L: Leaf> TreeSlice<'a, ARITY, L> {
     #[inline]
     fn measure_offset<M>(&self) -> M
     where
-        M: Metric<L::Summary>,
+        M: FromMetric<L::BaseMetric, L::Summary>,
     {
-        use core::ops::{Add, AddAssign, Sub, SubAssign};
-
-        /// A `Metric`-wrapper with `unreachable!` `SlicingMetric` impls
-        /// to be given to [`Node::convert_measure()`] which lets us avoid
-        /// adding a `L::BaseMetric: SlicingMetric<L>` bound to this function.
-        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-        struct OnBoundary<T>(T);
-
-        impl<T: Add<Output = T>> Add for OnBoundary<T> {
-            type Output = Self;
-            #[inline]
-            fn add(self, rhs: Self) -> Self {
-                Self(self.0 + rhs.0)
-            }
-        }
-        impl<T: AddAssign> AddAssign for OnBoundary<T> {
-            #[inline]
-            fn add_assign(&mut self, rhs: Self) {
-                self.0 += rhs.0;
-            }
-        }
-        impl<T: Sub<Output = T>> Sub for OnBoundary<T> {
-            type Output = Self;
-            fn sub(self, _: Self) -> Self {
-                unreachable!()
-            }
-        }
-        impl<T: SubAssign> SubAssign for OnBoundary<T> {
-            fn sub_assign(&mut self, _: Self) {
-                unreachable!()
-            }
-        }
-        impl<S: Summary> Metric<S> for OnBoundary<<S::Leaf as Leaf>::BaseMetric> {
-            #[inline]
-            fn zero() -> Self {
-                Self(<S::Leaf as Leaf>::BaseMetric::zero())
-            }
-            #[inline]
-            fn measure(summary: &S) -> Self {
-                Self(summary.base_measure())
-            }
-            #[inline]
-            fn one() -> Self {
-                unreachable!()
-            }
-        }
-        impl<L: Leaf> SlicingMetric<L> for OnBoundary<L::BaseMetric> {
-            fn slice_up_to<'a>(_: L::Slice<'a>, _: Self) -> L::Slice<'a> {
-                unreachable!()
-            }
-            fn slice_from<'a>(_: L::Slice<'a>, _: Self) -> L::Slice<'a> {
-                unreachable!()
-            }
-        }
-
-        // Make the offset lie on a leaf boundary to avoid slicing.
-        let base_offset = self.offset + self.start_slice.base_measure();
-        let m_offset: M = self.root.convert_measure(OnBoundary(base_offset));
-        m_offset - self.start_slice.measure::<M>()
+        self.root.convert_measure(self.offset)
     }
 }
 

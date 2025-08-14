@@ -149,6 +149,18 @@ pub trait Metric<S: Summary>:
     }
 }
 
+/// Trait for metrics that can be converted from another metric.
+pub trait FromMetric<M: Metric<S>, S: Summary>: Metric<S> {
+    fn measure_up_to(leaf: &S::Leaf, up_to: M) -> Self;
+}
+
+impl<S: Summary, M: Metric<S>> FromMetric<Self, S> for M {
+    #[inline]
+    fn measure_up_to(_: &S::Leaf, up_to: Self) -> Self {
+        up_to
+    }
+}
+
 /// Metrics that can be used to slice `Tree`s and `TreeSlice`s.
 pub trait SlicingMetric<L: Leaf>: Metric<L::Summary> {
     fn slice_up_to<'a>(slice: L::Slice<'a>, up_to: Self) -> L::Slice<'a>;

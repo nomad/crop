@@ -93,8 +93,8 @@ impl<const ARITY: usize, L: Leaf> Tree<ARITY, L> {
     #[inline]
     pub fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
-        M1: SlicingMetric<L>,
-        M2: Metric<L::Summary>,
+        M1: Metric<L::Summary>,
+        M2: FromMetric<M1, L::Summary>,
     {
         debug_assert!(up_to <= self.measure::<M1>());
         self.root.convert_measure(up_to)

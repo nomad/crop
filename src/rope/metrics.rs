@@ -4,6 +4,7 @@ use super::gap_buffer::GapBuffer;
 use super::gap_slice::GapSlice;
 use crate::tree::{
     DoubleEndedUnitMetric,
+    FromMetric,
     LeafSlice,
     Metric,
     SlicingMetric,
@@ -77,7 +78,7 @@ impl Summary for ChunkSummary {
     }
 }
 
-impl Add<Self> for ChunkSummary {
+impl Add for ChunkSummary {
     type Output = Self;
 
     #[inline]
@@ -87,7 +88,7 @@ impl Add<Self> for ChunkSummary {
     }
 }
 
-impl AddAssign<Self> for ChunkSummary {
+impl AddAssign for ChunkSummary {
     #[inline]
     fn add_assign(&mut self, rhs: Self) {
         self.bytes += rhs.bytes;
@@ -99,7 +100,7 @@ impl AddAssign<Self> for ChunkSummary {
     }
 }
 
-impl Sub<Self> for ChunkSummary {
+impl Sub for ChunkSummary {
     type Output = Self;
 
     #[inline]
@@ -109,7 +110,7 @@ impl Sub<Self> for ChunkSummary {
     }
 }
 
-impl SubAssign<Self> for ChunkSummary {
+impl SubAssign for ChunkSummary {
     #[inline]
     fn sub_assign(&mut self, rhs: Self) {
         self.bytes -= rhs.bytes;
@@ -256,6 +257,27 @@ impl Metric<ChunkSummary> for ByteMetric {
     }
 }
 
+impl FromMetric<RawLineMetric, ChunkSummary> for ByteMetric {
+    #[inline]
+    fn measure_up_to(
+        gap_buffer: &GapBuffer,
+        line_offset: RawLineMetric,
+    ) -> Self {
+        Self(gap_buffer.convert_measure_to_byte(line_offset))
+    }
+}
+
+#[cfg(feature = "utf16-metric")]
+impl FromMetric<utf16_metric::Utf16Metric, ChunkSummary> for ByteMetric {
+    #[inline]
+    fn measure_up_to(
+        gap_buffer: &GapBuffer,
+        utf16_offset: utf16_metric::Utf16Metric,
+    ) -> Self {
+        Self(gap_buffer.convert_measure_to_byte(utf16_offset))
+    }
+}
+
 impl SlicingMetric<GapBuffer> for ByteMetric {
     #[track_caller]
     #[inline]
@@ -310,6 +332,17 @@ impl SubAssign for RawLineMetric {
     #[inline]
     fn sub_assign(&mut self, other: Self) {
         self.0 -= other.0
+    }
+}
+
+impl FromMetric<ByteMetric, ChunkSummary> for RawLineMetric {
+    #[inline]
+    fn measure_up_to(
+        gap_buffer: &GapBuffer,
+        ByteMetric(byte_offset): ByteMetric,
+    ) -> Self {
+        gap_buffer.assert_char_boundary(byte_offset);
+        gap_buffer.convert_measure_from_byte::<Self>(byte_offset)
     }
 }
 
@@ -556,12 +589,19 @@ mod utf16_metric {
     #[derive(Copy, Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
     pub struct Utf16Metric(pub usize);
 
-    impl Add<Self> for Utf16Metric {
+    impl Add for Utf16Metric {
         type Output = Self;
 
         #[inline]
         fn add(self, other: Self) -> Self {
             Self(self.0 + other.0)
+        }
+    }
+
+    impl AddAssign for Utf16Metric {
+        #[inline]
+        fn add_assign(&mut self, other: Self) {
+            self.0 += other.0
         }
     }
 
@@ -571,13 +611,6 @@ mod utf16_metric {
         #[inline]
         fn sub(self, other: Self) -> Self {
             Self(self.0 - other.0)
-        }
-    }
-
-    impl AddAssign for Utf16Metric {
-        #[inline]
-        fn add_assign(&mut self, other: Self) {
-            self.0 += other.0
         }
     }
 
@@ -651,6 +684,18 @@ mod utf16_metric {
                 gap_slice.left_summary.utf16_code_units
                     + gap_slice.right_summary.utf16_code_units,
             )
+        }
+    }
+
+    impl FromMetric<ByteMetric, ChunkSummary> for Utf16Metric {
+        #[track_caller]
+        #[inline]
+        fn measure_up_to(
+            gap_buffer: &GapBuffer,
+            ByteMetric(byte_offset): ByteMetric,
+        ) -> Self {
+            gap_buffer.assert_char_boundary(byte_offset);
+            gap_buffer.convert_measure_from_byte::<Self>(byte_offset)
         }
     }
 

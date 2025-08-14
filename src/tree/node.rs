@@ -1,6 +1,4 @@
-use core::cmp::Ordering;
-
-use super::traits::{BalancedLeaf, Leaf, LeafSlice, Metric, SlicingMetric};
+use super::traits::{BalancedLeaf, FromMetric, Leaf, Metric};
 use super::{Arc, Inode};
 
 #[derive(Clone)]
@@ -81,8 +79,8 @@ impl<const N: usize, L: Leaf> Node<N, L> {
     #[inline]
     pub(super) fn convert_measure<M1, M2>(&self, up_to: M1) -> M2
     where
-        M1: SlicingMetric<L>,
-        M2: Metric<L::Summary>,
+        M1: Metric<L::Summary>,
+        M2: FromMetric<M1, L::Summary>,
     {
         debug_assert!(up_to <= self.measure::<M1>());
 
@@ -97,19 +95,12 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                     for child in inode.children() {
                         let child_m1 = child.measure::<M1>();
 
-                        match (m1 + child_m1).cmp(&up_to) {
-                            Ordering::Less => {
-                                m1 += child_m1;
-                                m2 += child.measure::<M2>();
-                            },
-
-                            // The child is exactly the right size.
-                            Ordering::Equal => return m2 + child.measure(),
-
-                            Ordering::Greater => {
-                                node = &**child;
-                                continue 'outer;
-                            },
+                        if m1 + child_m1 >= up_to {
+                            node = &**child;
+                            continue 'outer;
+                        } else {
+                            m1 += child_m1;
+                            m2 += child.measure::<M2>();
                         }
                     }
 
@@ -117,8 +108,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
                 },
 
                 Node::Leaf(leaf) => {
-                    let slice = M1::slice_up_to(leaf.as_slice(), up_to - m1);
-                    return m2 + slice.measure::<M2>();
+                    return m2 + M2::measure_up_to(leaf, up_to - m1);
                 },
             }
         }
@@ -130,10 +120,7 @@ impl<const N: usize, L: Leaf> Node<N, L> {
         _start_from: L::BaseMetric,
         _up_to: M1,
     ) -> M2
-    where
-        M1: SlicingMetric<L>,
-        M2: Metric<L::Summary>,
-    {
+where {
         todo!();
     }
 
