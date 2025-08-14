@@ -84,3 +84,7 @@ required-features = ["serde"]
 [[bench]]
 name = "slicing"
 harness = false
+
+[[test]]
+name = "chunk_len"
+required-features = ["chunk-len"]
