@@ -6,7 +6,7 @@
 use alloc::boxed::Box;
 use alloc::vec::Vec;
 use core::cmp::Ordering;
-use core::ops::{Range, RangeBounds};
+use core::ops::{Add, AddAssign, Deref, Range, RangeBounds, Sub, SubAssign};
 
 use super::gap_slice::GapSlice;
 use super::metrics::{ByteMetric, ChunkSummary, ToByteOffset};
@@ -45,6 +45,12 @@ pub struct GapBuffer {
     pub(super) bytes: Box<[u8; MAX_BYTES]>,
     pub(super) left_summary: ChunkSummary,
     pub(super) right_summary: ChunkSummary,
+}
+
+#[derive(Copy, Clone, Default, Debug, PartialEq)]
+pub struct GapBufferSummary {
+    /// The sum of the [`ChunkSummary`]s of the left and right chunks.
+    pub(super) chunks_summary: ChunkSummary,
 }
 
 impl core::fmt::Debug for GapBuffer {
@@ -341,16 +347,14 @@ impl GapBuffer {
         #[inline]
         fn measure_up_to<M: Metric<ChunkSummary>>(
             chunk: &str,
-            _chunk_len: M,
+            chunk_len: M,
             byte_offset: usize,
         ) -> M {
-            // debug_assert_eq!(chunk.measure::<M>(), chunk_len);
+            debug_assert_eq!(chunk.measure::<M>(), chunk_len);
             if byte_offset <= chunk.len() / 2 {
-                todo!();
-                // M::measure_leaf(&chunk[..byte_offset])
+                M::measure_leaf(&chunk[..byte_offset])
             } else {
-                todo!();
-                // chunk_len - M::measure_leaf(&chunk[byte_offset..])
+                chunk_len - M::measure_leaf(&chunk[byte_offset..])
             }
         }
 
@@ -1206,7 +1210,7 @@ impl GapBuffer {
 }
 
 impl Leaf for GapBuffer {
-    type Summary = ChunkSummary;
+    type Summary = GapBufferSummary;
     type BaseMetric = ByteMetric;
     type Slice<'a> = GapSlice<'a>;
 
@@ -1228,7 +1232,9 @@ impl Leaf for GapBuffer {
 
     #[inline]
     fn summarize(&self) -> Self::Summary {
-        self.left_summary + self.right_summary
+        GapBufferSummary {
+            chunks_summary: self.left_summary + self.right_summary,
+        }
     }
 }
 
@@ -1330,6 +1336,87 @@ impl ReplaceableLeaf<ByteMetric> for GapBuffer {
     #[inline]
     fn remove_up_to(&mut self, up_to: ByteMetric) {
         self.replace(..up_to, "");
+    }
+}
+
+impl Summary for GapBufferSummary {
+    type Leaf = GapBuffer;
+
+    #[inline]
+    fn empty() -> Self {
+        Self { chunks_summary: ChunkSummary::empty() }
+    }
+}
+
+impl Add for GapBufferSummary {
+    type Output = Self;
+
+    #[inline]
+    fn add(mut self, other: Self) -> Self::Output {
+        self += other;
+        self
+    }
+}
+
+impl AddAssign for GapBufferSummary {
+    #[inline]
+    fn add_assign(&mut self, rhs: Self) {
+        self.chunks_summary += rhs.chunks_summary;
+    }
+}
+
+impl Sub for GapBufferSummary {
+    type Output = Self;
+
+    #[inline]
+    fn sub(mut self, other: Self) -> Self::Output {
+        self -= other;
+        self
+    }
+}
+
+impl SubAssign for GapBufferSummary {
+    #[inline]
+    fn sub_assign(&mut self, rhs: Self) {
+        self.chunks_summary -= rhs.chunks_summary;
+    }
+}
+
+impl Deref for GapBufferSummary {
+    type Target = ChunkSummary;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        &self.chunks_summary
+    }
+}
+
+impl<M: Metric<ChunkSummary>> Metric<GapBufferSummary> for M {
+    #[inline(always)]
+    fn zero() -> Self {
+        <M as Metric<ChunkSummary>>::zero()
+    }
+
+    #[inline(always)]
+    fn one() -> Self {
+        <M as Metric<ChunkSummary>>::one()
+    }
+
+    #[inline(always)]
+    fn measure(summary: &GapBufferSummary) -> Self {
+        M::measure(&summary.chunks_summary)
+    }
+
+    #[inline(always)]
+    fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
+        M::measure(&gap_buffer.left_summary)
+            + M::measure(&gap_buffer.right_summary)
+    }
+
+    #[inline(always)]
+    fn measure_slice(gap_slice: &GapSlice) -> Self {
+        M::measure(&gap_slice.left_summary)
+            + M::measure(&gap_slice.right_summary)
     }
 }
 

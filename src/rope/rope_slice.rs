@@ -591,12 +591,11 @@ impl<'a> RopeSlice<'a> {
         if slice.end_slice.base_measure() == ByteMetric(1) {
             *self = self.byte_slice(..self.byte_len() - 1);
         }
-        // The last slice contains more than 2 bytes so we can just mutate
-        // in place.
+        // The last slice contains at least 2 bytes, so we can just mutate in
+        // place.
         else {
-            let last = &mut slice.end_slice;
-
-            slice.summary -= last.truncate_last_char();
+            slice.summary.chunks_summary -=
+                slice.end_slice.truncate_last_char();
 
             if slice.leaf_count() == 1 {
                 slice.start_slice = slice.end_slice;

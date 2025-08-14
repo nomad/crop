@@ -1,4 +1,4 @@
-use super::gap_buffer::GapBuffer;
+use super::gap_buffer::{GapBuffer, GapBufferSummary};
 use super::metrics::{ChunkSummary, SummaryUpTo, ToByteOffset};
 use super::utils::{debug_no_quotes, panic_messages as panic};
 use crate::tree::{LeafSlice, Metric, Summary};
@@ -328,8 +328,10 @@ impl<'a> LeafSlice<'a> for GapSlice<'a> {
     type Leaf = GapBuffer;
 
     #[inline]
-    fn summarize(&self) -> ChunkSummary {
-        self.right_summary + self.left_summary
+    fn summarize(&self) -> GapBufferSummary {
+        GapBufferSummary {
+            chunks_summary: self.right_summary + self.left_summary,
+        }
     }
 }
 

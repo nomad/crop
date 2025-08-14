@@ -3,7 +3,7 @@ use core::ops::{Add, AddAssign, RangeBounds, Sub, SubAssign};
 
 pub trait Summary: Debug + Clone + AddAssign + SubAssign {
     /// The leaf type this summary is for.
-    type Leaf: Leaf<Summary = Self>;
+    type Leaf: Leaf<Summary = Self> + ?Sized;
 
     fn empty() -> Self;
 
@@ -23,7 +23,7 @@ pub trait Summary: Debug + Clone + AddAssign + SubAssign {
     }
 }
 
-pub trait Leaf: Debug + Sized {
+pub trait Leaf: Debug {
     type BaseMetric: Metric<Self::Summary>;
 
     type Slice<'a>: LeafSlice<'a, Leaf = Self>
@@ -56,7 +56,7 @@ pub trait LeafSlice<'a>: Copy + Debug
 where
     Self: 'a,
 {
-    type Leaf: Leaf<Slice<'a> = Self>;
+    type Leaf: Leaf<Slice<'a> = Self> + ?Sized;
 
     fn summarize(&self) -> <Self::Leaf as Leaf>::Summary;
 

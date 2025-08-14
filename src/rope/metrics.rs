@@ -1,10 +1,11 @@
 use core::ops::{Add, AddAssign, Sub, SubAssign};
 
-use super::gap_buffer::GapBuffer;
+use super::gap_buffer::{GapBuffer, GapBufferSummary};
 use super::gap_slice::GapSlice;
 use crate::tree::{
     DoubleEndedUnitMetric,
     FromMetric,
+    Leaf,
     LeafSlice,
     Metric,
     SlicingMetric,
@@ -70,7 +71,7 @@ impl ChunkSummary {
 }
 
 impl Summary for ChunkSummary {
-    type Leaf = GapBuffer;
+    type Leaf = str;
 
     #[inline]
     fn empty() -> Self {
@@ -119,6 +120,31 @@ impl SubAssign for ChunkSummary {
         {
             self.utf16_code_units -= rhs.utf16_code_units;
         }
+    }
+}
+
+impl Leaf for str {
+    type BaseMetric = ByteMetric;
+    type Slice<'a> = &'a Self;
+    type Summary = ChunkSummary;
+
+    #[inline]
+    fn as_slice(&self) -> Self::Slice<'_> {
+        self
+    }
+
+    #[inline]
+    fn summarize(&self) -> Self::Summary {
+        ChunkSummary::from(self)
+    }
+}
+
+impl<'a> LeafSlice<'a> for &'a str {
+    type Leaf = str;
+
+    #[inline]
+    fn summarize(&self) -> <Self::Leaf as Leaf>::Summary {
+        ChunkSummary::from(*self)
     }
 }
 
@@ -247,17 +273,17 @@ impl Metric<ChunkSummary> for ByteMetric {
     }
 
     #[inline]
-    fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
-        Self(gap_buffer.len())
+    fn measure_leaf(str: &str) -> Self {
+        Self(str.len())
     }
 
     #[inline]
-    fn measure_slice(gap_slice: &GapSlice) -> Self {
-        Self(gap_slice.len())
+    fn measure_slice(str: &&str) -> Self {
+        Self(str.len())
     }
 }
 
-impl FromMetric<RawLineMetric, ChunkSummary> for ByteMetric {
+impl FromMetric<RawLineMetric, GapBufferSummary> for ByteMetric {
     #[inline]
     fn measure_up_to(
         gap_buffer: &GapBuffer,
@@ -268,7 +294,7 @@ impl FromMetric<RawLineMetric, ChunkSummary> for ByteMetric {
 }
 
 #[cfg(feature = "utf16-metric")]
-impl FromMetric<utf16_metric::Utf16Metric, ChunkSummary> for ByteMetric {
+impl FromMetric<utf16_metric::Utf16Metric, GapBufferSummary> for ByteMetric {
     #[inline]
     fn measure_up_to(
         gap_buffer: &GapBuffer,
@@ -335,7 +361,7 @@ impl SubAssign for RawLineMetric {
     }
 }
 
-impl FromMetric<ByteMetric, ChunkSummary> for RawLineMetric {
+impl FromMetric<ByteMetric, GapBufferSummary> for RawLineMetric {
     #[inline]
     fn measure_up_to(
         gap_buffer: &GapBuffer,
@@ -394,19 +420,13 @@ impl Metric<ChunkSummary> for RawLineMetric {
     }
 
     #[inline]
-    fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
-        Self(
-            gap_buffer.left_summary.line_breaks
-                + gap_buffer.right_summary.line_breaks,
-        )
+    fn measure_leaf(str: &str) -> Self {
+        Self(count::line_breaks(str))
     }
 
     #[inline]
-    fn measure_slice(gap_slice: &GapSlice) -> Self {
-        Self(
-            gap_slice.left_summary.line_breaks
-                + gap_slice.right_summary.line_breaks,
-        )
+    fn measure_slice(str: &&str) -> Self {
+        Self(count::line_breaks(str))
     }
 }
 
@@ -449,7 +469,7 @@ impl DoubleEndedUnitMetric<GapBuffer> for RawLineMetric {
     where
         'a: 'a,
     {
-        let split_offset = slice.summarize().line_breaks
+        let split_offset = slice.measure::<Self>().0
             - (slice.has_trailing_newline() as usize);
 
         let (rest, last) = slice.split_at_offset(RawLineMetric(split_offset));
@@ -525,13 +545,13 @@ impl Metric<ChunkSummary> for LineMetric {
     }
 
     #[inline]
-    fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
-        Self(RawLineMetric::measure_leaf(gap_buffer).0)
+    fn measure_leaf(str: &str) -> Self {
+        Self(count::line_breaks(str))
     }
 
     #[inline]
-    fn measure_slice(gap_slice: &GapSlice) -> Self {
-        Self(RawLineMetric::measure_slice(gap_slice).0)
+    fn measure_slice(str: &&str) -> Self {
+        Self(count::line_breaks(str))
     }
 }
 
@@ -671,23 +691,17 @@ mod utf16_metric {
         }
 
         #[inline]
-        fn measure_leaf(gap_buffer: &GapBuffer) -> Self {
-            Self(
-                gap_buffer.left_summary.utf16_code_units
-                    + gap_buffer.right_summary.utf16_code_units,
-            )
+        fn measure_leaf(str: &str) -> Self {
+            Self(count::utf16_code_units(str))
         }
 
         #[inline]
-        fn measure_slice(gap_slice: &GapSlice) -> Self {
-            Self(
-                gap_slice.left_summary.utf16_code_units
-                    + gap_slice.right_summary.utf16_code_units,
-            )
+        fn measure_slice(str: &&str) -> Self {
+            Self(count::utf16_code_units(str))
         }
     }
 
-    impl FromMetric<ByteMetric, ChunkSummary> for Utf16Metric {
+    impl FromMetric<ByteMetric, GapBufferSummary> for Utf16Metric {
         #[track_caller]
         #[inline]
         fn measure_up_to(
